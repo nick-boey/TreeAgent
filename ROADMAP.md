@@ -136,24 +136,24 @@ Build the tree visualization for the feature roadmap.
 
 ---
 
-## Milestone 6: Agent UI and Message Inspector
+## Milestone 6: Agent UI and Message Inspector (Complete)
 
 Build detailed agent monitoring and message inspection.
 
 ### Tasks
 
-- [ ] Agent dashboard
-  - [ ] List all active agents
-  - [ ] Show agent status
-  - [ ] Quick actions (stop, restart)
-- [ ] Message inspector component
-  - [ ] Real-time message stream
-  - [ ] Message filtering and search
-  - [ ] Syntax highlighting for code
-- [ ] Implement SignalR for real-time updates
-  - [ ] Push new messages to UI
-  - [ ] Agent status changes
-  - [ ] Feature status changes
+- [x] Agent dashboard
+  - [x] List all active agents
+  - [x] Show agent status
+  - [x] Quick actions (stop, restart)
+- [x] Message inspector component
+  - [x] Real-time message stream
+  - [x] Message filtering and search
+  - [x] Syntax highlighting for code
+- [x] Implement SignalR for real-time updates
+  - [x] Push new messages to UI
+  - [x] Agent status changes
+  - [x] Feature status changes
 
 ### Deliverables
 

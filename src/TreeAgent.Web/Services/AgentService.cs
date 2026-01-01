@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TreeAgent.Web.Data;
 using TreeAgent.Web.Data.Entities;
+using TreeAgent.Web.Hubs;
 
 namespace TreeAgent.Web.Services;
 
@@ -9,16 +10,18 @@ public class AgentService : IDisposable
     private readonly TreeAgentDbContext _db;
     private readonly ClaudeCodeProcessManager _processManager;
     private readonly MessageParser _messageParser;
+    private readonly IAgentHubNotifier _hubNotifier;
     private bool _disposed;
 
     public event Action<string, ParsedMessage>? OnMessageReceived;
     public event Action<string, AgentStatus>? OnStatusChanged;
 
-    public AgentService(TreeAgentDbContext db, ClaudeCodeProcessManager processManager)
+    public AgentService(TreeAgentDbContext db, ClaudeCodeProcessManager processManager, IAgentHubNotifier hubNotifier)
     {
         _db = db;
         _processManager = processManager;
         _messageParser = new MessageParser();
+        _hubNotifier = hubNotifier;
 
         _processManager.OnMessageReceived += HandleMessageReceived;
         _processManager.OnStatusChanged += HandleStatusChanged;
@@ -26,7 +29,10 @@ public class AgentService : IDisposable
 
     public async Task<Agent?> GetByIdAsync(string id)
     {
-        return await _db.Agents.FindAsync(id);
+        return await _db.Agents
+            .Include(a => a.Feature)
+            .ThenInclude(f => f.Project)
+            .FirstOrDefaultAsync(a => a.Id == id);
     }
 
     public async Task<List<Agent>> GetByFeatureIdAsync(string featureId)
@@ -40,6 +46,8 @@ public class AgentService : IDisposable
     public async Task<List<Agent>> GetAllActiveAsync()
     {
         return await _db.Agents
+            .Include(a => a.Feature)
+            .ThenInclude(f => f.Project)
             .Where(a => a.Status == AgentStatus.Running || a.Status == AgentStatus.Idle)
             .ToListAsync();
     }
@@ -153,6 +161,9 @@ public class AgentService : IDisposable
             _db.Messages.Add(message);
             await _db.SaveChangesAsync();
 
+            // Send real-time notification
+            await _hubNotifier.SendMessageAsync(agentId, "assistant", parsed.Content ?? rawMessage, rawMessage);
+
             OnMessageReceived?.Invoke(agentId, parsed);
         }
         catch
@@ -172,6 +183,9 @@ public class AgentService : IDisposable
                 agent.UpdatedAt = DateTime.UtcNow;
                 await _db.SaveChangesAsync();
             }
+
+            // Send real-time notification
+            await _hubNotifier.SendStatusChangeAsync(agentId, status.ToString());
 
             OnStatusChanged?.Invoke(agentId, status);
         }
