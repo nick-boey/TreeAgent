@@ -1,0 +1,22 @@
+@using TreeAgent.Web.Data.Entities
+
+<div class="feature-tree">
+    @foreach (var feature in Features)
+    {
+        <FeatureNode Feature="feature"
+                     SelectedFeatureId="@SelectedFeatureId"
+                     OnFeatureSelected="OnFeatureSelected"
+                     Level="0" />
+    }
+</div>
+
+@code {
+    [Parameter]
+    public List<Feature> Features { get; set; } = [];
+
+    [Parameter]
+    public string? SelectedFeatureId { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnFeatureSelected { get; set; }
+}

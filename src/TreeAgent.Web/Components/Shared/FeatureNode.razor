@@ -1,0 +1,75 @@
+@using TreeAgent.Web.Data.Entities
+
+<div class="feature-node" style="padding-left: @(Level * 20)px">
+    <div class="feature-item @(IsSelected ? "selected" : "") @GetStatusClass()"
+         @onclick="HandleClick">
+        @if (Feature.Children.Any())
+        {
+            <span class="tree-toggle" @onclick="ToggleExpand" @onclick:stopPropagation="true">
+                @(IsExpanded ? "[-]" : "[+]")
+            </span>
+        }
+        else
+        {
+            <span class="tree-toggle-spacer">&nbsp;&nbsp;&nbsp;</span>
+        }
+        <span class="status-indicator @GetStatusClass()"></span>
+        <span class="feature-title">@Feature.Title</span>
+        @if (Feature.GitHubPRNumber.HasValue)
+        {
+            <span class="badge bg-secondary ms-2">#@Feature.GitHubPRNumber</span>
+        }
+    </div>
+    @if (IsExpanded && Feature.Children.Any())
+    {
+        <div class="feature-children">
+            @foreach (var child in Feature.Children.OrderBy(c => c.CreatedAt))
+            {
+                <FeatureNode Feature="child"
+                             SelectedFeatureId="@SelectedFeatureId"
+                             OnFeatureSelected="OnFeatureSelected"
+                             Level="Level + 1" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public Feature Feature { get; set; } = null!;
+
+    [Parameter]
+    public string? SelectedFeatureId { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnFeatureSelected { get; set; }
+
+    [Parameter]
+    public int Level { get; set; }
+
+    private bool IsExpanded { get; set; } = true;
+    private bool IsSelected => SelectedFeatureId == Feature.Id;
+
+    private void ToggleExpand()
+    {
+        IsExpanded = !IsExpanded;
+    }
+
+    private async Task HandleClick()
+    {
+        await OnFeatureSelected.InvokeAsync(Feature.Id);
+    }
+
+    private string GetStatusClass()
+    {
+        return Feature.Status switch
+        {
+            FeatureStatus.Future => "status-future",
+            FeatureStatus.InDevelopment => "status-in-development",
+            FeatureStatus.ReadyForReview => "status-ready-for-review",
+            FeatureStatus.Merged => "status-merged",
+            FeatureStatus.Cancelled => "status-cancelled",
+            _ => ""
+        };
+    }
+}

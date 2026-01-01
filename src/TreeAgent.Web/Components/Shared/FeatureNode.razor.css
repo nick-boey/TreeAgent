@@ -1,0 +1,73 @@
+.feature-node {
+    user-select: none;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    border-radius: 0.25rem;
+    transition: background-color 0.15s ease;
+}
+
+.feature-item:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.feature-item.selected {
+    background-color: rgba(13, 110, 253, 0.15);
+    border-left: 3px solid #0d6efd;
+}
+
+.tree-toggle {
+    font-family: monospace;
+    width: 1.5rem;
+    cursor: pointer;
+    color: #6c757d;
+}
+
+.tree-toggle-spacer {
+    width: 1.5rem;
+    display: inline-block;
+}
+
+.status-indicator {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+    flex-shrink: 0;
+}
+
+.status-indicator.status-future {
+    background-color: #6c757d;
+}
+
+.status-indicator.status-in-development {
+    background-color: #0d6efd;
+}
+
+.status-indicator.status-ready-for-review {
+    background-color: #ffc107;
+}
+
+.status-indicator.status-merged {
+    background-color: #198754;
+}
+
+.status-indicator.status-cancelled {
+    background-color: #dc3545;
+}
+
+.feature-title {
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.feature-children {
+    border-left: 1px dashed #dee2e6;
+    margin-left: 0.75rem;
+}
