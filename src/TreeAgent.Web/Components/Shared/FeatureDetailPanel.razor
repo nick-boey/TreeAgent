@@ -1,0 +1,256 @@
+@using TreeAgent.Web.Data.Entities
+@using TreeAgent.Web.Services
+@inject FeatureService FeatureService
+@inject IGitHubService GitHubService
+@inject NavigationManager NavigationManager
+
+<div class="card feature-detail-panel">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Feature Details</span>
+        <button type="button" class="btn-close" @onclick="OnClose"></button>
+    </div>
+    <div class="card-body">
+        <h5 class="card-title">@Feature.Title</h5>
+
+        <div class="mb-3">
+            <span class="badge @GetStatusBadgeClass()">@Feature.Status</span>
+            @if (Feature.GitHubPRNumber.HasValue)
+            {
+                <a href="https://github.com/@Feature.Project?.GitHubOwner/@Feature.Project?.GitHubRepo/pull/@Feature.GitHubPRNumber"
+                   target="_blank"
+                   class="badge bg-secondary text-decoration-none ms-1">
+                    PR #@Feature.GitHubPRNumber
+                </a>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(Feature.Description))
+        {
+            <p class="card-text">@Feature.Description</p>
+        }
+
+        <dl class="row small">
+            @if (!string.IsNullOrEmpty(Feature.BranchName))
+            {
+                <dt class="col-4">Branch</dt>
+                <dd class="col-8"><code>@Feature.BranchName</code></dd>
+            }
+            @if (!string.IsNullOrEmpty(Feature.WorktreePath))
+            {
+                <dt class="col-4">Worktree</dt>
+                <dd class="col-8"><code>@Feature.WorktreePath</code></dd>
+            }
+            <dt class="col-4">Created</dt>
+            <dd class="col-8">@Feature.CreatedAt.ToLocalTime().ToString("g")</dd>
+            <dt class="col-4">Updated</dt>
+            <dd class="col-8">@Feature.UpdatedAt.ToLocalTime().ToString("g")</dd>
+        </dl>
+
+        @if (Feature.Agents.Any())
+        {
+            <hr />
+            <h6>Agents</h6>
+            <ul class="list-group list-group-flush small">
+                @foreach (var agent in Feature.Agents)
+                {
+                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <span>Agent @agent.Id[..8]</span>
+                        <span class="badge @GetAgentStatusBadgeClass(agent.Status)">@agent.Status</span>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+    <div class="card-footer">
+        <div class="d-flex flex-wrap gap-2">
+            @switch (Feature.Status)
+            {
+                case FeatureStatus.Future:
+                    <button class="btn btn-sm btn-primary" @onclick="StartDevelopment" disabled="@_isLoading">
+                        Start Development
+                    </button>
+                    break;
+                case FeatureStatus.InDevelopment:
+                    <button class="btn btn-sm btn-warning" @onclick="MarkReadyForReview" disabled="@_isLoading">
+                        Ready for Review
+                    </button>
+                    <button class="btn btn-sm btn-outline-success" @onclick="CreatePullRequest" disabled="@_isLoading || !CanCreatePR()">
+                        Create PR
+                    </button>
+                    break;
+                case FeatureStatus.ReadyForReview:
+                    <button class="btn btn-sm btn-success" @onclick="MarkMerged" disabled="@_isLoading">
+                        Mark Merged
+                    </button>
+                    break;
+            }
+
+            @if (Feature.Status != FeatureStatus.Merged && Feature.Status != FeatureStatus.Cancelled)
+            {
+                <button class="btn btn-sm btn-outline-danger" @onclick="Cancel" disabled="@_isLoading">
+                    Cancel
+                </button>
+            }
+
+            <a href="projects/@Feature.ProjectId/features/@Feature.Id/edit" class="btn btn-sm btn-outline-secondary">
+                Edit
+            </a>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Feature Feature { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback OnActionCompleted { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private bool _isLoading;
+    private string? _errorMessage;
+
+    private bool CanCreatePR()
+    {
+        return !string.IsNullOrEmpty(Feature.BranchName) &&
+               !Feature.GitHubPRNumber.HasValue &&
+               Feature.Project != null &&
+               !string.IsNullOrEmpty(Feature.Project.GitHubOwner) &&
+               !string.IsNullOrEmpty(Feature.Project.GitHubRepo);
+    }
+
+    private async Task StartDevelopment()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            var success = await FeatureService.StartDevelopmentAsync(Feature.Id);
+            if (!success)
+            {
+                _errorMessage = "Failed to start development. Ensure a branch name is set.";
+            }
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task MarkReadyForReview()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            await FeatureService.MarkReadyForReviewAsync(Feature.Id);
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CreatePullRequest()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            var pr = await GitHubService.CreatePullRequestAsync(Feature.ProjectId, Feature.Id);
+            if (pr == null)
+            {
+                _errorMessage = "Failed to create pull request.";
+            }
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task MarkMerged()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            await FeatureService.CompleteAsync(Feature.Id, merged: true);
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task Cancel()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            await FeatureService.CompleteAsync(Feature.Id, merged: false);
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private string GetStatusBadgeClass()
+    {
+        return Feature.Status switch
+        {
+            FeatureStatus.Future => "bg-secondary",
+            FeatureStatus.InDevelopment => "bg-primary",
+            FeatureStatus.ReadyForReview => "bg-warning text-dark",
+            FeatureStatus.Merged => "bg-success",
+            FeatureStatus.Cancelled => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+
+    private string GetAgentStatusBadgeClass(AgentStatus status)
+    {
+        return status switch
+        {
+            AgentStatus.Idle => "bg-secondary",
+            AgentStatus.Running => "bg-primary",
+            AgentStatus.Stopped => "bg-dark",
+            AgentStatus.Error => "bg-danger",
+            _ => "bg-secondary"
+        };
+    }
+}

@@ -1,0 +1,173 @@
+@page "/projects/{ProjectId}/features/{FeatureId}/edit"
+@using TreeAgent.Web.Data.Entities
+@using TreeAgent.Web.Services
+@inject FeatureService FeatureService
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>Edit Feature</PageTitle>
+
+<h1>Edit Feature</h1>
+
+@if (_feature == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-8">
+            <EditForm Model="_model" OnValidSubmit="HandleSubmit" FormName="EditFeature">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+
+                <div class="mb-3">
+                    <label for="title" class="form-label">Title</label>
+                    <InputText id="title" class="form-control" @bind-Value="_model.Title" />
+                    <ValidationMessage For="() => _model.Title" class="text-danger" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <InputTextArea id="description" class="form-control" rows="3" @bind-Value="_model.Description" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="branchName" class="form-label">Branch Name</label>
+                    <InputText id="branchName" class="form-control" @bind-Value="_model.BranchName" placeholder="feature/my-feature" />
+                    <div class="form-text">Required for development and PR creation.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="status" class="form-label">Status</label>
+                    <InputSelect id="status" class="form-select" @bind-Value="_model.Status">
+                        @foreach (var status in Enum.GetValues<FeatureStatus>())
+                        {
+                            <option value="@status">@status</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="mb-3">
+                    <label for="parentId" class="form-label">Parent Feature</label>
+                    <InputSelect id="parentId" class="form-select" @bind-Value="_model.ParentId">
+                        <option value="">None (root feature)</option>
+                        @foreach (var feature in _availableParents)
+                        {
+                            <option value="@feature.Id">@feature.Title</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" disabled="@_isSubmitting">
+                        @if (_isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Save Changes
+                    </button>
+                    <a href="projects/@ProjectId" class="btn btn-secondary">Cancel</a>
+                    <button type="button" class="btn btn-danger ms-auto" @onclick="HandleDelete" disabled="@_isSubmitting">
+                        Delete
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string ProjectId { get; set; } = "";
+
+    [Parameter]
+    public string FeatureId { get; set; } = "";
+
+    private Feature? _feature;
+    private List<Feature> _availableParents = [];
+    private FeatureModel _model = new();
+    private bool _isSubmitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _feature = await FeatureService.GetByIdAsync(FeatureId);
+        if (_feature != null)
+        {
+            _model = new FeatureModel
+            {
+                Title = _feature.Title,
+                Description = _feature.Description,
+                BranchName = _feature.BranchName,
+                Status = _feature.Status,
+                ParentId = _feature.ParentId
+            };
+
+            // Get all features except this one and its descendants
+            var allFeatures = await FeatureService.GetByProjectIdAsync(ProjectId);
+            _availableParents = allFeatures.Where(f => f.Id != FeatureId && !IsDescendant(f, allFeatures)).ToList();
+        }
+    }
+
+    private bool IsDescendant(Feature potentialParent, List<Feature> allFeatures)
+    {
+        // Check if potentialParent is a descendant of the current feature
+        var current = potentialParent;
+        while (current != null)
+        {
+            if (current.ParentId == FeatureId) return true;
+            current = allFeatures.FirstOrDefault(f => f.Id == current.ParentId);
+        }
+        return false;
+    }
+
+    private async Task HandleSubmit()
+    {
+        _isSubmitting = true;
+        try
+        {
+            await FeatureService.UpdateAsync(
+                FeatureId,
+                _model.Title,
+                _model.Description,
+                _model.BranchName,
+                _model.Status);
+
+            // Handle parent change separately
+            if (_feature!.ParentId != _model.ParentId)
+            {
+                await FeatureService.SetParentAsync(FeatureId,
+                    string.IsNullOrEmpty(_model.ParentId) ? null : _model.ParentId);
+            }
+
+            NavigationManager.NavigateTo($"projects/{ProjectId}");
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task HandleDelete()
+    {
+        _isSubmitting = true;
+        try
+        {
+            await FeatureService.DeleteAsync(FeatureId);
+            NavigationManager.NavigateTo($"projects/{ProjectId}");
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private class FeatureModel
+    {
+        public string Title { get; set; } = "";
+        public string? Description { get; set; }
+        public string? BranchName { get; set; }
+        public FeatureStatus Status { get; set; }
+        public string? ParentId { get; set; }
+    }
+}

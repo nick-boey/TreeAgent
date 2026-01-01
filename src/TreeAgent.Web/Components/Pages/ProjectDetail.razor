@@ -1,0 +1,116 @@
+@page "/projects/{Id}"
+@using TreeAgent.Web.Data.Entities
+@using TreeAgent.Web.Services
+@inject ProjectService ProjectService
+@inject FeatureService FeatureService
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>@(_project?.Name ?? "Project")</PageTitle>
+
+@if (_project == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>@_project.Name</h1>
+        <div>
+            <a href="projects/@Id/edit" class="btn btn-outline-secondary">Edit Project</a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Feature Tree</span>
+                    <a href="projects/@Id/features/create" class="btn btn-sm btn-primary">New Feature</a>
+                </div>
+                <div class="card-body">
+                    @if (_rootFeatures == null || _rootFeatures.Count == 0)
+                    {
+                        <p class="text-muted">No features yet. Create one to get started.</p>
+                    }
+                    else
+                    {
+                        <FeatureTree Features="_rootFeatures"
+                                     SelectedFeatureId="@_selectedFeatureId"
+                                     OnFeatureSelected="SelectFeature" />
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            @if (_selectedFeature != null)
+            {
+                <FeatureDetailPanel Feature="_selectedFeature"
+                                    OnActionCompleted="RefreshData"
+                                    OnClose="() => _selectedFeature = null" />
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-header">Project Info</div>
+                    <div class="card-body">
+                        <dl>
+                            <dt>Local Path</dt>
+                            <dd><code>@_project.LocalPath</code></dd>
+                            <dt>Default Branch</dt>
+                            <dd>@_project.DefaultBranch</dd>
+                            @if (!string.IsNullOrEmpty(_project.GitHubOwner) && !string.IsNullOrEmpty(_project.GitHubRepo))
+                            {
+                                <dt>GitHub</dt>
+                                <dd>
+                                    <a href="https://github.com/@_project.GitHubOwner/@_project.GitHubRepo" target="_blank">
+                                        @_project.GitHubOwner/@_project.GitHubRepo
+                                    </a>
+                                </dd>
+                            }
+                        </dl>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string Id { get; set; } = "";
+
+    private Project? _project;
+    private List<Feature>? _rootFeatures;
+    private Feature? _selectedFeature;
+    private string? _selectedFeatureId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _project = await ProjectService.GetByIdAsync(Id);
+        if (_project != null)
+        {
+            _rootFeatures = await FeatureService.GetTreeAsync(Id);
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadData();
+        if (_selectedFeatureId != null)
+        {
+            _selectedFeature = await FeatureService.GetByIdAsync(_selectedFeatureId);
+        }
+    }
+
+    private async Task SelectFeature(string featureId)
+    {
+        _selectedFeatureId = featureId;
+        _selectedFeature = await FeatureService.GetByIdAsync(featureId);
+    }
+}

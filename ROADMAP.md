@@ -110,23 +110,23 @@ Sync features with GitHub pull requests.
 
 ---
 
-## Milestone 5: Feature Tree Visualization
+## Milestone 5: Feature Tree Visualization (Complete)
 
 Build the tree visualization for the feature roadmap.
 
 ### Tasks
 
-- [ ] Design tree data structure
-  - [ ] Parent-child relationships
-  - [ ] Ordering within siblings
-- [ ] Implement tree rendering component
-  - [ ] Hierarchical list or simple tree view
-  - [ ] Color coding by status
-  - [ ] Node selection
-- [ ] Feature detail panel
-  - [ ] View/edit feature metadata
-  - [ ] View linked agent and messages
-  - [ ] Quick actions (start, cancel)
+- [x] Design tree data structure
+  - [x] Parent-child relationships
+  - [x] Ordering within siblings
+- [x] Implement tree rendering component
+  - [x] Hierarchical list or simple tree view
+  - [x] Color coding by status
+  - [x] Node selection
+- [x] Feature detail panel
+  - [x] View/edit feature metadata
+  - [x] View linked agent and messages
+  - [x] Quick actions (start, cancel)
 
 ### Deliverables
 

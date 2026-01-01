@@ -34,7 +34,7 @@ else
             @foreach (var project in _projects)
             {
                 <tr>
-                    <td>@project.Name</td>
+                    <td><a href="projects/@project.Id">@project.Name</a></td>
                     <td><code>@project.LocalPath</code></td>
                     <td>
                         @if (!string.IsNullOrEmpty(project.GitHubOwner) && !string.IsNullOrEmpty(project.GitHubRepo))
@@ -48,6 +48,7 @@ else
                     </td>
                     <td>@project.DefaultBranch</td>
                     <td>
+                        <a href="projects/@project.Id" class="btn btn-sm btn-primary">View</a>
                         <a href="projects/@project.Id/edit" class="btn btn-sm btn-outline-secondary">Edit</a>
                         <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteProject(project.Id)">Delete</button>
                     </td>
