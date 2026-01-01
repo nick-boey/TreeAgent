@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using TreeAgent.Web.Components;
 using TreeAgent.Web.Data;
+using TreeAgent.Web.Hubs;
 using TreeAgent.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,7 +20,9 @@ builder.Services.AddScoped<FeatureService>();
 builder.Services.AddScoped<AgentService>();
 builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
+builder.Services.AddSingleton<IAgentHubNotifier, AgentHubNotifier>();
 
+builder.Services.AddSignalR();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -47,5 +50,6 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+app.MapHub<AgentHub>("/hubs/agent");
 
 app.Run();
