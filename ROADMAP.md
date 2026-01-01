@@ -2,24 +2,24 @@
 
 This document outlines the development roadmap for TreeAgent, organized into milestones that can be developed incrementally.
 
-## Milestone 1: Foundation
+## Milestone 1: Foundation (Complete)
 
 Establish the core project structure and basic infrastructure.
 
 ### Tasks
 
-- [ ] Create .NET solution with single web project
-  - [ ] TreeAgent.Web (Blazor SSR, services, data)
-  - [ ] Components/ for Blazor components
-  - [ ] Data/ for EF Core entities and DbContext
-  - [ ] Services/ for business logic
-- [ ] Set up SQLite database with EF Core
-  - [ ] Projects table
-  - [ ] Features table
-  - [ ] Agents table
-  - [ ] Messages table
-- [ ] Implement basic project CRUD operations
-- [ ] Create minimal Blazor layout and navigation
+- [x] Create .NET solution with single web project
+  - [x] TreeAgent.Web (Blazor SSR, services, data)
+  - [x] Components/ for Blazor components
+  - [x] Data/ for EF Core entities and DbContext
+  - [x] Services/ for business logic
+- [x] Set up SQLite database with EF Core
+  - [x] Projects table
+  - [x] Features table
+  - [x] Agents table
+  - [x] Messages table
+- [x] Implement basic project CRUD operations
+- [x] Create minimal Blazor layout and navigation
 
 ### Deliverables
 
