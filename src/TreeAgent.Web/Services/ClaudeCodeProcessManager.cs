@@ -75,6 +75,11 @@ public class ClaudeCodeProcessManager : IDisposable
         return _processes.Keys.ToList();
     }
 
+    public int GetRunningAgentCount()
+    {
+        return _processes.Values.Count(p => p.IsRunning);
+    }
+
     // For testing purposes
     public void SimulateMessageReceived(string agentId, string message)
     {
