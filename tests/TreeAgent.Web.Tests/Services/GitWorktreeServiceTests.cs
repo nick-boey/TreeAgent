@@ -3,18 +3,20 @@ using TreeAgent.Web.Services;
 
 namespace TreeAgent.Web.Tests.Services;
 
+[TestFixture]
 public class GitWorktreeServiceTests
 {
-    private readonly Mock<ICommandRunner> _mockRunner;
-    private readonly GitWorktreeService _service;
+    private Mock<ICommandRunner> _mockRunner = null!;
+    private GitWorktreeService _service = null!;
 
-    public GitWorktreeServiceTests()
+    [SetUp]
+    public void SetUp()
     {
         _mockRunner = new Mock<ICommandRunner>();
         _service = new GitWorktreeService(_mockRunner.Object);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorktree_Success_ReturnsPath()
     {
         // Arrange
@@ -29,11 +31,11 @@ public class GitWorktreeServiceTests
         var result = await _service.CreateWorktreeAsync(repoPath, branchName);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Contains("feature-test", result);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Does.Contain("feature-test"));
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorktree_GitError_ReturnsNull()
     {
         // Arrange
@@ -47,10 +49,10 @@ public class GitWorktreeServiceTests
         var result = await _service.CreateWorktreeAsync(repoPath, branchName);
 
         // Assert
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task RemoveWorktree_Success_ReturnsTrue()
     {
         // Arrange
@@ -64,10 +66,10 @@ public class GitWorktreeServiceTests
         var result = await _service.RemoveWorktreeAsync(repoPath, worktreePath);
 
         // Assert
-        Assert.True(result);
+        Assert.That(result, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task RemoveWorktree_GitError_ReturnsFalse()
     {
         // Arrange
@@ -81,10 +83,10 @@ public class GitWorktreeServiceTests
         var result = await _service.RemoveWorktreeAsync(repoPath, worktreePath);
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task ListWorktrees_Success_ReturnsWorktrees()
     {
         // Arrange
@@ -98,11 +100,11 @@ public class GitWorktreeServiceTests
         var result = await _service.ListWorktreesAsync(repoPath);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(3, result.Count);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(3));
     }
 
-    [Fact]
+    [Test]
     public async Task ListWorktrees_GitError_ReturnsEmptyList()
     {
         // Arrange
@@ -115,11 +117,11 @@ public class GitWorktreeServiceTests
         var result = await _service.ListWorktreesAsync(repoPath);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Empty(result);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.Empty);
     }
 
-    [Fact]
+    [Test]
     public async Task PruneWorktrees_CallsGitPrune()
     {
         // Arrange
@@ -135,27 +137,27 @@ public class GitWorktreeServiceTests
         _mockRunner.Verify(r => r.RunAsync("git", "worktree prune", repoPath), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public void SanitizeBranchName_RemovesSlashes()
     {
         // Act
         var result = GitWorktreeService.SanitizeBranchName("feature/new-thing");
 
         // Assert
-        Assert.Equal("feature-new-thing", result);
+        Assert.That(result, Is.EqualTo("feature-new-thing"));
     }
 
-    [Fact]
+    [Test]
     public void SanitizeBranchName_RemovesSpecialCharacters()
     {
         // Act
         var result = GitWorktreeService.SanitizeBranchName("feature/test@branch#1");
 
         // Assert
-        Assert.Equal("feature-test-branch-1", result);
+        Assert.That(result, Is.EqualTo("feature-test-branch-1"));
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorktree_WithNewBranch_CreatesBranchFirst()
     {
         // Arrange
@@ -171,6 +173,6 @@ public class GitWorktreeServiceTests
         var result = await _service.CreateWorktreeAsync(repoPath, branchName, createBranch: true);
 
         // Assert
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
     }
 }

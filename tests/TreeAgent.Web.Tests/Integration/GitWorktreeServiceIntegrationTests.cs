@@ -7,16 +7,24 @@ namespace TreeAgent.Web.Tests.Integration;
 /// Integration tests for GitWorktreeService that test against real git repositories.
 /// These tests require git to be installed and available on the PATH.
 /// </summary>
-[Trait("Category", "Integration")]
-public class GitWorktreeServiceIntegrationTests : IDisposable
+[TestFixture]
+[Category("Integration")]
+public class GitWorktreeServiceIntegrationTests
 {
-    private readonly TempGitRepositoryFixture _fixture;
-    private readonly GitWorktreeService _service;
+    private TempGitRepositoryFixture _fixture = null!;
+    private GitWorktreeService _service = null!;
 
-    public GitWorktreeServiceIntegrationTests()
+    [SetUp]
+    public void SetUp()
     {
         _fixture = new TempGitRepositoryFixture();
         _service = new GitWorktreeService(); // Uses real CommandRunner
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _fixture.Dispose();
     }
 
     /// <summary>
@@ -24,7 +32,7 @@ public class GitWorktreeServiceIntegrationTests : IDisposable
     /// </summary>
     private static string NormalizePath(string path) => path.Replace('\\', '/').TrimEnd('/');
 
-    [Fact]
+    [Test]
     public async Task CreateWorktree_WithExistingBranch_CreatesWorktreeSuccessfully()
     {
         // Arrange
@@ -35,12 +43,12 @@ public class GitWorktreeServiceIntegrationTests : IDisposable
         var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
-        Assert.NotNull(worktreePath);
-        Assert.True(Directory.Exists(worktreePath));
-        Assert.True(File.Exists(Path.Combine(worktreePath, "README.md")));
+        Assert.That(worktreePath, Is.Not.Null);
+        Assert.That(Directory.Exists(worktreePath), Is.True);
+        Assert.That(File.Exists(Path.Combine(worktreePath!, "README.md")), Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorktree_WithNewBranch_CreatesBranchAndWorktree()
     {
         // Arrange
@@ -53,15 +61,15 @@ public class GitWorktreeServiceIntegrationTests : IDisposable
             createBranch: true);
 
         // Assert
-        Assert.NotNull(worktreePath);
-        Assert.True(Directory.Exists(worktreePath));
+        Assert.That(worktreePath, Is.Not.Null);
+        Assert.That(Directory.Exists(worktreePath), Is.True);
 
         // Verify the branch was created
         var branches = _fixture.RunGit("branch --list");
-        Assert.Contains(branchName, branches);
+        Assert.That(branches, Does.Contain(branchName));
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorktree_WithBaseBranch_CreatesBranchFromSpecifiedBase()
     {
         // Arrange
@@ -81,13 +89,13 @@ public class GitWorktreeServiceIntegrationTests : IDisposable
             baseBranch: baseBranch);
 
         // Assert
-        Assert.NotNull(worktreePath);
-        Assert.True(Directory.Exists(worktreePath));
+        Assert.That(worktreePath, Is.Not.Null);
+        Assert.That(Directory.Exists(worktreePath), Is.True);
         // The worktree should have the file from develop branch
-        Assert.True(File.Exists(Path.Combine(worktreePath, "develop.txt")));
+        Assert.That(File.Exists(Path.Combine(worktreePath!, "develop.txt")), Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorktree_NonExistentBranch_ReturnsNull()
     {
         // Arrange
@@ -100,22 +108,22 @@ public class GitWorktreeServiceIntegrationTests : IDisposable
             createBranch: false);
 
         // Assert
-        Assert.Null(worktreePath);
+        Assert.That(worktreePath, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ListWorktrees_ReturnsMainWorktree()
     {
         // Act
         var worktrees = await _service.ListWorktreesAsync(_fixture.RepositoryPath);
 
         // Assert
-        Assert.NotNull(worktrees);
-        Assert.Single(worktrees);
-        Assert.Equal(NormalizePath(_fixture.RepositoryPath), NormalizePath(worktrees[0].Path));
+        Assert.That(worktrees, Is.Not.Null);
+        Assert.That(worktrees, Has.Count.EqualTo(1));
+        Assert.That(NormalizePath(worktrees[0].Path), Is.EqualTo(NormalizePath(_fixture.RepositoryPath)));
     }
 
-    [Fact]
+    [Test]
     public async Task ListWorktrees_AfterCreatingWorktree_ReturnsMultipleWorktrees()
     {
         // Arrange
@@ -127,51 +135,51 @@ public class GitWorktreeServiceIntegrationTests : IDisposable
         var worktrees = await _service.ListWorktreesAsync(_fixture.RepositoryPath);
 
         // Assert
-        Assert.NotNull(worktrees);
-        Assert.Equal(2, worktrees.Count);
-        Assert.Contains(worktrees, w => NormalizePath(w.Path) == NormalizePath(_fixture.RepositoryPath));
-        Assert.Contains(worktrees, w => w.Branch?.EndsWith(branchName) == true);
+        Assert.That(worktrees, Is.Not.Null);
+        Assert.That(worktrees, Has.Count.EqualTo(2));
+        Assert.That(worktrees, Has.Some.Matches<WorktreeInfo>(w => NormalizePath(w.Path) == NormalizePath(_fixture.RepositoryPath)));
+        Assert.That(worktrees, Has.Some.Matches<WorktreeInfo>(w => w.Branch?.EndsWith(branchName) == true));
     }
 
-    [Fact]
+    [Test]
     public async Task ListWorktrees_ReturnsCorrectBranchInfo()
     {
         // Arrange
         var branchName = "feature/branch-info-test";
         _fixture.CreateBranch(branchName);
         var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
-        Assert.NotNull(worktreePath);
+        Assert.That(worktreePath, Is.Not.Null);
 
         // Act
         var worktrees = await _service.ListWorktreesAsync(_fixture.RepositoryPath);
 
         // Assert
-        var worktree = worktrees.FirstOrDefault(w => NormalizePath(w.Path) == NormalizePath(worktreePath));
-        Assert.NotNull(worktree);
-        Assert.EndsWith(branchName, worktree.Branch!);
-        Assert.NotNull(worktree.HeadCommit);
-        Assert.False(worktree.IsDetached);
+        var worktree = worktrees.FirstOrDefault(w => NormalizePath(w.Path) == NormalizePath(worktreePath!));
+        Assert.That(worktree, Is.Not.Null);
+        Assert.That(worktree!.Branch, Does.EndWith(branchName));
+        Assert.That(worktree.HeadCommit, Is.Not.Null);
+        Assert.That(worktree.IsDetached, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task RemoveWorktree_ExistingWorktree_RemovesSuccessfully()
     {
         // Arrange
         var branchName = "feature/remove-test";
         _fixture.CreateBranch(branchName);
         var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
-        Assert.NotNull(worktreePath);
-        Assert.True(Directory.Exists(worktreePath));
+        Assert.That(worktreePath, Is.Not.Null);
+        Assert.That(Directory.Exists(worktreePath), Is.True);
 
         // Act
-        var result = await _service.RemoveWorktreeAsync(_fixture.RepositoryPath, worktreePath);
+        var result = await _service.RemoveWorktreeAsync(_fixture.RepositoryPath, worktreePath!);
 
         // Assert
-        Assert.True(result);
-        Assert.False(Directory.Exists(worktreePath));
+        Assert.That(result, Is.True);
+        Assert.That(Directory.Exists(worktreePath), Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task RemoveWorktree_NonExistentWorktree_ReturnsFalse()
     {
         // Arrange
@@ -181,10 +189,10 @@ public class GitWorktreeServiceIntegrationTests : IDisposable
         var result = await _service.RemoveWorktreeAsync(_fixture.RepositoryPath, fakeWorktreePath);
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task WorktreeExists_ExistingWorktree_ReturnsTrue()
     {
         // Arrange
@@ -196,32 +204,32 @@ public class GitWorktreeServiceIntegrationTests : IDisposable
         var exists = await _service.WorktreeExistsAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
-        Assert.True(exists);
+        Assert.That(exists, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task WorktreeExists_NonExistentWorktree_ReturnsFalse()
     {
         // Act
         var exists = await _service.WorktreeExistsAsync(_fixture.RepositoryPath, "non-existent-branch");
 
         // Assert
-        Assert.False(exists);
+        Assert.That(exists, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task PruneWorktrees_RemovesStaleWorktreeReferences()
     {
         // Arrange
         var branchName = "feature/prune-test";
         _fixture.CreateBranch(branchName);
         var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
-        Assert.NotNull(worktreePath);
+        Assert.That(worktreePath, Is.Not.Null);
 
         // Manually delete the worktree directory (simulating stale worktree)
         if (Directory.Exists(worktreePath))
         {
-            Directory.Delete(worktreePath, recursive: true);
+            Directory.Delete(worktreePath!, recursive: true);
         }
 
         // Act - should not throw
@@ -229,10 +237,10 @@ public class GitWorktreeServiceIntegrationTests : IDisposable
 
         // Assert - worktree should be pruned from the list
         var worktrees = await _service.ListWorktreesAsync(_fixture.RepositoryPath);
-        Assert.DoesNotContain(worktrees, w => NormalizePath(w.Path) == NormalizePath(worktreePath));
+        Assert.That(worktrees, Has.None.Matches<WorktreeInfo>(w => NormalizePath(w.Path) == NormalizePath(worktreePath!)));
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorktree_WithModifiedFiles_WorktreeHasCleanState()
     {
         // Arrange
@@ -247,14 +255,14 @@ public class GitWorktreeServiceIntegrationTests : IDisposable
         var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
-        Assert.NotNull(worktreePath);
+        Assert.That(worktreePath, Is.Not.Null);
 
         // The new worktree should have the clean version from the branch
-        var worktreeReadme = File.ReadAllText(Path.Combine(worktreePath, "README.md"));
-        Assert.DoesNotContain("Modified content.", worktreeReadme);
+        var worktreeReadme = File.ReadAllText(Path.Combine(worktreePath!, "README.md"));
+        Assert.That(worktreeReadme, Does.Not.Contain("Modified content."));
     }
 
-    [Fact]
+    [Test]
     public async Task CreateWorktree_BranchNameWithSpecialCharacters_SanitizesPath()
     {
         // Arrange
@@ -265,14 +273,9 @@ public class GitWorktreeServiceIntegrationTests : IDisposable
         var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
 
         // Assert
-        Assert.NotNull(worktreePath);
-        Assert.DoesNotContain("@", worktreePath);
-        Assert.DoesNotContain("#", worktreePath);
-        Assert.True(Directory.Exists(worktreePath));
-    }
-
-    public void Dispose()
-    {
-        _fixture.Dispose();
+        Assert.That(worktreePath, Is.Not.Null);
+        Assert.That(worktreePath, Does.Not.Contain("@"));
+        Assert.That(worktreePath, Does.Not.Contain("#"));
+        Assert.That(Directory.Exists(worktreePath), Is.True);
     }
 }

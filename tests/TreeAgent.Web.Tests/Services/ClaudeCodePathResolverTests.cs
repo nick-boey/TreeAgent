@@ -2,9 +2,10 @@ using TreeAgent.Web.Services;
 
 namespace TreeAgent.Web.Tests.Services;
 
+[TestFixture]
 public class ClaudeCodePathResolverTests
 {
-    [Fact]
+    [Test]
     public void Resolve_WithEnvironmentVariable_ReturnsEnvPath()
     {
         // Arrange
@@ -17,10 +18,10 @@ public class ClaudeCodePathResolverTests
         var result = resolver.Resolve();
 
         // Assert
-        Assert.Equal(envPath, result);
+        Assert.That(result, Is.EqualTo(envPath));
     }
 
-    [Fact]
+    [Test]
     public void Resolve_WithoutEnvVar_ChecksDefaultLocations()
     {
         // Arrange
@@ -37,10 +38,10 @@ public class ClaudeCodePathResolverTests
         var result = resolver.Resolve();
 
         // Assert
-        Assert.Equal(existingPath, result);
+        Assert.That(result, Is.EqualTo(existingPath));
     }
 
-    [Fact]
+    [Test]
     public void Resolve_Windows_ChecksNativeInstallerFirst()
     {
         // Arrange
@@ -59,10 +60,10 @@ public class ClaudeCodePathResolverTests
         var result = resolver.Resolve();
 
         // Assert
-        Assert.Equal(nativePath, result);
+        Assert.That(result, Is.EqualTo(nativePath));
     }
 
-    [Fact]
+    [Test]
     public void Resolve_Windows_FallsBackToNpmPath()
     {
         // Arrange
@@ -80,10 +81,10 @@ public class ClaudeCodePathResolverTests
         var result = resolver.Resolve();
 
         // Assert
-        Assert.Equal(npmPath, result);
+        Assert.That(result, Is.EqualTo(npmPath));
     }
 
-    [Fact]
+    [Test]
     public void Resolve_Linux_ChecksNativeInstallerFirst()
     {
         // Arrange
@@ -102,10 +103,10 @@ public class ClaudeCodePathResolverTests
         var result = resolver.Resolve();
 
         // Assert
-        Assert.Equal(nativePath, result);
+        Assert.That(result, Is.EqualTo(nativePath));
     }
 
-    [Fact]
+    [Test]
     public void Resolve_Linux_FallsBackToNpmGlobalPath()
     {
         // Arrange
@@ -123,10 +124,10 @@ public class ClaudeCodePathResolverTests
         var result = resolver.Resolve();
 
         // Assert
-        Assert.Equal(npmPath, result);
+        Assert.That(result, Is.EqualTo(npmPath));
     }
 
-    [Fact]
+    [Test]
     public void Resolve_Linux_FallsBackToLocalBinPath()
     {
         // Arrange
@@ -144,10 +145,10 @@ public class ClaudeCodePathResolverTests
         var result = resolver.Resolve();
 
         // Assert
-        Assert.Equal(localBinPath, result);
+        Assert.That(result, Is.EqualTo(localBinPath));
     }
 
-    [Fact]
+    [Test]
     public void Resolve_NoPathFound_ReturnsClaude()
     {
         // Arrange
@@ -163,10 +164,10 @@ public class ClaudeCodePathResolverTests
         var result = resolver.Resolve();
 
         // Assert
-        Assert.Equal("claude", result);
+        Assert.That(result, Is.EqualTo("claude"));
     }
 
-    [Fact]
+    [Test]
     public void Resolve_NullLocalAppData_SkipsNativeWindowsPath()
     {
         // Arrange
@@ -184,10 +185,10 @@ public class ClaudeCodePathResolverTests
         var result = resolver.Resolve();
 
         // Assert
-        Assert.Equal(npmPath, result);
+        Assert.That(result, Is.EqualTo(npmPath));
     }
 
-    [Fact]
+    [Test]
     public void GetDefaultPaths_Windows_ReturnsExpectedPaths()
     {
         // Arrange
@@ -203,11 +204,11 @@ public class ClaudeCodePathResolverTests
         var paths = resolver.GetDefaultPaths().ToList();
 
         // Assert
-        Assert.Contains(@"C:\Users\test\AppData\Local\Programs\claude-code\claude.exe", paths);
-        Assert.Contains(@"C:\Users\test\AppData\Roaming\npm\claude.cmd", paths);
+        Assert.That(paths, Does.Contain(@"C:\Users\test\AppData\Local\Programs\claude-code\claude.exe"));
+        Assert.That(paths, Does.Contain(@"C:\Users\test\AppData\Roaming\npm\claude.cmd"));
     }
 
-    [Fact]
+    [Test]
     public void GetDefaultPaths_Linux_ReturnsExpectedPaths()
     {
         // Arrange
@@ -223,8 +224,8 @@ public class ClaudeCodePathResolverTests
         var paths = resolver.GetDefaultPaths().ToList();
 
         // Assert
-        Assert.Contains("/usr/local/bin/claude", paths);
-        Assert.Contains("/home/test/.npm-global/bin/claude", paths);
-        Assert.Contains("/home/test/.local/bin/claude", paths);
+        Assert.That(paths, Does.Contain("/usr/local/bin/claude"));
+        Assert.That(paths, Does.Contain("/home/test/.npm-global/bin/claude"));
+        Assert.That(paths, Does.Contain("/home/test/.local/bin/claude"));
     }
 }

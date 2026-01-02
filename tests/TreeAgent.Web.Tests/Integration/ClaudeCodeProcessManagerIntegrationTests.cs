@@ -8,23 +8,32 @@ namespace TreeAgent.Web.Tests.Integration;
 /// Integration tests for ClaudeCodeProcessManager that test multiple agent management.
 /// These tests require Claude Code to be installed and available on the PATH.
 /// </summary>
-[Trait("Category", "Integration")]
-[Trait("Category", "ClaudeCode")]
-public class ClaudeCodeProcessManagerIntegrationTests : IDisposable
+[TestFixture]
+[Category("Integration")]
+[Category("ClaudeCode")]
+public class ClaudeCodeProcessManagerIntegrationTests
 {
-    private readonly ClaudeCodeTestFixture _fixture;
-    private readonly ClaudeCodeProcessManager _manager;
+    private ClaudeCodeTestFixture _fixture = null!;
+    private ClaudeCodeProcessManager _manager = null!;
 
-    public ClaudeCodeProcessManagerIntegrationTests()
+    [SetUp]
+    public void SetUp()
     {
         _fixture = new ClaudeCodeTestFixture();
         _manager = new ClaudeCodeProcessManager(new ClaudeCodeProcessFactory(_fixture.ClaudeCodePath));
     }
 
-    [SkippableFact]
+    [TearDown]
+    public void TearDown()
+    {
+        _manager.Dispose();
+        _fixture.Dispose();
+    }
+
+    [Test]
     public async Task StartAgent_SingleAgent_StartsSuccessfully()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var agentId = "test-agent-1";
@@ -36,15 +45,15 @@ public class ClaudeCodeProcessManagerIntegrationTests : IDisposable
         await Task.Delay(2000); // Allow time for process to start
 
         // Assert
-        Assert.True(result);
-        Assert.True(_manager.IsAgentRunning(agentId));
-        Assert.Equal(AgentStatus.Running, _manager.GetAgentStatus(agentId));
+        Assert.That(result, Is.True);
+        Assert.That(_manager.IsAgentRunning(agentId), Is.True);
+        Assert.That(_manager.GetAgentStatus(agentId), Is.EqualTo(AgentStatus.Running));
     }
 
-    [SkippableFact]
+    [Test]
     public async Task StartAgent_DuplicateAgentId_ReturnsFalse()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var agentId = "test-duplicate";
@@ -55,13 +64,13 @@ public class ClaudeCodeProcessManagerIntegrationTests : IDisposable
         var result = await _manager.StartAgentAsync(agentId, _fixture.WorkingDirectory);
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [SkippableFact]
+    [Test]
     public async Task StartAgent_MultipleAgents_AllRunConcurrently()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var agentIds = new[] { "agent-1", "agent-2", "agent-3" };
@@ -74,49 +83,49 @@ public class ClaudeCodeProcessManagerIntegrationTests : IDisposable
         await Task.Delay(3000); // Allow time for all processes to start
 
         // Assert
-        Assert.Equal(3, _manager.GetRunningAgentCount());
+        Assert.That(_manager.GetRunningAgentCount(), Is.EqualTo(3));
         foreach (var id in agentIds)
         {
-            Assert.True(_manager.IsAgentRunning(id));
+            Assert.That(_manager.IsAgentRunning(id), Is.True);
         }
     }
 
-    [SkippableFact]
+    [Test]
     public async Task StopAgent_RunningAgent_StopsSuccessfully()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var agentId = "test-stop-manager";
         await _manager.StartAgentAsync(agentId, _fixture.WorkingDirectory);
         await Task.Delay(2000);
-        Assert.True(_manager.IsAgentRunning(agentId));
+        Assert.That(_manager.IsAgentRunning(agentId), Is.True);
 
         // Act
         var result = await _manager.StopAgentAsync(agentId);
 
         // Assert
-        Assert.True(result);
-        Assert.False(_manager.IsAgentRunning(agentId));
-        Assert.Equal(AgentStatus.Stopped, _manager.GetAgentStatus(agentId));
+        Assert.That(result, Is.True);
+        Assert.That(_manager.IsAgentRunning(agentId), Is.False);
+        Assert.That(_manager.GetAgentStatus(agentId), Is.EqualTo(AgentStatus.Stopped));
     }
 
-    [SkippableFact]
+    [Test]
     public async Task StopAgent_NonExistentAgent_ReturnsFalse()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Act
         var result = await _manager.StopAgentAsync("non-existent");
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [SkippableFact]
+    [Test]
     public async Task SendMessage_RunningAgent_SendsSuccessfully()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var agentId = "test-send-message";
@@ -133,13 +142,13 @@ public class ClaudeCodeProcessManagerIntegrationTests : IDisposable
         var result = await _manager.SendMessageAsync(agentId, "Reply with only 'OK'");
 
         // Assert
-        Assert.True(result);
+        Assert.That(result, Is.True);
     }
 
-    [SkippableFact]
+    [Test]
     public async Task SendMessage_StoppedAgent_ReturnsFalse()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var agentId = "test-stopped-send";
@@ -151,13 +160,13 @@ public class ClaudeCodeProcessManagerIntegrationTests : IDisposable
         var result = await _manager.SendMessageAsync(agentId, "This should fail");
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [SkippableFact]
+    [Test]
     public async Task GetAllAgentIds_ReturnsAllRunningAgents()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var agentIds = new[] { "list-agent-1", "list-agent-2" };
@@ -171,15 +180,15 @@ public class ClaudeCodeProcessManagerIntegrationTests : IDisposable
         var result = _manager.GetAllAgentIds().ToList();
 
         // Assert
-        Assert.Equal(2, result.Count);
-        Assert.Contains("list-agent-1", result);
-        Assert.Contains("list-agent-2", result);
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result, Does.Contain("list-agent-1"));
+        Assert.That(result, Does.Contain("list-agent-2"));
     }
 
-    [SkippableFact]
+    [Test]
     public async Task StartAgent_WithSystemPrompt_PassesPromptToProcess()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var agentId = "test-system-prompt";
@@ -204,34 +213,28 @@ public class ClaudeCodeProcessManagerIntegrationTests : IDisposable
         await Task.WhenAny(messageReceived.Task, Task.Delay(TimeSpan.FromSeconds(30)));
 
         // Assert
-        Assert.NotEmpty(messagesReceived);
+        Assert.That(messagesReceived, Is.Not.Empty);
         var allMessages = string.Join(" ", messagesReceived);
-        Assert.Contains("ACKNOWLEDGED", allMessages, StringComparison.OrdinalIgnoreCase);
+        Assert.That(allMessages.ToUpperInvariant(), Does.Contain("ACKNOWLEDGED"));
     }
 
-    [Fact]
+    [Test]
     public void GetAgentStatus_NonExistentAgent_ReturnsStopped()
     {
         // Act
         var status = _manager.GetAgentStatus("non-existent");
 
         // Assert
-        Assert.Equal(AgentStatus.Stopped, status);
+        Assert.That(status, Is.EqualTo(AgentStatus.Stopped));
     }
 
-    [Fact]
+    [Test]
     public void IsAgentRunning_NonExistentAgent_ReturnsFalse()
     {
         // Act
         var isRunning = _manager.IsAgentRunning("non-existent");
 
         // Assert
-        Assert.False(isRunning);
-    }
-
-    public void Dispose()
-    {
-        _manager.Dispose();
-        _fixture.Dispose();
+        Assert.That(isRunning, Is.False);
     }
 }

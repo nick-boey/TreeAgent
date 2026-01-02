@@ -8,22 +8,43 @@ namespace TreeAgent.Web.Tests.Integration;
 /// Integration tests for ClaudeCodeProcess that test against a real Claude Code installation.
 /// These tests require Claude Code to be installed and available on the PATH.
 /// </summary>
-[Trait("Category", "Integration")]
-[Trait("Category", "ClaudeCode")]
-public class ClaudeCodeProcessIntegrationTests : IDisposable
+[TestFixture]
+[Category("Integration")]
+[Category("ClaudeCode")]
+public class ClaudeCodeProcessIntegrationTests
 {
-    private readonly ClaudeCodeTestFixture _fixture;
+    private ClaudeCodeTestFixture _fixture = null!;
     private readonly List<IClaudeCodeProcess> _processesToCleanup = [];
 
-    public ClaudeCodeProcessIntegrationTests()
+    [SetUp]
+    public void SetUp()
     {
         _fixture = new ClaudeCodeTestFixture();
     }
 
-    [SkippableFact]
+    [TearDown]
+    public void TearDown()
+    {
+        foreach (var process in _processesToCleanup)
+        {
+            try
+            {
+                process.Dispose();
+            }
+            catch
+            {
+                // Best effort cleanup
+            }
+        }
+        _processesToCleanup.Clear();
+
+        _fixture.Dispose();
+    }
+
+    [Test]
     public async Task ClaudeCodeProcess_Start_StartsSuccessfully()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var process = CreateProcess("test-start");
@@ -37,14 +58,14 @@ public class ClaudeCodeProcessIntegrationTests : IDisposable
         await Task.Delay(2000);
 
         // Assert
-        Assert.True(process.IsRunning);
-        Assert.Contains(AgentStatus.Running, statusChanges);
+        Assert.That(process.IsRunning, Is.True);
+        Assert.That(statusChanges, Does.Contain(AgentStatus.Running));
     }
 
-    [SkippableFact]
+    [Test]
     public async Task ClaudeCodeProcess_SendMessage_ReceivesResponse()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var process = CreateProcess("test-message");
@@ -72,13 +93,13 @@ public class ClaudeCodeProcessIntegrationTests : IDisposable
             Task.Delay(TimeSpan.FromSeconds(30)));
 
         // Assert
-        Assert.NotEmpty(messagesReceived);
+        Assert.That(messagesReceived, Is.Not.Empty);
     }
 
-    [SkippableFact]
+    [Test]
     public async Task ClaudeCodeProcess_Stop_StopsGracefully()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var process = CreateProcess("test-stop");
@@ -87,20 +108,20 @@ public class ClaudeCodeProcessIntegrationTests : IDisposable
 
         await process.StartAsync();
         await Task.Delay(2000); // Wait for startup
-        Assert.True(process.IsRunning);
+        Assert.That(process.IsRunning, Is.True);
 
         // Act
         await process.StopAsync();
 
         // Assert
-        Assert.False(process.IsRunning);
-        Assert.Equal(AgentStatus.Stopped, process.Status);
+        Assert.That(process.IsRunning, Is.False);
+        Assert.That(process.Status, Is.EqualTo(AgentStatus.Stopped));
     }
 
-    [SkippableFact]
+    [Test]
     public async Task ClaudeCodeProcess_WithSystemPrompt_UsesSystemPrompt()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var systemPrompt = "You are a helpful assistant that always responds with 'PONG' when asked 'PING'.";
@@ -125,16 +146,16 @@ public class ClaudeCodeProcessIntegrationTests : IDisposable
             Task.Delay(TimeSpan.FromSeconds(30)));
 
         // Assert
-        Assert.NotEmpty(messagesReceived);
+        Assert.That(messagesReceived, Is.Not.Empty);
         // The response should contain PONG if the system prompt was applied
         var allMessages = string.Join(" ", messagesReceived);
-        Assert.Contains("PONG", allMessages, StringComparison.OrdinalIgnoreCase);
+        Assert.That(allMessages.ToUpperInvariant(), Does.Contain("PONG"));
     }
 
-    [SkippableFact]
+    [Test]
     public async Task ClaudeCodeProcess_MultipleMessages_MaintainsContext()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var process = CreateProcess("test-context");
@@ -166,15 +187,15 @@ public class ClaudeCodeProcessIntegrationTests : IDisposable
             Task.Delay(TimeSpan.FromSeconds(30)));
 
         // Assert
-        Assert.True(messagesReceived.Count >= 2);
+        Assert.That(messagesReceived.Count, Is.GreaterThanOrEqualTo(2));
         var allMessages = string.Join(" ", messagesReceived);
-        Assert.Contains("42", allMessages);
+        Assert.That(allMessages, Does.Contain("42"));
     }
 
-    [SkippableFact]
+    [Test]
     public async Task ClaudeCodeProcess_JsonOutputFormat_ReturnsJson()
     {
-        Skip.IfNot(_fixture.IsClaudeCodeAvailable, "Claude Code is not available");
+        Assume.That(_fixture.IsClaudeCodeAvailable, Is.True, "Claude Code is not available");
 
         // Arrange
         var process = CreateProcess("test-json");
@@ -198,15 +219,16 @@ public class ClaudeCodeProcessIntegrationTests : IDisposable
             Task.Delay(TimeSpan.FromSeconds(30)));
 
         // Assert - Should receive JSON formatted output
-        Assert.NotEmpty(messagesReceived);
+        Assert.That(messagesReceived, Is.Not.Empty);
         // JSON output typically starts with { or contains json-like structure
         var firstMessage = messagesReceived.First();
-        Assert.True(
+        Assert.That(
             firstMessage.Contains("{") || firstMessage.Contains("\""),
+            Is.True,
             $"Expected JSON-like output but got: {firstMessage}");
     }
 
-    [Fact]
+    [Test]
     public void ClaudeCodeAvailability_ReportsCorrectly()
     {
         // This test always runs and documents the Claude Code availability
@@ -214,12 +236,12 @@ public class ClaudeCodeProcessIntegrationTests : IDisposable
 
         if (_fixture.IsClaudeCodeAvailable)
         {
-            Assert.NotNull(version);
-            Assert.NotEmpty(version);
+            Assert.That(version, Is.Not.Null);
+            Assert.That(version, Is.Not.Empty);
         }
         else
         {
-            Assert.Null(version);
+            Assert.That(version, Is.Null);
         }
     }
 
@@ -229,22 +251,5 @@ public class ClaudeCodeProcessIntegrationTests : IDisposable
         var process = factory.Create(agentId, _fixture.WorkingDirectory, systemPrompt);
         _processesToCleanup.Add(process);
         return process;
-    }
-
-    public void Dispose()
-    {
-        foreach (var process in _processesToCleanup)
-        {
-            try
-            {
-                process.Dispose();
-            }
-            catch
-            {
-                // Best effort cleanup
-            }
-        }
-
-        _fixture.Dispose();
     }
 }

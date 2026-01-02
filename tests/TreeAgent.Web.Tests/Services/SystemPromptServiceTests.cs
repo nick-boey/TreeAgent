@@ -6,13 +6,15 @@ using TreeAgent.Web.Services;
 
 namespace TreeAgent.Web.Tests.Services;
 
-public class SystemPromptServiceTests : IDisposable
+[TestFixture]
+public class SystemPromptServiceTests
 {
-    private readonly TreeAgentDbContext _db;
-    private readonly Mock<FeatureService> _mockFeatureService;
-    private readonly SystemPromptService _service;
+    private TreeAgentDbContext _db = null!;
+    private Mock<FeatureService> _mockFeatureService = null!;
+    private SystemPromptService _service = null!;
 
-    public SystemPromptServiceTests()
+    [SetUp]
+    public void SetUp()
     {
         var options = new DbContextOptionsBuilder<TreeAgentDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -27,7 +29,8 @@ public class SystemPromptServiceTests : IDisposable
         _service = new SystemPromptService(_db, _mockFeatureService.Object);
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
         _db.Dispose();
     }
@@ -64,7 +67,7 @@ public class SystemPromptServiceTests : IDisposable
         return feature;
     }
 
-    [Fact]
+    [Test]
     public async Task CreateAsync_CreatesTemplate()
     {
         // Act
@@ -76,13 +79,13 @@ public class SystemPromptServiceTests : IDisposable
             true);
 
         // Assert
-        Assert.NotNull(template);
-        Assert.Equal("Test Template", template.Name);
-        Assert.Equal("This is the content", template.Content);
-        Assert.True(template.IsGlobal);
+        Assert.That(template, Is.Not.Null);
+        Assert.That(template.Name, Is.EqualTo("Test Template"));
+        Assert.That(template.Content, Is.EqualTo("This is the content"));
+        Assert.That(template.IsGlobal, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task GetGlobalTemplatesAsync_ReturnsOnlyGlobalTemplates()
     {
         // Arrange
@@ -96,11 +99,11 @@ public class SystemPromptServiceTests : IDisposable
         var templates = await _service.GetGlobalTemplatesAsync();
 
         // Assert
-        Assert.Equal(2, templates.Count);
-        Assert.All(templates, t => Assert.True(t.IsGlobal));
+        Assert.That(templates, Has.Count.EqualTo(2));
+        Assert.That(templates, Has.All.Matches<SystemPromptTemplate>(t => t.IsGlobal));
     }
 
-    [Fact]
+    [Test]
     public async Task GetProjectTemplatesAsync_ReturnsProjectAndGlobalTemplates()
     {
         // Arrange
@@ -113,10 +116,10 @@ public class SystemPromptServiceTests : IDisposable
         var templates = await _service.GetProjectTemplatesAsync(project.Id);
 
         // Assert
-        Assert.Equal(2, templates.Count);
+        Assert.That(templates, Has.Count.EqualTo(2));
     }
 
-    [Fact]
+    [Test]
     public async Task UpdateAsync_UpdatesTemplate()
     {
         // Arrange
@@ -131,13 +134,13 @@ public class SystemPromptServiceTests : IDisposable
             false);
 
         // Assert
-        Assert.NotNull(updated);
-        Assert.Equal("Updated", updated.Name);
-        Assert.Equal("Updated Content", updated.Content);
-        Assert.False(updated.IsGlobal);
+        Assert.That(updated, Is.Not.Null);
+        Assert.That(updated!.Name, Is.EqualTo("Updated"));
+        Assert.That(updated.Content, Is.EqualTo("Updated Content"));
+        Assert.That(updated.IsGlobal, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task DeleteAsync_DeletesTemplate()
     {
         // Arrange
@@ -147,12 +150,12 @@ public class SystemPromptServiceTests : IDisposable
         var result = await _service.DeleteAsync(template.Id);
 
         // Assert
-        Assert.True(result);
+        Assert.That(result, Is.True);
         var deleted = await _service.GetByIdAsync(template.Id);
-        Assert.Null(deleted);
+        Assert.That(deleted, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessTemplateAsync_ReplacesProjectVariables()
     {
         // Arrange
@@ -165,11 +168,11 @@ public class SystemPromptServiceTests : IDisposable
         var result = await _service.ProcessTemplateAsync(template, feature.Id);
 
         // Assert
-        Assert.Contains("Test Project", result);
-        Assert.Contains("main", result);
+        Assert.That(result, Does.Contain("Test Project"));
+        Assert.That(result, Does.Contain("main"));
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessTemplateAsync_ReplacesFeatureVariables()
     {
         // Arrange
@@ -182,12 +185,12 @@ public class SystemPromptServiceTests : IDisposable
         var result = await _service.ProcessTemplateAsync(template, feature.Id);
 
         // Assert
-        Assert.Contains("Test Feature", result);
-        Assert.Contains("InDevelopment", result);
-        Assert.Contains("feature/test", result);
+        Assert.That(result, Does.Contain("Test Feature"));
+        Assert.That(result, Does.Contain("InDevelopment"));
+        Assert.That(result, Does.Contain("feature/test"));
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessTemplateAsync_RemovesUnprocessedVariables()
     {
         // Arrange
@@ -197,31 +200,31 @@ public class SystemPromptServiceTests : IDisposable
         var result = await _service.ProcessTemplateAsync(template);
 
         // Assert
-        Assert.DoesNotContain("{{", result);
-        Assert.DoesNotContain("}}", result);
+        Assert.That(result, Does.Not.Contain("{{"));
+        Assert.That(result, Does.Not.Contain("}}"));
     }
 
-    [Fact]
+    [Test]
     public async Task ProcessTemplateAsync_HandlesEmptyTemplate()
     {
         // Act
         var result = await _service.ProcessTemplateAsync("");
 
         // Assert
-        Assert.Equal("", result);
+        Assert.That(result, Is.EqualTo(""));
     }
 
-    [Fact]
+    [Test]
     public void GetAvailableVariables_ReturnsExpectedVariables()
     {
         // Act
         var variables = SystemPromptService.GetAvailableVariables();
 
         // Assert
-        Assert.NotEmpty(variables);
-        Assert.Contains(variables, v => v.Variable == "{{PROJECT_NAME}}");
-        Assert.Contains(variables, v => v.Variable == "{{FEATURE_TITLE}}");
-        Assert.Contains(variables, v => v.Variable == "{{BRANCH_NAME}}");
-        Assert.Contains(variables, v => v.Variable == "{{FEATURE_TREE}}");
+        Assert.That(variables, Is.Not.Empty);
+        Assert.That(variables, Has.Some.Matches<TemplateVariable>(v => v.Variable == "{{PROJECT_NAME}}"));
+        Assert.That(variables, Has.Some.Matches<TemplateVariable>(v => v.Variable == "{{FEATURE_TITLE}}"));
+        Assert.That(variables, Has.Some.Matches<TemplateVariable>(v => v.Variable == "{{BRANCH_NAME}}"));
+        Assert.That(variables, Has.Some.Matches<TemplateVariable>(v => v.Variable == "{{FEATURE_TREE}}"));
     }
 }
