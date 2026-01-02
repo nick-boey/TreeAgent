@@ -7,12 +7,9 @@ using TreeAgent.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure structured logging
+// Configure console logging with readable output
 builder.Logging.ClearProviders();
-builder.Logging.AddConsole(options =>
-{
-    options.FormatterName = "json";
-});
+builder.Logging.AddConsole();
 
 // Add services to the container.
 var dbPath = builder.Configuration["TREEAGENT_DB_PATH"] ?? "treeagent.db";
