@@ -16,6 +16,14 @@ builder.Logging.AddConsole(options =>
 
 // Add services to the container.
 var dbPath = builder.Configuration["TREEAGENT_DB_PATH"] ?? "treeagent.db";
+
+// Ensure the database directory exists
+var dbDirectory = Path.GetDirectoryName(dbPath);
+if (!string.IsNullOrEmpty(dbDirectory) && !Directory.Exists(dbDirectory))
+{
+    Directory.CreateDirectory(dbDirectory);
+}
+
 builder.Services.AddDbContext<TreeAgentDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
 
