@@ -2,11 +2,12 @@ using TreeAgent.Web.Services;
 
 namespace TreeAgent.Web.Tests.Services;
 
+[TestFixture]
 public class MessageParserTests
 {
     private readonly MessageParser _parser = new();
 
-    [Fact]
+    [Test]
     public void Parse_TextMessage_ReturnsCorrectType()
     {
         // Arrange
@@ -16,12 +17,12 @@ public class MessageParserTests
         var result = _parser.Parse(json);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("text", result.Type);
-        Assert.Equal("Hello, world!", result.Content);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Type, Is.EqualTo("text"));
+        Assert.That(result.Content, Is.EqualTo("Hello, world!"));
     }
 
-    [Fact]
+    [Test]
     public void Parse_ToolUseMessage_ReturnsCorrectType()
     {
         // Arrange
@@ -31,12 +32,12 @@ public class MessageParserTests
         var result = _parser.Parse(json);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("tool_use", result.Type);
-        Assert.Equal("read_file", result.ToolName);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Type, Is.EqualTo("tool_use"));
+        Assert.That(result.ToolName, Is.EqualTo("read_file"));
     }
 
-    [Fact]
+    [Test]
     public void Parse_ToolResultMessage_ReturnsCorrectType()
     {
         // Arrange
@@ -46,11 +47,11 @@ public class MessageParserTests
         var result = _parser.Parse(json);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("tool_result", result.Type);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Type, Is.EqualTo("tool_result"));
     }
 
-    [Fact]
+    [Test]
     public void Parse_InvalidJson_ReturnsNull()
     {
         // Arrange
@@ -60,30 +61,30 @@ public class MessageParserTests
         var result = _parser.Parse(json);
 
         // Assert
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void Parse_EmptyString_ReturnsNull()
     {
         // Act
         var result = _parser.Parse("");
 
         // Assert
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void Parse_NullString_ReturnsNull()
     {
         // Act
         var result = _parser.Parse(null!);
 
         // Assert
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public void Parse_SystemMessage_ReturnsCorrectType()
     {
         // Arrange
@@ -93,11 +94,11 @@ public class MessageParserTests
         var result = _parser.Parse(json);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("system", result.Type);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Type, Is.EqualTo("system"));
     }
 
-    [Fact]
+    [Test]
     public void Parse_ErrorMessage_ReturnsCorrectType()
     {
         // Arrange
@@ -107,12 +108,12 @@ public class MessageParserTests
         var result = _parser.Parse(json);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal("error", result.Type);
-        Assert.Equal("Something went wrong", result.ErrorMessage);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Type, Is.EqualTo("error"));
+        Assert.That(result.ErrorMessage, Is.EqualTo("Something went wrong"));
     }
 
-    [Fact]
+    [Test]
     public void Parse_MessageWithMetadata_PreservesRawJson()
     {
         // Arrange
@@ -122,7 +123,7 @@ public class MessageParserTests
         var result = _parser.Parse(json);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(json, result.RawJson);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.RawJson, Is.EqualTo(json));
     }
 }

@@ -4,12 +4,14 @@ using TreeAgent.Web.Data.Entities;
 
 namespace TreeAgent.Web.Tests.Services;
 
+[TestFixture]
 public class ClaudeCodeProcessManagerTests
 {
-    private readonly Mock<IClaudeCodeProcessFactory> _mockFactory;
-    private readonly Mock<IClaudeCodeProcess> _mockProcess;
+    private Mock<IClaudeCodeProcessFactory> _mockFactory = null!;
+    private Mock<IClaudeCodeProcess> _mockProcess = null!;
 
-    public ClaudeCodeProcessManagerTests()
+    [SetUp]
+    public void SetUp()
     {
         _mockFactory = new Mock<IClaudeCodeProcessFactory>();
         _mockProcess = new Mock<IClaudeCodeProcess>();
@@ -24,7 +26,7 @@ public class ClaudeCodeProcessManagerTests
             .Returns(_mockProcess.Object);
     }
 
-    [Fact]
+    [Test]
     public async Task StartAgent_CreatesNewProcess()
     {
         // Arrange
@@ -36,13 +38,13 @@ public class ClaudeCodeProcessManagerTests
         var result = await manager.StartAgentAsync(agentId, workingDirectory);
 
         // Assert
-        Assert.True(result);
-        Assert.True(manager.IsAgentRunning(agentId));
+        Assert.That(result, Is.True);
+        Assert.That(manager.IsAgentRunning(agentId), Is.True);
         _mockFactory.Verify(f => f.Create(agentId, workingDirectory, null), Times.Once);
         _mockProcess.Verify(p => p.StartAsync(), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task StartAgent_WithSystemPrompt_PassesPromptToFactory()
     {
         // Arrange
@@ -55,11 +57,11 @@ public class ClaudeCodeProcessManagerTests
         var result = await manager.StartAgentAsync(agentId, workingDirectory, systemPrompt);
 
         // Assert
-        Assert.True(result);
+        Assert.That(result, Is.True);
         _mockFactory.Verify(f => f.Create(agentId, workingDirectory, systemPrompt), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task StartAgent_DuplicateId_ReturnsFalse()
     {
         // Arrange
@@ -71,10 +73,10 @@ public class ClaudeCodeProcessManagerTests
         var result = await manager.StartAgentAsync(agentId, "/tmp/test");
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task StopAgent_TerminatesProcess()
     {
         // Arrange
@@ -86,13 +88,13 @@ public class ClaudeCodeProcessManagerTests
         var result = await manager.StopAgentAsync(agentId);
 
         // Assert
-        Assert.True(result);
-        Assert.False(manager.IsAgentRunning(agentId));
+        Assert.That(result, Is.True);
+        Assert.That(manager.IsAgentRunning(agentId), Is.False);
         _mockProcess.Verify(p => p.StopAsync(), Times.Once);
         _mockProcess.Verify(p => p.Dispose(), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task StopAgent_NonExistent_ReturnsFalse()
     {
         // Arrange
@@ -102,10 +104,10 @@ public class ClaudeCodeProcessManagerTests
         var result = await manager.StopAgentAsync("non-existent");
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task SendMessage_ToRunningAgent_ReturnsTrue()
     {
         // Arrange
@@ -117,11 +119,11 @@ public class ClaudeCodeProcessManagerTests
         var result = await manager.SendMessageAsync(agentId, "Hello, Claude!");
 
         // Assert
-        Assert.True(result);
+        Assert.That(result, Is.True);
         _mockProcess.Verify(p => p.SendMessageAsync("Hello, Claude!"), Times.Once);
     }
 
-    [Fact]
+    [Test]
     public async Task SendMessage_ToNonExistentAgent_ReturnsFalse()
     {
         // Arrange
@@ -131,10 +133,10 @@ public class ClaudeCodeProcessManagerTests
         var result = await manager.SendMessageAsync("non-existent", "Hello");
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [Fact]
+    [Test]
     public void GetAgentStatus_NonExistent_ReturnsStopped()
     {
         // Arrange
@@ -144,10 +146,10 @@ public class ClaudeCodeProcessManagerTests
         var status = manager.GetAgentStatus("non-existent");
 
         // Assert
-        Assert.Equal(AgentStatus.Stopped, status);
+        Assert.That(status, Is.EqualTo(AgentStatus.Stopped));
     }
 
-    [Fact]
+    [Test]
     public async Task GetAgentStatus_RunningAgent_ReturnsRunning()
     {
         // Arrange
@@ -159,10 +161,10 @@ public class ClaudeCodeProcessManagerTests
         var status = manager.GetAgentStatus(agentId);
 
         // Assert
-        Assert.Equal(AgentStatus.Running, status);
+        Assert.That(status, Is.EqualTo(AgentStatus.Running));
     }
 
-    [Fact]
+    [Test]
     public async Task GetAllAgentIds_ReturnsAllTrackedAgents()
     {
         // Arrange
@@ -174,12 +176,12 @@ public class ClaudeCodeProcessManagerTests
         var agentIds = manager.GetAllAgentIds().ToList();
 
         // Assert
-        Assert.Equal(2, agentIds.Count);
-        Assert.Contains("agent-1", agentIds);
-        Assert.Contains("agent-2", agentIds);
+        Assert.That(agentIds, Has.Count.EqualTo(2));
+        Assert.That(agentIds, Does.Contain("agent-1"));
+        Assert.That(agentIds, Does.Contain("agent-2"));
     }
 
-    [Fact]
+    [Test]
     public void OnMessageReceived_EventIsRaised()
     {
         // Arrange
@@ -197,11 +199,11 @@ public class ClaudeCodeProcessManagerTests
         manager.SimulateMessageReceived("test-agent", "{\"type\":\"text\",\"content\":\"Hello\"}");
 
         // Assert
-        Assert.Equal("test-agent", receivedAgentId);
-        Assert.Contains("Hello", receivedMessage);
+        Assert.That(receivedAgentId, Is.EqualTo("test-agent"));
+        Assert.That(receivedMessage, Does.Contain("Hello"));
     }
 
-    [Fact]
+    [Test]
     public async Task Dispose_StopsAllProcesses()
     {
         // Arrange
@@ -213,6 +215,6 @@ public class ClaudeCodeProcessManagerTests
 
         // Assert
         _mockProcess.Verify(p => p.Dispose(), Times.Once);
-        Assert.Empty(manager.GetAllAgentIds());
+        Assert.That(manager.GetAllAgentIds(), Is.Empty);
     }
 }

@@ -24,13 +24,7 @@ public class ClaudeCodeProcessFactory : IClaudeCodeProcessFactory
 
     public ClaudeCodeProcessFactory(string? claudeCodePath = null)
     {
-        _claudeCodePath = claudeCodePath ?? GetDefaultClaudeCodePath();
-    }
-
-    private static string GetDefaultClaudeCodePath()
-    {
-        var envPath = Environment.GetEnvironmentVariable("CLAUDE_CODE_PATH");
-        return !string.IsNullOrEmpty(envPath) ? envPath : "claude";
+        _claudeCodePath = claudeCodePath ?? new ClaudeCodePathResolver().Resolve();
     }
 
     public IClaudeCodeProcess Create(string agentId, string workingDirectory, string? systemPrompt = null)

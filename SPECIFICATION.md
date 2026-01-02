@@ -53,6 +53,16 @@ Features are color-coded by status:
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
 │  │  Tree View  │  │ Agent View  │  │  Message Inspector  │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+│  ┌─────────────────────────┐  ┌────────────────────────────┐ │
+│  │   Prompt Templates     │  │     Feature Editor          │ │
+│  └─────────────────────────┘  └────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│                    SignalR Hub (Real-time)                   │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │     Agent Hub: messages, status changes, updates        │ │
+│  └─────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
                               │
 ┌─────────────────────────────────────────────────────────────┐
@@ -61,7 +71,10 @@ Features are color-coded by status:
 │  │   Project   │  │  Worktree   │  │      GitHub         │  │
 │  │   Service   │  │   Service   │  │      Service        │  │
 │  └─────────────┘  └─────────────┘  └─────────────────────┘  │
-│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │   Feature   │  │   Agent     │  │   System Prompt     │  │
+│  │   Service   │  │   Service   │  │      Service        │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │              Claude Code Process Manager                 │ │
 │  └─────────────────────────────────────────────────────────┘ │
@@ -71,9 +84,12 @@ Features are color-coded by status:
 │                       Data Layer                             │
 │  ┌─────────────────────────────────────────────────────────┐ │
 │  │                 SQLite + EF Core                         │ │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐ │ │
-│  │  │ Projects │  │ Features │  │ Messages │  │ Agents  │ │ │
-│  │  └──────────┘  └──────────┘  └──────────┘  └─────────┘ │ │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐ │ │
+│  │  │ Projects │ │ Features │ │ Messages │ │   Agents   │ │ │
+│  │  └──────────┘ └──────────┘ └──────────┘ └────────────┘ │ │
+│  │  ┌──────────────────────────────────────────────────┐  │ │
+│  │  │              Prompt Templates                     │  │ │
+│  │  └──────────────────────────────────────────────────┘  │ │
 │  └─────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -87,11 +103,33 @@ TreeAgent/
 ├── src/
 │   └── TreeAgent.Web/
 │       ├── Components/       # Blazor components
+│       │   ├── Layout/      # Layout components (MainLayout, NavMenu)
+│       │   ├── Pages/       # Routed page components
+│       │   └── Shared/      # Reusable components (FeatureTree, FeatureNode)
 │       ├── Data/            # EF Core DbContext and entities
-│       ├── Services/        # Business logic
+│       │   └── Entities/    # Entity classes (Project, Feature, Agent, Message)
+│       ├── HealthChecks/    # Health check implementations
+│       ├── Hubs/            # SignalR hubs for real-time updates
+│       ├── Migrations/      # EF Core migrations
+│       ├── Services/        # Business logic services
 │       └── Program.cs
+├── tests/
+│   └── TreeAgent.Web.Tests/ # Unit and integration tests
 └── TreeAgent.sln
 ```
+
+### 3.4 Core Services
+
+| Service | Responsibility |
+|---------|----------------|
+| `ProjectService` | CRUD operations for projects |
+| `FeatureService` | Feature management with tree structure and worktree integration |
+| `AgentService` | Agent lifecycle management with Claude Code process orchestration |
+| `GitHubService` | GitHub PR synchronization using Octokit |
+| `GitWorktreeService` | Git worktree operations |
+| `SystemPromptService` | Template processing for agent system prompts |
+| `ClaudeCodeProcessManager` | Process lifecycle for Claude Code CLI instances |
+| `MessageParser` | Parse JSON output from Claude Code agents |
 
 ## 4. Functional Requirements
 
@@ -140,6 +178,14 @@ TreeAgent/
 - **FR-UI-03**: Message inspector for individual agents
 - **FR-UI-04**: Feature editor for planning
 - **FR-UI-05**: Real-time updates via SignalR
+
+### 4.7 System Prompts
+
+- **FR-SP-01**: Per-feature custom system prompts
+- **FR-SP-02**: Project-level default system prompts
+- **FR-SP-03**: Template variable substitution (project name, feature title, etc.)
+- **FR-SP-04**: Prompt template library for reuse across projects
+- **FR-SP-05**: Context injection with feature tree information
 
 ## 5. Non-Functional Requirements
 
@@ -225,6 +271,20 @@ CREATE TABLE Messages (
 );
 ```
 
+### 6.5 PromptTemplates Table
+
+```sql
+CREATE TABLE PromptTemplates (
+    Id TEXT PRIMARY KEY,
+    Name TEXT NOT NULL,
+    Content TEXT NOT NULL,
+    Description TEXT,
+    IsDefault INTEGER DEFAULT 0,
+    CreatedAt TEXT NOT NULL,
+    UpdatedAt TEXT NOT NULL
+);
+```
+
 ## 7. External Dependencies
 
 ### 7.1 Claude Code CLI
@@ -249,6 +309,7 @@ git clone https://github.com/slopus/happy-cli .tmp/happy-cli
 - Cloud VM or local machine
 - Optionally accessible via Tailscale private network
 - Linux or Windows
+- .NET 8 runtime required
 
 ### 8.2 Configuration
 
@@ -257,3 +318,30 @@ Environment variables:
 - `TREEAGENT_WORKTREE_ROOT`: Base directory for worktrees
 - `GITHUB_TOKEN`: GitHub API access token
 - `CLAUDE_CODE_PATH`: Path to Claude Code CLI executable
+
+### 8.3 Health Checks
+
+The application exposes a health check endpoint at `/health` that monitors:
+- Database connectivity
+- Process manager status
+
+### 8.4 Real-time Communication
+
+SignalR hub available at `/hubs/agent` for:
+- Agent message streaming
+- Agent status change notifications
+- Feature status updates
+
+## 9. Template Variables
+
+System prompts support the following template variables:
+
+| Variable | Description |
+|----------|-------------|
+| `{{ProjectName}}` | Name of the current project |
+| `{{FeatureTitle}}` | Title of the feature being worked on |
+| `{{FeatureDescription}}` | Description of the feature |
+| `{{BranchName}}` | Git branch name for the feature |
+| `{{WorktreePath}}` | Absolute path to the worktree directory |
+| `{{ParentFeature}}` | Title of the parent feature (if any) |
+| `{{ChildFeatures}}` | Comma-separated list of child feature titles |

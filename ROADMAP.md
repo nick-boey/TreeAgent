@@ -2,6 +2,20 @@
 
 This document outlines the development roadmap for TreeAgent, organized into milestones that can be developed incrementally.
 
+## Current Status
+
+**All core milestones (1-8) are complete.** TreeAgent is production-ready with the following capabilities:
+
+- Project and feature management with hierarchical tree visualization
+- Git worktree integration for isolated feature development
+- GitHub pull request synchronization
+- Claude Code agent orchestration with real-time message streaming
+- Customizable system prompts with template variables
+- Health checks and structured logging
+- Comprehensive test coverage
+
+---
+
 ## Milestone 1: Foundation (Complete)
 
 Establish the core project structure and basic infrastructure.
@@ -218,12 +232,28 @@ Prepare for production deployment.
 
 ## Future Considerations
 
-Features for potential future development:
+Features for potential future development, organized by priority:
 
-- **Interactive Tree Editing**: Drag-and-drop reordering and reparenting
-- **Agent Collaboration**: Multiple agents working on related features
-- **Auto-merge Pipeline**: Automated PR merging with conflict resolution
-- **Code Review Integration**: AI-assisted code review workflow
-- **Metrics Dashboard**: Development velocity and agent performance metrics
-- **Protocol Layer (ACP/AG-UI/MCP)**: Standardized protocols for agent interoperability
-- **Multi-user Support**: Team features with role-based access
+### High Priority
+
+- **Interactive Tree Editing**: Drag-and-drop reordering and reparenting of features in the tree view
+- **Agent Collaboration**: Enable multiple agents to work on related features with shared context
+- **Auto-merge Pipeline**: Automated PR merging with conflict resolution and CI integration
+
+### Medium Priority
+
+- **Code Review Integration**: AI-assisted code review workflow with inline comments and suggestions
+- **Metrics Dashboard**: Development velocity tracking, agent performance metrics, and cost analysis
+- **Multi-user Support**: Team features with role-based access control and user authentication
+- **Notification System**: Email/Slack notifications for agent completions, PR status changes, and errors
+
+### Exploratory
+
+- **Protocol Layer (ACP/AG-UI/MCP)**: Standardized protocols for agent interoperability with other AI tools
+- **Plugin Architecture**: Extensibility for custom integrations and workflows
+- **Mobile Companion App**: Monitor agents and approve PRs from mobile devices
+- **Self-hosting Guide**: Docker/Kubernetes deployment documentation
+
+### Contributing
+
+Contributions are welcome. Please see the [SPECIFICATION.md](SPECIFICATION.md) for technical details and architecture overview before submitting pull requests.

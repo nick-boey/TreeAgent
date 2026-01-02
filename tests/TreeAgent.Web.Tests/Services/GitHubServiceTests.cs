@@ -9,15 +9,17 @@ using Project = TreeAgent.Web.Data.Entities.Project;
 
 namespace TreeAgent.Web.Tests.Services;
 
-public class GitHubServiceTests : IDisposable
+[TestFixture]
+public class GitHubServiceTests
 {
-    private readonly TreeAgentDbContext _db;
-    private readonly Mock<ICommandRunner> _mockRunner;
-    private readonly Mock<IConfiguration> _mockConfig;
-    private readonly Mock<IGitHubClientWrapper> _mockGitHubClient;
-    private readonly GitHubService _service;
+    private TreeAgentDbContext _db = null!;
+    private Mock<ICommandRunner> _mockRunner = null!;
+    private Mock<IConfiguration> _mockConfig = null!;
+    private Mock<IGitHubClientWrapper> _mockGitHubClient = null!;
+    private GitHubService _service = null!;
 
-    public GitHubServiceTests()
+    [SetUp]
+    public void SetUp()
     {
         var options = new DbContextOptionsBuilder<TreeAgentDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -33,7 +35,8 @@ public class GitHubServiceTests : IDisposable
         _service = new GitHubService(_db, _mockRunner.Object, _mockConfig.Object, _mockGitHubClient.Object);
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
         _db.Dispose();
     }
@@ -71,7 +74,7 @@ public class GitHubServiceTests : IDisposable
         return feature;
     }
 
-    [Fact]
+    [Test]
     public async Task IsConfigured_WithGitHubSettings_ReturnsTrue()
     {
         // Arrange
@@ -81,10 +84,10 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.IsConfiguredAsync(project.Id);
 
         // Assert
-        Assert.True(result);
+        Assert.That(result, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task IsConfigured_WithoutGitHubSettings_ReturnsFalse()
     {
         // Arrange
@@ -94,10 +97,10 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.IsConfiguredAsync(project.Id);
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task IsConfigured_WithoutToken_ReturnsFalse()
     {
         // Arrange
@@ -108,20 +111,20 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.IsConfiguredAsync(project.Id);
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task IsConfigured_ProjectNotFound_ReturnsFalse()
     {
         // Act
         var result = await _service.IsConfiguredAsync("nonexistent");
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task GetOpenPullRequests_ReturnsOpenPRs()
     {
         // Arrange
@@ -143,12 +146,12 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.GetOpenPullRequestsAsync(project.Id);
 
         // Assert
-        Assert.Equal(2, result.Count);
-        Assert.Equal("PR 1", result[0].Title);
-        Assert.Equal("PR 2", result[1].Title);
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result[0].Title, Is.EqualTo("PR 1"));
+        Assert.That(result[1].Title, Is.EqualTo("PR 2"));
     }
 
-    [Fact]
+    [Test]
     public async Task GetOpenPullRequests_ProjectNotConfigured_ReturnsEmpty()
     {
         // Arrange
@@ -158,10 +161,10 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.GetOpenPullRequestsAsync(project.Id);
 
         // Assert
-        Assert.Empty(result);
+        Assert.That(result, Is.Empty);
     }
 
-    [Fact]
+    [Test]
     public async Task GetClosedPullRequests_ReturnsClosedPRs()
     {
         // Arrange
@@ -182,11 +185,11 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.GetClosedPullRequestsAsync(project.Id);
 
         // Assert
-        Assert.Single(result);
-        Assert.True(result[0].Merged);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Merged, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task GetPullRequest_ReturnsSpecificPR()
     {
         // Arrange
@@ -203,12 +206,12 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.GetPullRequestAsync(project.Id, 42);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(42, result.Number);
-        Assert.Equal("Specific PR", result.Title);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Number, Is.EqualTo(42));
+        Assert.That(result.Title, Is.EqualTo("Specific PR"));
     }
 
-    [Fact]
+    [Test]
     public async Task GetPullRequest_NotFound_ReturnsNull()
     {
         // Arrange
@@ -224,10 +227,10 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.GetPullRequestAsync(project.Id, 999);
 
         // Assert
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task PushBranch_Success_ReturnsTrue()
     {
         // Arrange
@@ -240,10 +243,10 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.PushBranchAsync(project.Id, "feature/test");
 
         // Assert
-        Assert.True(result);
+        Assert.That(result, Is.True);
     }
 
-    [Fact]
+    [Test]
     public async Task PushBranch_Failure_ReturnsFalse()
     {
         // Arrange
@@ -256,10 +259,10 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.PushBranchAsync(project.Id, "feature/test");
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
-    [Fact]
+    [Test]
     public async Task CreatePullRequest_Success_CreatesPRAndUpdatesFeature()
     {
         // Arrange
@@ -280,16 +283,16 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.CreatePullRequestAsync(project.Id, feature.Id);
 
         // Assert
-        Assert.NotNull(result);
-        Assert.Equal(123, result.Number);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Number, Is.EqualTo(123));
 
         // Verify feature was updated
         var updatedFeature = await _db.Features.FindAsync(feature.Id);
-        Assert.Equal(123, updatedFeature!.GitHubPRNumber);
-        Assert.Equal(FeatureStatus.ReadyForReview, updatedFeature.Status);
+        Assert.That(updatedFeature!.GitHubPRNumber, Is.EqualTo(123));
+        Assert.That(updatedFeature.Status, Is.EqualTo(FeatureStatus.ReadyForReview));
     }
 
-    [Fact]
+    [Test]
     public async Task CreatePullRequest_PushFails_ReturnsNull()
     {
         // Arrange
@@ -303,10 +306,10 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.CreatePullRequestAsync(project.Id, feature.Id);
 
         // Assert
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task CreatePullRequest_NoBranch_ReturnsNull()
     {
         // Arrange
@@ -317,10 +320,10 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.CreatePullRequestAsync(project.Id, feature.Id);
 
         // Assert
-        Assert.Null(result);
+        Assert.That(result, Is.Null);
     }
 
-    [Fact]
+    [Test]
     public async Task SyncPullRequests_ImportsNewPRs()
     {
         // Arrange
@@ -348,17 +351,17 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.SyncPullRequestsAsync(project.Id);
 
         // Assert
-        Assert.Equal(1, result.Imported);
-        Assert.Equal(0, result.Updated);
-        Assert.Empty(result.Errors);
+        Assert.That(result.Imported, Is.EqualTo(1));
+        Assert.That(result.Updated, Is.EqualTo(0));
+        Assert.That(result.Errors, Is.Empty);
 
         var features = await _db.Features.Where(f => f.ProjectId == project.Id).ToListAsync();
-        Assert.Single(features);
-        Assert.Equal("New Feature", features[0].Title);
-        Assert.Equal(1, features[0].GitHubPRNumber);
+        Assert.That(features, Has.Count.EqualTo(1));
+        Assert.That(features[0].Title, Is.EqualTo("New Feature"));
+        Assert.That(features[0].GitHubPRNumber, Is.EqualTo(1));
     }
 
-    [Fact]
+    [Test]
     public async Task SyncPullRequests_UpdatesExistingFeatures()
     {
         // Arrange
@@ -389,25 +392,25 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.SyncPullRequestsAsync(project.Id);
 
         // Assert
-        Assert.Equal(0, result.Imported);
-        Assert.Equal(1, result.Updated);
+        Assert.That(result.Imported, Is.EqualTo(0));
+        Assert.That(result.Updated, Is.EqualTo(1));
 
         var updatedFeature = await _db.Features.FindAsync(existingFeature.Id);
-        Assert.Equal(FeatureStatus.Merged, updatedFeature!.Status);
+        Assert.That(updatedFeature!.Status, Is.EqualTo(FeatureStatus.Merged));
     }
 
-    [Fact]
+    [Test]
     public async Task SyncPullRequests_ProjectNotConfigured_ReturnsError()
     {
         // Act
         var result = await _service.SyncPullRequestsAsync("nonexistent");
 
         // Assert
-        Assert.Single(result.Errors);
-        Assert.Contains("not found", result.Errors[0].ToLower());
+        Assert.That(result.Errors, Has.Count.EqualTo(1));
+        Assert.That(result.Errors[0].ToLower(), Does.Contain("not found"));
     }
 
-    [Fact]
+    [Test]
     public async Task LinkPullRequest_Success_UpdatesFeature()
     {
         // Arrange
@@ -418,19 +421,19 @@ public class GitHubServiceTests : IDisposable
         var result = await _service.LinkPullRequestAsync(feature.Id, 42);
 
         // Assert
-        Assert.True(result);
+        Assert.That(result, Is.True);
         var updatedFeature = await _db.Features.FindAsync(feature.Id);
-        Assert.Equal(42, updatedFeature!.GitHubPRNumber);
+        Assert.That(updatedFeature!.GitHubPRNumber, Is.EqualTo(42));
     }
 
-    [Fact]
+    [Test]
     public async Task LinkPullRequest_FeatureNotFound_ReturnsFalse()
     {
         // Act
         var result = await _service.LinkPullRequestAsync("nonexistent", 42);
 
         // Assert
-        Assert.False(result);
+        Assert.That(result, Is.False);
     }
 
     // Helper to create mock PullRequest objects
@@ -494,11 +497,14 @@ public class GitHubServiceTests : IDisposable
 /// Integration tests that require real GitHub authentication.
 /// These tests are marked with [Ignore] and should be run manually.
 /// </summary>
-public class GitHubServiceIntegrationTests : IDisposable
+[TestFixture]
+[Category("Integration")]
+public class GitHubServiceIntegrationTests
 {
-    private readonly TreeAgentDbContext _db;
+    private TreeAgentDbContext _db = null!;
 
-    public GitHubServiceIntegrationTests()
+    [SetUp]
+    public void SetUp()
     {
         var options = new DbContextOptionsBuilder<TreeAgentDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
@@ -507,13 +513,14 @@ public class GitHubServiceIntegrationTests : IDisposable
         _db = new TreeAgentDbContext(options);
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
         _db.Dispose();
     }
 
-    [Fact]
-    [Trait("Category", "Integration")]
+    [Test]
+    [Category("Integration")]
     public async Task GetOpenPullRequests_RealGitHub_ReturnsData()
     {
         // This test requires:
@@ -524,7 +531,8 @@ public class GitHubServiceIntegrationTests : IDisposable
         var token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
         if (string.IsNullOrEmpty(token))
         {
-            return; // Skip test
+            Assert.Ignore("GITHUB_TOKEN environment variable not set");
+            return;
         }
 
         // Add a project pointing to a real repo
@@ -553,6 +561,6 @@ public class GitHubServiceIntegrationTests : IDisposable
         var result = await service.GetOpenPullRequestsAsync(project.Id);
 
         // Assert - just verify it doesn't throw
-        Assert.NotNull(result);
+        Assert.That(result, Is.Not.Null);
     }
 }
