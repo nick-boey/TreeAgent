@@ -126,10 +126,11 @@ TreeAgent organizes development as a continuous chain of pull requests across th
 
 #### Time Dimension
 
-Each pull request is assigned an integer time value `t`:
-- **Past (`t <= 0`)**: Merged/closed PRs ordered by merge time. The most recently merged PR has `t = 0`, older PRs have negative values.
-- **Present (`t = 1`)**: Currently open PRs. Multiple PRs can exist in parallel at this stage.
-- **Future (`t > 1`)**: Planned changes stored in `ROADMAP.json`, organized as a tree of dependent features.
+Each pull request has a calculated time value `t` based on its position in the workflow. This value is not stored but computed dynamically:
+
+- **Past (`t <= 0`)**: Merged/closed PRs. The value is calculated from merge order - most recent merge has `t = 0`, older PRs have negative values (`t = -1`, `t = -2`, etc.).
+- **Present (`t = 1`)**: All currently open PRs have `t = 1`. Multiple PRs can exist in parallel at this stage.
+- **Future (`t > 1`)**: Planned changes stored in `ROADMAP.json`. The value is calculated from the change's depth in the tree structure.
 
 #### PR Status Workflow
 
@@ -169,17 +170,18 @@ Examples: `core/feature/pr-time-dimension`, `web/bug/fix-status-colors`
 #### Future Changes (ROADMAP.json)
 
 Planned changes are stored in `ROADMAP.json` on the default branch:
-- Each change includes `id`, `group`, `type`, `title`, `instructions`, and `thread`
-- Changes are organized hierarchically with parent-child relationships
-- Threads link related changes across past, present, and future stages
+- Each change includes `id`, `group`, `type`, `title`, and `instructions`
+- Changes are organized as a recursive tree structure with nested children
 - When an agent starts work on a future change, it becomes a current PR
 
 #### Plan Update PRs
 
-Changes to `ROADMAP.json` require a special `plan-update` thread PR. These PRs:
-- Contain only modifications to the roadmap file
+When a PR contains *only* modifications to `ROADMAP.json` (planning changes without code), it is treated as a special `plan-update` group PR. These PRs:
+- Contain only modifications to the roadmap file (no code changes)
 - Must be merged before other PRs
 - Ensure the single source of truth for planning is always consistent
+
+Note: When a future change is promoted to a current PR, the `ROADMAP.json` is also updated to remove that change. This is a normal PR, not a plan-update PR, since it includes code changes.
 
 #### GitHub Sync
 

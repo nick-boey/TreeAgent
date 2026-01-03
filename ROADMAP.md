@@ -12,11 +12,12 @@ TreeAgent manages past, present, and future pull requests in a unified workflow.
 
 ### Time Dimension
 
-Each pull request is assigned an integer time value `t`:
-- `t < 0`: Past (merged/closed) PRs, ordered by merge time
+Each pull request has a calculated time value `t` based on its position in the workflow. This value is not stored but computed dynamically:
+
+- `t < 0`: Past (merged/closed) PRs. Calculated from merge order - most recent merge has `t = 0`, older PRs have negative values.
 - `t = 0`: Most recently merged PR (head of main)
-- `t = 1`: Current open PRs (may be multiple, parallel branches)
-- `t > 1`: Future planned changes (stored in ROADMAP.json)
+- `t = 1`: All currently open PRs. Multiple PRs can exist in parallel at this stage.
+- `t > 1`: Future planned changes (stored in ROADMAP.json). Calculated from tree depth.
 
 ### Current PR Status Workflow
 
@@ -53,7 +54,7 @@ stateDiagram-v2
 
 ## ROADMAP.json Schema
 
-Future changes are stored in a `ROADMAP.json` file on the default branch. This schema defines the structure:
+Future changes are stored in a `ROADMAP.json` file on the default branch. The structure is a recursive tree where each change can have nested children. The time value `t` is calculated from tree depth (root children have `t = 2`, their children have `t = 3`, etc.).
 
 ```json
 {
@@ -74,7 +75,8 @@ Future changes are stored in a `ROADMAP.json` file on the default branch. This s
       "type": "array",
       "items": {
         "$ref": "#/definitions/futureChange"
-      }
+      },
+      "description": "Root-level future changes (t = 2)"
     }
   },
   "required": ["version", "changes"],
@@ -106,20 +108,7 @@ Future changes are stored in a `ROADMAP.json` file on the default branch. This s
         },
         "instructions": {
           "type": "string",
-          "description": "Implementation instructions for agents (more specific for lower t values)"
-        },
-        "t": {
-          "type": "integer",
-          "minimum": 2,
-          "description": "Time position (must be >= 2 for future changes)"
-        },
-        "parentId": {
-          "type": ["string", "null"],
-          "description": "ID of parent change (null for root-level changes based on t=1)"
-        },
-        "thread": {
-          "type": "string",
-          "description": "Thread name linking related changes across the tree"
+          "description": "Implementation instructions for agents (more specific for changes closer to root)"
         },
         "priority": {
           "type": "string",
@@ -130,9 +119,16 @@ Future changes are stored in a `ROADMAP.json` file on the default branch. This s
           "type": "string",
           "enum": ["small", "medium", "large"],
           "description": "Estimated implementation complexity"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/futureChange"
+          },
+          "description": "Nested child changes that depend on this change"
         }
       },
-      "required": ["id", "group", "type", "title", "t", "thread"]
+      "required": ["id", "group", "type", "title"]
     }
   }
 }
@@ -149,23 +145,38 @@ Examples:
 
 ---
 
+## Data Architecture
+
+TreeAgent uses a hybrid data architecture with clear separation of concerns:
+
+| Data Type | Source of Truth | Storage |
+|-----------|-----------------|---------|
+| Past PRs | GitHub | Read from GitHub API (merged/closed PRs) |
+| Current PRs | GitHub | Read from GitHub API (open PRs) |
+| Future Changes | ROADMAP.json | Read from file in repository |
+| Agent Messages | SQLite | EF Core database |
+
+**Key principle**: PR and future change data is derived from GitHub and ROADMAP.json respectively. The SQLite database (EF Core) is used *only* for storing agent communication messages and related metadata. This ensures GitHub remains the single source of truth for PR state and the repository itself holds the roadmap.
+
+---
+
 ## Implementation Plan
 
 This implementation follows TDD principles: write failing tests first, then implement to make them pass.
 
 ### Phase 1: Data Model and Schema
 
-#### 1.1 Define PullRequestState Entity
+#### 1.1 Define PR Status Types
 
 **Tests:**
-- `PullRequestState_HasRequiredProperties_TimeGroupTypeId`
-- `PullRequestState_TimeValue_CanBeNegativeZeroOrPositive`
-- `PullRequestState_Status_MapsToCorrectColors`
+- `PullRequestStatus_AllStatusesHaveCorrectColors`
+- `PullRequestStatus_CanCalculateTimeFromMergeOrder`
+- `PullRequestStatus_OpenPRsAlwaysHaveTimeOne`
 
 **Implementation:**
-- Create `PullRequestState` entity with properties: `Id`, `Time`, `Group`, `Type`, `Title`, `Status`, `Thread`, `GitHubPrNumber`
-- Add `PullRequestStatus` enum: `InProgress`, `ReadyForReview`, `ChecksFailing`, `ReadyForMerging`, `Merged`, `Closed`
-- Add EF Core migration
+- Create `PullRequestStatus` enum: `InProgress`, `ReadyForReview`, `ChecksFailing`, `ReadyForMerging`, `Merged`, `Closed`
+- Create `PullRequestInfo` model for GitHub PR data (not persisted to EF Core)
+- Create helper methods to calculate `t` value from PR position
 
 #### 1.2 Create ROADMAP.json Parser
 
@@ -173,27 +184,29 @@ This implementation follows TDD principles: write failing tests first, then impl
 - `RoadmapParser_ValidJson_ParsesAllChanges`
 - `RoadmapParser_InvalidJson_ThrowsValidationException`
 - `RoadmapParser_MissingRequiredFields_ThrowsValidationException`
-- `RoadmapParser_ValidatesTimeGreaterThanOne`
+- `RoadmapParser_ParsesNestedChildren_AsTree`
+- `RoadmapParser_CalculatesTimeFromTreeDepth`
 
 **Implementation:**
-- Create `RoadmapChange` model matching schema
+- Create `RoadmapChange` model matching schema with recursive `Children` property
 - Create `RoadmapParser` service with JSON schema validation
 - Add file watcher for ROADMAP.json changes
+- Implement `t` value calculation from tree depth
 
 ### Phase 2: GitHub Integration Refactor
 
 #### 2.1 Past PR Synchronization
 
 **Tests:**
-- `GitHubSync_MergedPRs_AssignsNegativeTimeInOrder`
-- `GitHubSync_ClosedPRs_AssignsNegativeTimeInOrder`
+- `GitHubSync_MergedPRs_OrderedByMergeTime`
+- `GitHubSync_ClosedPRs_OrderedByCloseTime`
+- `GitHubSync_CalculatesTimeFromMergeOrder`
 - `GitHubSync_MostRecentMerge_HasTimeZero`
-- `GitHubSync_PreservesExistingTimeValues`
 
 **Implementation:**
 - Modify `GitHubService` to fetch merged/closed PRs with merge timestamps
-- Assign `t` values based on merge order (most recent = 0, older = negative)
-- Update sync to preserve existing time values for already-synced PRs
+- Calculate `t` values dynamically based on merge order (most recent = 0, older = negative)
+- Return PR data as read-only models (not persisted to database)
 
 #### 2.2 Current PR Status Tracking
 
@@ -201,15 +214,15 @@ This implementation follows TDD principles: write failing tests first, then impl
 - `CurrentPR_NewPR_HasInProgressStatus`
 - `CurrentPR_AgentComplete_HasReadyForReviewStatus`
 - `CurrentPR_ReviewComments_ReturnsToInProgress`
-- `CurrentPR_ChecksFailing_HasChecksFailing Status`
+- `CurrentPR_ChecksFailing_HasChecksFailingStatus`
 - `CurrentPR_Approved_HasReadyForMergingStatus`
-- `CurrentPR_AllCurrentPRs_HaveTimeOne`
+- `CurrentPR_AllOpenPRs_HaveTimeOne`
 
 **Implementation:**
 - Track PR review state from GitHub webhooks or polling
 - Detect CI check status via GitHub API
 - Implement status transition logic matching the state diagram
-- Ensure all open PRs maintain `t = 1`
+- All open PRs always have calculated `t = 1`
 
 #### 2.3 Automatic Rebasing
 
@@ -230,40 +243,40 @@ This implementation follows TDD principles: write failing tests first, then impl
 
 **Tests:**
 - `FutureChanges_LoadFromRoadmap_DisplaysInTree`
-- `FutureChanges_ParentChild_DisplaysHierarchy`
-- `FutureChanges_Thread_GroupsRelatedChanges`
-- `FutureChanges_TimeOrdering_DisplaysCorrectDepth`
+- `FutureChanges_NestedChildren_DisplaysHierarchy`
+- `FutureChanges_CalculatesTimeFromDepth`
+- `FutureChanges_GroupsDisplayedCorrectly`
 
 **Implementation:**
 - Load ROADMAP.json on startup and file change
-- Display future changes in feature tree with parent-child relationships
-- Show thread information for related changes
-- Order by `t` value within siblings
+- Display future changes in feature tree with recursive children
+- Calculate `t` values from tree depth (root = 2, children = 3, etc.)
+- Group changes visually by the `group` field
 
 #### 3.2 Promote Future Change to Current PR
 
 **Tests:**
 - `PromoteChange_CreatesWorktree_WithCorrectBranchName`
 - `PromoteChange_CreatesPR_WithChangeDetails`
-- `PromoteChange_RemovesFromRoadmap_AddsToCurrentPRs`
-- `PromoteChange_UpdatesChildParents_ToNewPR`
+- `PromoteChange_RemovesFromRoadmap_UpdatesTree`
+- `PromoteChange_PromotesChildren_ToParentLevel`
 
 **Implementation:**
 - When agent starts work on a future change, create worktree with branch `{group}/{type}/{id}`
 - Open PR with title and description from the change
-- Remove the change from ROADMAP.json (requires plan-update PR if only plan changes)
-- Update any child changes to reference the new PR as parent
+- Remove the change from ROADMAP.json and promote its children to the parent level
+- ROADMAP.json update is included in the PR (not a separate plan-update PR)
 
 #### 3.3 Plan Update PRs
 
 **Tests:**
-- `PlanUpdate_OnlyRoadmapChanges_CreatesSpecialThread`
+- `PlanUpdate_OnlyRoadmapChanges_UsesPlanUpdateGroup`
 - `PlanUpdate_MustMergeFirst_BeforeOtherPRs`
 - `PlanUpdate_ValidatesSchema_BeforeMerge`
 
 **Implementation:**
-- Detect PRs that only modify ROADMAP.json
-- Assign to special `plan-update` thread
+- Detect PRs that only modify ROADMAP.json (no code changes)
+- Use `plan-update` as the group in branch naming
 - Block merging of other PRs until plan-update PRs are merged
 - Validate ROADMAP.json schema on PR creation
 
@@ -274,7 +287,7 @@ This implementation follows TDD principles: write failing tests first, then impl
 **Tests:**
 - `Timeline_PastPRs_ShowsMergeOrder`
 - `Timeline_CurrentPRs_ShowsParallelBranches`
-- `Timeline_FutureChnges_ShowsTree`
+- `Timeline_FutureChanges_ShowsTree`
 - `Timeline_StatusColors_MatchDefinitions`
 
 **Implementation:**
@@ -282,17 +295,17 @@ This implementation follows TDD principles: write failing tests first, then impl
 - Add visual distinction between past (linear), current (parallel), future (tree)
 - Apply correct status colors per the status definitions table
 
-#### 4.2 Thread Visualization
+#### 4.2 Group Visualization
 
 **Tests:**
-- `Threads_RelatedPRs_ShowsConnection`
-- `Threads_CrossTimespan_LinksAllStages`
-- `Threads_FilterByThread_ShowsOnlyRelated`
+- `Groups_PRsGroupedByComponent`
+- `Groups_FilterByGroup_ShowsOnlyRelated`
+- `Groups_ColorCodedByGroup`
 
 **Implementation:**
-- Add visual thread indicators connecting related PRs/changes
-- Allow filtering the view by thread
-- Show thread timeline spanning past -> current -> future
+- Add visual group indicators for PRs and changes
+- Allow filtering the view by group
+- Color-code or tag items by their group
 
 #### 4.3 Status Workflow UI
 
@@ -314,12 +327,12 @@ This implementation follows TDD principles: write failing tests first, then impl
 **Tests:**
 - `Agent_StartWork_PRMovesToInProgress`
 - `Agent_CompleteWork_PRMovesToReadyForReview`
-- `Agent_RoadmapUpdate_CreatesplanUpdatePR`
+- `Agent_RoadmapOnlyChange_CreatesPlanUpdatePR`
 
 **Implementation:**
 - Agent lifecycle updates PR status automatically
 - Detect agent completion and transition to Ready for Review
-- When agent modifies ROADMAP.json, create special plan-update PR
+- When agent modifies *only* ROADMAP.json (no code), create plan-update group PR
 
 #### 5.2 Review Comment Handling
 
