@@ -9,7 +9,7 @@ using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
 using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
 
-namespace TreeAgent.Web.Tests.Features.PullRequests.Services;
+namespace TreeAgent.Web.Tests.Features.GitHub;
 
 [TestFixture]
 public class GitHubServiceTests

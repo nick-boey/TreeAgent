@@ -1,6 +1,6 @@
 using TreeAgent.Web.Features.Roadmap;
 
-namespace TreeAgent.Web.Tests.Services;
+namespace TreeAgent.Web.Tests.Features.Roadmap;
 
 [TestFixture]
 public class RoadmapParserTests
@@ -333,7 +333,7 @@ public class RoadmapParserTests
     public void RoadmapParser_Serialize_RoundTrips()
     {
         // Arrange
-        var roadmap = new Roadmap
+        var roadmap = new Web.Features.Roadmap.Roadmap
         {
             Version = "1.0",
             LastUpdated = DateTime.UtcNow,

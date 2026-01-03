@@ -5,7 +5,7 @@ using TreeAgent.Web.Features.Git;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
 
-namespace TreeAgent.Web.Tests.Services;
+namespace TreeAgent.Web.Tests.Features.Agents;
 
 [TestFixture]
 public class SystemPromptServiceTests

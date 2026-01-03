@@ -1,6 +1,6 @@
 using System.Diagnostics;
 
-namespace TreeAgent.Web.Tests.Integration.Fixtures;
+namespace TreeAgent.Web.Tests.Helpers;
 
 /// <summary>
 /// Fixture that creates a temporary git repository for integration testing.

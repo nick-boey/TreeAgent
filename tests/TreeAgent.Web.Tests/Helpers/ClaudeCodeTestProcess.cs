@@ -1,26 +1,17 @@
 using System.Diagnostics;
 using System.Text.Json;
 
-namespace TreeAgent.Web.Tests.Integration.Helpers;
+namespace TreeAgent.Web.Tests.Helpers;
 
 /// <summary>
 /// A Claude Code process wrapper designed for integration testing.
 /// Uses --print mode for single queries and stream-json for structured output.
 /// Based on the approach used by happy-cli (slopus/happy-cli).
 /// </summary>
-public class ClaudeCodeTestProcess : IDisposable
+public class ClaudeCodeTestProcess(string claudeCodePath, string workingDirectory, string? systemPrompt = null)
+    : IDisposable
 {
-    private readonly string _claudeCodePath;
-    private readonly string _workingDirectory;
-    private readonly string? _systemPrompt;
     private bool _disposed;
-
-    public ClaudeCodeTestProcess(string claudeCodePath, string workingDirectory, string? systemPrompt = null)
-    {
-        _claudeCodePath = claudeCodePath;
-        _workingDirectory = workingDirectory;
-        _systemPrompt = systemPrompt;
-    }
 
     /// <summary>
     /// Executes a single query against Claude Code and returns the result.
@@ -44,9 +35,9 @@ public class ClaudeCodeTestProcess : IDisposable
         var args = BuildArguments(prompt);
         var startInfo = new ProcessStartInfo
         {
-            FileName = _claudeCodePath,
+            FileName = claudeCodePath,
             Arguments = args,
-            WorkingDirectory = _workingDirectory,
+            WorkingDirectory = workingDirectory,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -159,10 +150,10 @@ public class ClaudeCodeTestProcess : IDisposable
             "--verbose"
         };
 
-        if (!string.IsNullOrEmpty(_systemPrompt))
+        if (!string.IsNullOrEmpty(systemPrompt))
         {
             args.Add("--system-prompt");
-            args.Add(EscapeArgument(_systemPrompt));
+            args.Add(EscapeArgument(systemPrompt));
         }
 
         return string.Join(" ", args);

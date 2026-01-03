@@ -1,7 +1,7 @@
 using TreeAgent.Web.Features.Git;
-using TreeAgent.Web.Tests.Integration.Fixtures;
+using TreeAgent.Web.Tests.Helpers;
 
-namespace TreeAgent.Web.Tests.Integration;
+namespace TreeAgent.Web.Tests.Features.Git;
 
 /// <summary>
 /// Integration tests for GitWorktreeService that test against real git repositories.

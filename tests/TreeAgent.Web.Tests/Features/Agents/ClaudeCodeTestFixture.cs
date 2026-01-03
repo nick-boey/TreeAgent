@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using TreeAgent.Web.Features.Agents.Services;
 
-namespace TreeAgent.Web.Tests.Integration.Fixtures;
+namespace TreeAgent.Web.Tests.Features.Agents;
 
 /// <summary>
 /// Fixture for Claude Code integration tests.

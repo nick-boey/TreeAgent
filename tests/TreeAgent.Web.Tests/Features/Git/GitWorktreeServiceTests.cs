@@ -2,7 +2,7 @@ using Moq;
 using TreeAgent.Web.Features.Commands;
 using TreeAgent.Web.Features.Git;
 
-namespace TreeAgent.Web.Tests.Services;
+namespace TreeAgent.Web.Tests.Features.Git;
 
 [TestFixture]
 public class GitWorktreeServiceTests

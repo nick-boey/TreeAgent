@@ -1,7 +1,4 @@
-using TreeAgent.Web.Tests.Integration.Fixtures;
-using TreeAgent.Web.Tests.Integration.Helpers;
-
-namespace TreeAgent.Web.Tests.Integration;
+namespace TreeAgent.Web.Tests.Features.Agents;
 
 /// <summary>
 /// Integration tests for Claude Code using query mode (--print).

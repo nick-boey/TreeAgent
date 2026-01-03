@@ -7,7 +7,7 @@ using TreeAgent.Web.Features.PullRequests.Data.Entities;
 using TreeAgent.Web.Features.Roadmap;
 using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
 
-namespace TreeAgent.Web.Tests.Services;
+namespace TreeAgent.Web.Tests.Features.Roadmap;
 
 [TestFixture]
 public class RoadmapServiceTests

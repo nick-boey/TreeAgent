@@ -1,6 +1,6 @@
 using TreeAgent.Web.Features.PullRequests;
 
-namespace TreeAgent.Web.Tests.Models;
+namespace TreeAgent.Web.Tests.Features.PullRequests;
 
 [TestFixture]
 public class PullRequestStatusTests

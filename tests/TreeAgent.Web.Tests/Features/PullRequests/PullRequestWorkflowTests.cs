@@ -10,7 +10,7 @@ using TreeAgent.Web.Features.PullRequests.Data.Entities;
 using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
 using PullRequestStatus = TreeAgent.Web.Features.PullRequests.PullRequestStatus;
 
-namespace TreeAgent.Web.Tests.Services;
+namespace TreeAgent.Web.Tests.Features.PullRequests;
 
 [TestFixture]
 public class PullRequestWorkflowTests

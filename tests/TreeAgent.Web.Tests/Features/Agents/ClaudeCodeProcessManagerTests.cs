@@ -2,7 +2,7 @@ using Moq;
 using TreeAgent.Web.Features.Agents.Data;
 using TreeAgent.Web.Features.Agents.Services;
 
-namespace TreeAgent.Web.Tests.Features.Agents.Services;
+namespace TreeAgent.Web.Tests.Features.Agents;
 
 [TestFixture]
 public class ClaudeCodeProcessManagerTests

@@ -5,7 +5,7 @@ using TreeAgent.Web.Features.GitHub;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
 
-namespace TreeAgent.Web.Tests.Features.PullRequests.Services;
+namespace TreeAgent.Web.Tests.Features.GitHub;
 
 /// <summary>
 /// Integration tests that require real GitHub authentication.

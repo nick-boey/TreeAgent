@@ -54,16 +54,13 @@ src/TreeAgent.Web/
 └── Program.cs                   # Application entry point
 
 tests/TreeAgent.Web.Tests/
-├── Features/                    # Tests organized by feature
-│   ├── Agents/
-│   │   ├── Services/            # Agent service unit tests
-│   │   └── Integration/         # Agent integration tests
-│   └── PullRequests/
-│       └── Services/            # GitHub service tests
-├── Integration/
-│   └── Fixtures/                # Test fixtures
-├── Models/                      # Model unit tests
-└── Services/                    # Service tests (legacy location)
+├── Features/                    # Tests organized by feature (mirrors src structure)
+│   ├── Agents/                  # Agent unit tests, fixtures, and integration tests
+│   ├── Git/                     # Git worktree tests
+│   ├── GitHub/                  # GitHub service tests
+│   ├── PullRequests/            # PR model and workflow tests
+│   └── Roadmap/                 # Roadmap parser and service tests
+└── Helpers/                     # Shared test utilities and fixtures
 ```
 
 ### Feature Slices
