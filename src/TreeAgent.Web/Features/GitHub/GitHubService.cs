@@ -3,6 +3,7 @@ using Octokit;
 using TreeAgent.Web.Features.Commands;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
+using TrackedPullRequest = TreeAgent.Web.Features.PullRequests.Data.Entities.PullRequest;
 
 namespace TreeAgent.Web.Features.GitHub;
 
@@ -129,33 +130,33 @@ public class GitHubService(
         }
     }
 
-    public async Task<GitHubPullRequest?> CreatePullRequestAsync(string projectId, string featureId)
+    public async Task<GitHubPullRequest?> CreatePullRequestAsync(string projectId, string pullRequestId)
     {
-        var feature = await db.Features
-            .Include(f => f.Project)
-            .FirstOrDefaultAsync(f => f.Id == featureId);
+        var pullRequest = await db.PullRequests
+            .Include(pr => pr.Project)
+            .FirstOrDefaultAsync(pr => pr.Id == pullRequestId);
 
-        if (feature == null)
+        if (pullRequest == null)
         {
-            logger.LogWarning("Cannot create PR: feature {FeatureId} not found", featureId);
+            logger.LogWarning("Cannot create PR: pull request {PullRequestId} not found", pullRequestId);
             return null;
         }
 
-        var project = feature.Project;
+        var project = pullRequest.Project;
         if (string.IsNullOrEmpty(project.GitHubOwner) ||
             string.IsNullOrEmpty(project.GitHubRepo) ||
-            string.IsNullOrEmpty(feature.BranchName))
+            string.IsNullOrEmpty(pullRequest.BranchName))
         {
-            logger.LogWarning("Cannot create PR: GitHub not configured or branch not set for feature {FeatureId}", featureId);
+            logger.LogWarning("Cannot create PR: GitHub not configured or branch not set for pull request {PullRequestId}", pullRequestId);
             return null;
         }
 
         // First push the branch
-        logger.LogInformation("Pushing branch {Branch} to {Owner}/{Repo}", feature.BranchName, project.GitHubOwner, project.GitHubRepo);
-        var pushed = await PushBranchAsync(projectId, feature.BranchName);
+        logger.LogInformation("Pushing branch {Branch} to {Owner}/{Repo}", pullRequest.BranchName, project.GitHubOwner, project.GitHubRepo);
+        var pushed = await PushBranchAsync(projectId, pullRequest.BranchName);
         if (!pushed)
         {
-            logger.LogError("Failed to push branch {Branch}", feature.BranchName);
+            logger.LogError("Failed to push branch {Branch}", pullRequest.BranchName);
             return null;
         }
 
@@ -163,29 +164,29 @@ public class GitHubService(
 
         try
         {
-            logger.LogInformation("Creating PR for branch {Branch} in {Owner}/{Repo}", feature.BranchName, project.GitHubOwner, project.GitHubRepo);
+            logger.LogInformation("Creating PR for branch {Branch} in {Owner}/{Repo}", pullRequest.BranchName, project.GitHubOwner, project.GitHubRepo);
             var newPr = new NewPullRequest(
-                feature.Title,
-                feature.BranchName,
+                pullRequest.Title,
+                pullRequest.BranchName,
                 project.DefaultBranch)
             {
-                Body = feature.Description
+                Body = pullRequest.Description
             };
 
             var pr = await githubClient.CreatePullRequestAsync(project.GitHubOwner, project.GitHubRepo, newPr);
             logger.LogInformation("Created PR #{PrNumber}: {Title}", pr.Number, pr.Title);
 
-            // Update feature with PR number
-            feature.GitHubPRNumber = pr.Number;
-            feature.Status = FeatureStatus.ReadyForReview;
-            feature.UpdatedAt = DateTime.UtcNow;
+            // Update pull request with PR number
+            pullRequest.GitHubPRNumber = pr.Number;
+            pullRequest.Status = OpenPullRequestStatus.ReadyForReview;
+            pullRequest.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
             return MapPullRequest(pr);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to create PR for branch {Branch} in {Owner}/{Repo}", feature.BranchName, project.GitHubOwner, project.GitHubRepo);
+            logger.LogError(ex, "Failed to create PR for branch {Branch} in {Owner}/{Repo}", pullRequest.BranchName, project.GitHubOwner, project.GitHubRepo);
             return null;
         }
     }
@@ -217,6 +218,9 @@ public class GitHubService(
         return result.Success;
     }
 
+    /// <summary>
+    /// Syncs only open pull requests from GitHub. Closed/merged PRs are removed from local tracking.
+    /// </summary>
     public async Task<SyncResult> SyncPullRequestsAsync(string projectId)
     {
         var result = new SyncResult();
@@ -231,53 +235,59 @@ public class GitHubService(
 
         logger.LogInformation("Starting PR sync for {Owner}/{Repo}", project.GitHubOwner, project.GitHubRepo);
 
-        // Fetch all PRs
+        // Only fetch open PRs - closed/merged PRs should be retrieved from GitHub when needed
         var openPrs = await GetOpenPullRequestsAsync(projectId);
-        var closedPrs = await GetClosedPullRequestsAsync(projectId);
-        var allPrs = openPrs.Concat(closedPrs).ToList();
+        var openPrNumbers = openPrs.Select(pr => pr.Number).ToHashSet();
 
-        // Get existing features with PR numbers
-        var existingFeatures = await db.Features
-            .Where(f => f.ProjectId == projectId && f.GitHubPRNumber != null)
+        // Get existing tracked pull requests
+        var existingPullRequests = await db.PullRequests
+            .Where(pr => pr.ProjectId == projectId && pr.GitHubPRNumber != null)
             .ToListAsync();
 
-        var existingPrNumbers = existingFeatures
-            .Where(f => f.GitHubPRNumber.HasValue)
-            .Select(f => f.GitHubPRNumber!.Value)
+        // Remove PRs that are no longer open on GitHub
+        foreach (var pr in existingPullRequests)
+        {
+            if (pr.GitHubPRNumber.HasValue && !openPrNumbers.Contains(pr.GitHubPRNumber.Value))
+            {
+                logger.LogInformation("Removing closed/merged PR #{PrNumber} from local tracking", pr.GitHubPRNumber);
+                db.PullRequests.Remove(pr);
+                result.Removed++;
+            }
+        }
+
+        var existingPrNumbers = existingPullRequests
+            .Where(pr => pr.GitHubPRNumber.HasValue && openPrNumbers.Contains(pr.GitHubPRNumber.Value))
+            .Select(pr => pr.GitHubPRNumber!.Value)
             .ToHashSet();
 
-        foreach (var pr in allPrs)
+        foreach (var pr in openPrs)
         {
             try
             {
                 if (existingPrNumbers.Contains(pr.Number))
                 {
-                    // Update existing feature
-                    var feature = existingFeatures.First(f => f.GitHubPRNumber == pr.Number);
-                    var newStatus = MapPrStateToFeatureStatus(pr);
-
-                    if (feature.Status != newStatus)
-                    {
-                        feature.Status = newStatus;
-                        feature.UpdatedAt = DateTime.UtcNow;
-                        result.Updated++;
-                    }
+                    // Update existing pull request
+                    var pullRequest = existingPullRequests.First(p => p.GitHubPRNumber == pr.Number);
+                    pullRequest.Title = pr.Title;
+                    pullRequest.Description = pr.Body;
+                    pullRequest.UpdatedAt = DateTime.UtcNow;
+                    result.Updated++;
                 }
                 else
                 {
-                    // Import as new feature
-                    var feature = new Feature
+                    // Import as new tracked pull request
+                    var pullRequest = new TrackedPullRequest
                     {
                         ProjectId = projectId,
                         Title = pr.Title,
                         Description = pr.Body,
                         BranchName = pr.BranchName,
                         GitHubPRNumber = pr.Number,
-                        Status = MapPrStateToFeatureStatus(pr),
+                        Status = OpenPullRequestStatus.ReadyForReview,
                         CreatedAt = pr.CreatedAt
                     };
 
-                    db.Features.Add(feature);
+                    db.PullRequests.Add(pullRequest);
                     result.Imported++;
                 }
             }
@@ -289,23 +299,23 @@ public class GitHubService(
         }
 
         await db.SaveChangesAsync();
-        logger.LogInformation("PR sync completed: {Imported} imported, {Updated} updated, {Errors} errors",
-            result.Imported, result.Updated, result.Errors.Count);
+        logger.LogInformation("PR sync completed: {Imported} imported, {Updated} updated, {Removed} removed, {Errors} errors",
+            result.Imported, result.Updated, result.Removed, result.Errors.Count);
         return result;
     }
 
-    public async Task<bool> LinkPullRequestAsync(string featureId, int prNumber)
+    public async Task<bool> LinkPullRequestAsync(string pullRequestId, int prNumber)
     {
-        var feature = await db.Features.FindAsync(featureId);
-        if (feature == null)
+        var pullRequest = await db.PullRequests.FindAsync(pullRequestId);
+        if (pullRequest == null)
         {
-            logger.LogWarning("Cannot link PR: feature {FeatureId} not found", featureId);
+            logger.LogWarning("Cannot link PR: pull request {PullRequestId} not found", pullRequestId);
             return false;
         }
 
-        logger.LogInformation("Linking PR #{PrNumber} to feature {FeatureId}", prNumber, featureId);
-        feature.GitHubPRNumber = prNumber;
-        feature.UpdatedAt = DateTime.UtcNow;
+        logger.LogInformation("Linking PR #{PrNumber} to pull request {PullRequestId}", prNumber, pullRequestId);
+        pullRequest.GitHubPRNumber = prNumber;
+        pullRequest.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
         return true;
@@ -322,7 +332,7 @@ public class GitHubService(
         }
     }
 
-    private static GitHubPullRequest MapPullRequest(PullRequest pr)
+    private static GitHubPullRequest MapPullRequest(Octokit.PullRequest pr)
     {
         return new GitHubPullRequest
         {
@@ -337,20 +347,5 @@ public class GitHubService(
             MergedAt = pr.MergedAt?.UtcDateTime,
             ClosedAt = pr.ClosedAt?.UtcDateTime
         };
-    }
-
-    private static FeatureStatus MapPrStateToFeatureStatus(GitHubPullRequest pr)
-    {
-        if (pr.Merged)
-        {
-            return FeatureStatus.Merged;
-        }
-
-        if (pr.State == "closed")
-        {
-            return FeatureStatus.Cancelled;
-        }
-
-        return FeatureStatus.ReadyForReview;
     }
 }

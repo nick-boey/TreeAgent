@@ -4,7 +4,7 @@
 @using TreeAgent.Web.Features.PullRequests.Data
 @using TreeAgent.Web.Features.PullRequests.Data.Entities
 @inject ProjectService ProjectService
-@inject FeatureService FeatureService
+@inject PullRequestDataService PullRequestDataService
 @inject IGitHubService GitHubService
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
@@ -29,29 +29,29 @@ else
         <div class="col-md-8">
             <div class="card mb-3">
                 <div class="card-header d-flex justify-content-between align-items-center">
-                    <span>Feature Tree</span>
-                    <a href="projects/@Id/features/create" class="btn btn-sm btn-primary">New Feature</a>
+                    <span>Pull Request Tree</span>
+                    <a href="projects/@Id/pull-requests/create" class="btn btn-sm btn-primary">New Pull Request</a>
                 </div>
                 <div class="card-body">
-                    @if (_rootFeatures == null || _rootFeatures.Count == 0)
+                    @if (_rootPullRequests == null || _rootPullRequests.Count == 0)
                     {
-                        <p class="text-muted">No features yet. Create one to get started.</p>
+                        <p class="text-muted">No pull requests yet. Create one to get started.</p>
                     }
                     else
                     {
-                        <FeatureTree Features="_rootFeatures"
-                                     SelectedFeatureId="@_selectedFeatureId"
-                                     OnFeatureSelected="SelectFeature" />
+                        <FeatureTree PullRequests="_rootPullRequests"
+                                     SelectedPullRequestId="@_selectedPullRequestId"
+                                     OnPullRequestSelected="SelectPullRequest" />
                     }
                 </div>
             </div>
         </div>
         <div class="col-md-4">
-            @if (_selectedFeature != null)
+            @if (_selectedPullRequest != null)
             {
-                <FeatureDetailPanel Feature="_selectedFeature"
+                <FeatureDetailPanel PullRequest="_selectedPullRequest"
                                     OnActionCompleted="RefreshData"
-                                    OnClose="() => _selectedFeature = null" />
+                                    OnClose="() => _selectedPullRequest = null" />
             }
             else
             {
@@ -89,7 +89,7 @@ else
                                     }
                                     else if (_lastSyncResult != null)
                                     {
-                                        <span class="badge bg-success ms-2" title="Imported: @_lastSyncResult.Imported, Updated: @_lastSyncResult.Updated">
+                                        <span class="badge bg-success ms-2" title="Imported: @_lastSyncResult.Imported, Updated: @_lastSyncResult.Updated, Removed: @_lastSyncResult.Removed">
                                             Synced
                                         </span>
                                         <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">Refresh</button>
@@ -109,9 +109,9 @@ else
     public string Id { get; set; } = "";
 
     private Project? _project;
-    private List<Feature>? _rootFeatures;
-    private Feature? _selectedFeature;
-    private string? _selectedFeatureId;
+    private List<PullRequest>? _rootPullRequests;
+    private PullRequest? _selectedPullRequest;
+    private string? _selectedPullRequestId;
     private bool _isSyncingPRs;
     private bool _tokenMissing;
     private string? _syncError;
@@ -136,7 +136,7 @@ else
         _project = await ProjectService.GetByIdAsync(Id);
         if (_project != null)
         {
-            _rootFeatures = await FeatureService.GetTreeAsync(Id);
+            _rootPullRequests = await PullRequestDataService.GetTreeAsync(Id);
         }
     }
 
@@ -185,11 +185,11 @@ else
             }
             else
             {
-                Logger.LogInformation("PR sync completed for project {ProjectId}: {Imported} imported, {Updated} updated",
-                    _project.Id, _lastSyncResult.Imported, _lastSyncResult.Updated);
+                Logger.LogInformation("PR sync completed for project {ProjectId}: {Imported} imported, {Updated} updated, {Removed} removed",
+                    _project.Id, _lastSyncResult.Imported, _lastSyncResult.Updated, _lastSyncResult.Removed);
             }
 
-            // Refresh the feature tree to show newly synced PRs
+            // Refresh the pull request tree to show newly synced PRs
             await LoadData();
         }
         catch (Exception ex)
@@ -207,15 +207,15 @@ else
     private async Task RefreshData()
     {
         await LoadData();
-        if (_selectedFeatureId != null)
+        if (_selectedPullRequestId != null)
         {
-            _selectedFeature = await FeatureService.GetByIdAsync(_selectedFeatureId);
+            _selectedPullRequest = await PullRequestDataService.GetByIdAsync(_selectedPullRequestId);
         }
     }
 
-    private async Task SelectFeature(string featureId)
+    private async Task SelectPullRequest(string pullRequestId)
     {
-        _selectedFeatureId = featureId;
-        _selectedFeature = await FeatureService.GetByIdAsync(featureId);
+        _selectedPullRequestId = pullRequestId;
+        _selectedPullRequest = await PullRequestDataService.GetByIdAsync(pullRequestId);
     }
 }

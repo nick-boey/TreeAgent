@@ -8,6 +8,7 @@ using TreeAgent.Web.Features.PullRequests;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
 using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
+using TrackedPullRequest = TreeAgent.Web.Features.PullRequests.Data.Entities.PullRequest;
 using PullRequestStatus = TreeAgent.Web.Features.PullRequests.PullRequestStatus;
 
 namespace TreeAgent.Web.Tests.Features.PullRequests;
@@ -69,7 +70,7 @@ public class PullRequestWorkflowTests
         var project = await CreateTestProject();
         var now = DateTime.UtcNow;
 
-        var mockPrs = new List<PullRequest>
+        var mockPrs = new List<Octokit.PullRequest>
         {
             CreateMockPullRequest(1, "First Merge", ItemState.Closed, "feature/first", merged: true, mergedAt: now.AddDays(-3)),
             CreateMockPullRequest(2, "Second Merge", ItemState.Closed, "feature/second", merged: true, mergedAt: now.AddDays(-1)),
@@ -99,7 +100,7 @@ public class PullRequestWorkflowTests
         var project = await CreateTestProject();
         var now = DateTime.UtcNow;
 
-        var mockPrs = new List<PullRequest>
+        var mockPrs = new List<Octokit.PullRequest>
         {
             CreateMockPullRequest(1, "First", ItemState.Closed, "feature/first", merged: true, mergedAt: now.AddDays(-2)),
             CreateMockPullRequest(2, "Second", ItemState.Closed, "feature/second", merged: true, mergedAt: now.AddDays(-1)),
@@ -127,7 +128,7 @@ public class PullRequestWorkflowTests
         // Arrange
         var project = await CreateTestProject();
 
-        var mockPrs = new List<PullRequest>
+        var mockPrs = new List<Octokit.PullRequest>
         {
             CreateMockPullRequest(1, "Only Merge", ItemState.Closed, "feature/only", merged: true, mergedAt: DateTime.UtcNow)
         };
@@ -153,7 +154,7 @@ public class PullRequestWorkflowTests
         var project = await CreateTestProject();
         var now = DateTime.UtcNow;
 
-        var mockPrs = new List<PullRequest>
+        var mockPrs = new List<Octokit.PullRequest>
         {
             CreateMockPullRequest(1, "Closed First", ItemState.Closed, "feature/first", merged: false, closedAt: now.AddDays(-2)),
             CreateMockPullRequest(2, "Closed Second", ItemState.Closed, "feature/second", merged: false, closedAt: now)
@@ -354,7 +355,7 @@ public class PullRequestWorkflowTests
         // Arrange
         var project = await CreateTestProject();
 
-        var mockPrs = new List<PullRequest>
+        var mockPrs = new List<Octokit.PullRequest>
         {
             CreateMockPullRequest(1, "PR 1", ItemState.Open, "feature/one"),
             CreateMockPullRequest(2, "PR 2", ItemState.Open, "feature/two"),
@@ -397,10 +398,10 @@ public class PullRequestWorkflowTests
         // Arrange
         var project = await CreateTestProject();
 
-        // Create features for open PRs
-        var feature1 = new Feature { ProjectId = project.Id, Title = "Feature 1", BranchName = "feature/one", Status = FeatureStatus.InDevelopment };
-        var feature2 = new Feature { ProjectId = project.Id, Title = "Feature 2", BranchName = "feature/two", Status = FeatureStatus.InDevelopment };
-        _db.Features.AddRange(feature1, feature2);
+        // Create pull requests for open PRs
+        var pr1 = new TrackedPullRequest { ProjectId = project.Id, Title = "PR 1", BranchName = "feature/one", Status = OpenPullRequestStatus.InDevelopment };
+        var pr2 = new TrackedPullRequest { ProjectId = project.Id, Title = "PR 2", BranchName = "feature/two", Status = OpenPullRequestStatus.InDevelopment };
+        _db.PullRequests.AddRange(pr1, pr2);
         await _db.SaveChangesAsync();
 
         // Mock successful rebases
@@ -425,8 +426,8 @@ public class PullRequestWorkflowTests
         // Arrange
         var project = await CreateTestProject();
 
-        var feature = new Feature { ProjectId = project.Id, Title = "Conflicting Feature", BranchName = "feature/conflict", Status = FeatureStatus.InDevelopment };
-        _db.Features.Add(feature);
+        var pullRequest = new TrackedPullRequest { ProjectId = project.Id, Title = "Conflicting PR", BranchName = "feature/conflict", Status = OpenPullRequestStatus.InDevelopment };
+        _db.PullRequests.Add(pullRequest);
         await _db.SaveChangesAsync();
 
         // Mock fetch success but rebase conflict
@@ -453,8 +454,8 @@ public class PullRequestWorkflowTests
         // Arrange
         var project = await CreateTestProject();
 
-        var feature = new Feature { ProjectId = project.Id, Title = "Feature", BranchName = "feature/test", Status = FeatureStatus.InDevelopment };
-        _db.Features.Add(feature);
+        var pullRequest = new TrackedPullRequest { ProjectId = project.Id, Title = "Test PR", BranchName = "feature/test", Status = OpenPullRequestStatus.InDevelopment };
+        _db.PullRequests.Add(pullRequest);
         await _db.SaveChangesAsync();
 
         _mockRunner.Setup(r => r.RunAsync("git", It.Is<string>(s => s.Contains("fetch")), project.LocalPath))
@@ -475,7 +476,7 @@ public class PullRequestWorkflowTests
 
     #region Helper Methods
 
-    private static PullRequest CreateMockPullRequest(
+    private static Octokit.PullRequest CreateMockPullRequest(
         int number,
         string title,
         ItemState state,
@@ -495,7 +496,7 @@ public class PullRequestWorkflowTests
             repository: null
         );
 
-        return new PullRequest(
+        return new Octokit.PullRequest(
             id: number,
             nodeId: $"node-{number}",
             url: $"https://api.github.com/repos/owner/repo/pulls/{number}",

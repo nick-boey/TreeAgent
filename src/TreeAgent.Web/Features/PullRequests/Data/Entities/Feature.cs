@@ -2,7 +2,11 @@ using TreeAgent.Web.Features.Agents.Data;
 
 namespace TreeAgent.Web.Features.PullRequests.Data.Entities;
 
-public class Feature
+/// <summary>
+/// Represents a locally tracked pull request. Only open PRs are stored in the database.
+/// Closed/merged PRs should be retrieved from GitHub, and future work comes from ROADMAP.json.
+/// </summary>
+public class PullRequest
 {
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public required string ProjectId { get; set; }
@@ -10,14 +14,14 @@ public class Feature
     public required string Title { get; set; }
     public string? Description { get; set; }
     public string? BranchName { get; set; }
-    public FeatureStatus Status { get; set; } = FeatureStatus.Future;
+    public OpenPullRequestStatus Status { get; set; } = OpenPullRequestStatus.InDevelopment;
     public int? GitHubPRNumber { get; set; }
     public string? WorktreePath { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public Project Project { get; set; } = null!;
-    public Feature? Parent { get; set; }
-    public ICollection<Feature> Children { get; set; } = [];
+    public PullRequest? Parent { get; set; }
+    public ICollection<PullRequest> Children { get; set; } = [];
     public ICollection<Agent> Agents { get; set; } = [];
 }

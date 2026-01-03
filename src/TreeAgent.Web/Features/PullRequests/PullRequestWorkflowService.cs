@@ -6,6 +6,7 @@ using TreeAgent.Web.Features.GitHub;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
 using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
+using TrackedPullRequest = TreeAgent.Web.Features.PullRequests.Data.Entities.PullRequest;
 
 namespace TreeAgent.Web.Features.PullRequests;
 
@@ -156,7 +157,7 @@ public class PullRequestWorkflowService(
     /// <summary>
     /// Determines the status of a PR based on its state, reviews, and CI checks.
     /// </summary>
-    private async Task<PullRequestStatus> DetermineStatusAsync(string owner, string repo, PullRequest pr)
+    private async Task<PullRequestStatus> DetermineStatusAsync(string owner, string repo, Octokit.PullRequest pr)
     {
         // Draft PRs are always InProgress
         if (pr.Draft)
@@ -246,11 +247,10 @@ public class PullRequestWorkflowService(
             return result;
         }
 
-        // Get all features with open PRs
-        var features = await db.Features
-            .Where(f => f.ProjectId == projectId &&
-                       f.BranchName != null &&
-                       (f.Status == FeatureStatus.InDevelopment || f.Status == FeatureStatus.ReadyForReview))
+        // Get all tracked pull requests that are open
+        var pullRequests = await db.PullRequests
+            .Where(pr => pr.ProjectId == projectId &&
+                       pr.BranchName != null)
             .ToListAsync();
 
         // Fetch latest from origin
@@ -261,12 +261,12 @@ public class PullRequestWorkflowService(
             return result;
         }
 
-        foreach (var feature in features)
+        foreach (var pullRequest in pullRequests)
         {
-            if (string.IsNullOrEmpty(feature.BranchName))
+            if (string.IsNullOrEmpty(pullRequest.BranchName))
                 continue;
 
-            var rebaseSuccess = await RebaseBranchAsync(project, feature, result);
+            var rebaseSuccess = await RebaseBranchAsync(project, pullRequest, result);
             if (rebaseSuccess)
             {
                 result.SuccessCount++;
@@ -280,9 +280,9 @@ public class PullRequestWorkflowService(
         return result;
     }
 
-    private async Task<bool> RebaseBranchAsync(Project project, Feature feature, RebaseResult result)
+    private async Task<bool> RebaseBranchAsync(Project project, TrackedPullRequest pullRequest, RebaseResult result)
     {
-        var workingDir = feature.WorktreePath ?? project.LocalPath;
+        var workingDir = pullRequest.WorktreePath ?? project.LocalPath;
         var baseBranch = project.DefaultBranch ?? "main";
 
         // Perform rebase
@@ -297,8 +297,8 @@ public class PullRequestWorkflowService(
             await commandRunner.RunAsync("git", "rebase --abort", workingDir);
 
             result.Conflicts.Add(new RebaseConflict(
-                feature.BranchName!,
-                feature.Id,
+                pullRequest.BranchName!,
+                pullRequest.Id,
                 rebaseResult.Error ?? "Rebase failed"));
 
             return false;
@@ -307,12 +307,12 @@ public class PullRequestWorkflowService(
         // Push the rebased branch with force-with-lease for safety
         var pushResult = await commandRunner.RunAsync(
             "git",
-            $"push --force-with-lease origin {feature.BranchName}",
+            $"push --force-with-lease origin {pullRequest.BranchName}",
             workingDir);
 
         if (!pushResult.Success)
         {
-            result.Errors.Add($"Failed to push {feature.BranchName}: {pushResult.Error}");
+            result.Errors.Add($"Failed to push {pullRequest.BranchName}: {pushResult.Error}");
             return false;
         }
 
@@ -323,7 +323,7 @@ public class PullRequestWorkflowService(
 
     #region Helpers
 
-    private static PullRequestInfo MapToPullRequestInfo(PullRequest pr)
+    private static PullRequestInfo MapToPullRequestInfo(Octokit.PullRequest pr)
     {
         PullRequestStatus status;
 

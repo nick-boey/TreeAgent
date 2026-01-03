@@ -2,21 +2,24 @@
 
 ## 1. Introduction
 
-TreeAgent is an application for managing software development using Git, GitHub, and agentic AI tools. It treats development as a tree where each node represents a feature or fix that corresponds to a GitHub pull request.
+TreeAgent is an application for managing software development using Git, GitHub, and agentic AI tools. It treats
+development as a tree where each node represents a feature or fix that corresponds to a GitHub pull request.
 
 ## 2. System Overview
 
 ### 2.1 Core Concepts
 
 #### Feature Tree
+
 - Each node in the tree represents a discrete unit of work (feature, fix, refactor)
 - Nodes align with the concept of GitHub pull requests
 - The tree supports:
-  - **Past nodes**: Closed/merged pull requests (historical context)
-  - **Present nodes**: Open pull requests (active development)
-  - **Future nodes**: Planned features (not yet created as PRs)
+    - **Past nodes**: Closed/merged pull requests (historical context)
+    - **Present nodes**: Open pull requests (active development)
+    - **Future nodes**: Planned features (not yet created as PRs)
 
 #### Projects
+
 - A project represents a Git repository being worked on
 - Multiple projects can be active simultaneously
 - Each project has its own tree of features
@@ -25,25 +28,25 @@ TreeAgent is an application for managing software development using Git, GitHub,
 
 Features are color-coded by status:
 
-| Status | Color | Description |
-|--------|-------|-------------|
-| Merged | Blue | Complete and merged into target branch |
-| Cancelled | Red | Closed without merging |
-| In Development | Yellow | Active development in progress |
-| Ready for Review | Green | PR created, awaiting human review |
-| Future | Grey | Planned but not yet started |
+| Status           | Color  | Description                            |
+|------------------|--------|----------------------------------------|
+| Merged           | Blue   | Complete and merged into target branch |
+| Cancelled        | Red    | Closed without merging                 |
+| In Development   | Yellow | Active development in progress         |
+| Ready for Review | Green  | PR created, awaiting human review      |
+| Future           | Grey   | Planned but not yet started            |
 
 ## 3. Technical Architecture
 
 ### 3.1 Technology Stack
 
-| Component | Technology |
-|-----------|------------|
-| Runtime | .NET 8+ |
-| Web Framework | Blazor Server (SSR) |
-| Database | SQLite with EF Core |
+| Component      | Technology                              |
+|----------------|-----------------------------------------|
+| Runtime        | .NET 8+                                 |
+| Web Framework  | Blazor Server (SSR)                     |
+| Database       | SQLite with EF Core                     |
 | Network Access | Tailscale (optional, for remote access) |
-| AI Agent | Claude Code CLI |
+| AI Agent       | Claude Code CLI                         |
 
 ### 3.2 System Components
 
@@ -120,16 +123,16 @@ TreeAgent/
 
 ### 3.4 Core Services
 
-| Service | Responsibility |
-|---------|----------------|
-| `ProjectService` | CRUD operations for projects |
-| `FeatureService` | Feature management with tree structure and worktree integration |
-| `AgentService` | Agent lifecycle management with Claude Code process orchestration |
-| `GitHubService` | GitHub PR synchronization using Octokit |
-| `GitWorktreeService` | Git worktree operations |
-| `SystemPromptService` | Template processing for agent system prompts |
-| `ClaudeCodeProcessManager` | Process lifecycle for Claude Code CLI instances |
-| `MessageParser` | Parse JSON output from Claude Code agents |
+| Service                    | Responsibility                                                    |
+|----------------------------|-------------------------------------------------------------------|
+| `ProjectService`           | CRUD operations for projects                                      |
+| `FeatureService`           | Feature management with tree structure and worktree integration   |
+| `AgentService`             | Agent lifecycle management with Claude Code process orchestration |
+| `GitHubService`            | GitHub PR synchronization using Octokit                           |
+| `GitWorktreeService`       | Git worktree operations                                           |
+| `SystemPromptService`      | Template processing for agent system prompts                      |
+| `ClaudeCodeProcessManager` | Process lifecycle for Claude Code CLI instances                   |
+| `MessageParser`            | Parse JSON output from Claude Code agents                         |
 
 ## 4. Functional Requirements
 
@@ -210,78 +213,83 @@ TreeAgent/
 ### 6.1 Projects Table
 
 ```sql
-CREATE TABLE Projects (
-    Id TEXT PRIMARY KEY,
-    Name TEXT NOT NULL,
-    LocalPath TEXT NOT NULL,
-    GitHubOwner TEXT,
-    GitHubRepo TEXT,
+CREATE TABLE Projects
+(
+    Id            TEXT PRIMARY KEY,
+    Name          TEXT NOT NULL,
+    LocalPath     TEXT NOT NULL,
+    GitHubOwner   TEXT,
+    GitHubRepo    TEXT,
     DefaultBranch TEXT DEFAULT 'main',
-    CreatedAt TEXT NOT NULL,
-    UpdatedAt TEXT NOT NULL
+    CreatedAt     TEXT NOT NULL,
+    UpdatedAt     TEXT NOT NULL
 );
 ```
 
 ### 6.2 Features Table
 
 ```sql
-CREATE TABLE Features (
-    Id TEXT PRIMARY KEY,
-    ProjectId TEXT NOT NULL,
-    ParentId TEXT,
-    Title TEXT NOT NULL,
-    Description TEXT,
-    BranchName TEXT,
-    Status TEXT NOT NULL,
+CREATE TABLE Features
+(
+    Id             TEXT PRIMARY KEY,
+    ProjectId      TEXT NOT NULL,
+    ParentId       TEXT,
+    Title          TEXT NOT NULL,
+    Description    TEXT,
+    BranchName     TEXT,
+    Status         TEXT NOT NULL,
     GitHubPRNumber INTEGER,
-    WorktreePath TEXT,
-    CreatedAt TEXT NOT NULL,
-    UpdatedAt TEXT NOT NULL,
-    FOREIGN KEY (ProjectId) REFERENCES Projects(Id),
-    FOREIGN KEY (ParentId) REFERENCES Features(Id)
+    WorktreePath   TEXT,
+    CreatedAt      TEXT NOT NULL,
+    UpdatedAt      TEXT NOT NULL,
+    FOREIGN KEY (ProjectId) REFERENCES Projects (Id),
+    FOREIGN KEY (ParentId) REFERENCES Features (Id)
 );
 ```
 
 ### 6.3 Agents Table
 
 ```sql
-CREATE TABLE Agents (
-    Id TEXT PRIMARY KEY,
-    FeatureId TEXT NOT NULL,
-    ProcessId INTEGER,
-    Status TEXT NOT NULL,
+CREATE TABLE Agents
+(
+    Id           TEXT PRIMARY KEY,
+    FeatureId    TEXT NOT NULL,
+    ProcessId    INTEGER,
+    Status       TEXT NOT NULL,
     SystemPrompt TEXT,
-    CreatedAt TEXT NOT NULL,
-    UpdatedAt TEXT NOT NULL,
-    FOREIGN KEY (FeatureId) REFERENCES Features(Id)
+    CreatedAt    TEXT NOT NULL,
+    UpdatedAt    TEXT NOT NULL,
+    FOREIGN KEY (FeatureId) REFERENCES Features (Id)
 );
 ```
 
 ### 6.4 Messages Table
 
 ```sql
-CREATE TABLE Messages (
-    Id TEXT PRIMARY KEY,
-    AgentId TEXT NOT NULL,
-    Role TEXT NOT NULL,
-    Content TEXT NOT NULL,
+CREATE TABLE Messages
+(
+    Id        TEXT PRIMARY KEY,
+    AgentId   TEXT NOT NULL,
+    Role      TEXT NOT NULL,
+    Content   TEXT NOT NULL,
     Timestamp TEXT NOT NULL,
-    Metadata TEXT,
-    FOREIGN KEY (AgentId) REFERENCES Agents(Id)
+    Metadata  TEXT,
+    FOREIGN KEY (AgentId) REFERENCES Agents (Id)
 );
 ```
 
 ### 6.5 PromptTemplates Table
 
 ```sql
-CREATE TABLE PromptTemplates (
-    Id TEXT PRIMARY KEY,
-    Name TEXT NOT NULL,
-    Content TEXT NOT NULL,
+CREATE TABLE PromptTemplates
+(
+    Id          TEXT PRIMARY KEY,
+    Name        TEXT NOT NULL,
+    Content     TEXT NOT NULL,
     Description TEXT,
-    IsDefault INTEGER DEFAULT 0,
-    CreatedAt TEXT NOT NULL,
-    UpdatedAt TEXT NOT NULL
+    IsDefault   INTEGER DEFAULT 0,
+    CreatedAt   TEXT NOT NULL,
+    UpdatedAt   TEXT NOT NULL
 );
 ```
 
@@ -290,13 +298,15 @@ CREATE TABLE PromptTemplates (
 ### 7.1 Claude Code CLI
 
 The application depends on Claude Code CLI for agent functionality:
+
 - JSON output mode for structured responses
 - Headless operation capability
 - Process-based lifecycle management
 
 ### 7.2 Reference Implementation
 
-The [happy-cli](https://github.com/slopus/happy-cli) project provides reference patterns for Claude Code process management. Clone for reference if needed:
+The [happy-cli](https://github.com/slopus/happy-cli) project provides reference patterns for Claude Code process
+management. Clone for reference if needed:
 
 ```bash
 git clone https://github.com/slopus/happy-cli .tmp/happy-cli
@@ -314,6 +324,7 @@ git clone https://github.com/slopus/happy-cli .tmp/happy-cli
 ### 8.2 Configuration
 
 Environment variables:
+
 - `TREEAGENT_DB_PATH`: SQLite database path
 - `TREEAGENT_WORKTREE_ROOT`: Base directory for worktrees
 - `GITHUB_TOKEN`: GitHub API access token
@@ -322,12 +333,14 @@ Environment variables:
 ### 8.3 Health Checks
 
 The application exposes a health check endpoint at `/health` that monitors:
+
 - Database connectivity
 - Process manager status
 
 ### 8.4 Real-time Communication
 
 SignalR hub available at `/hubs/agent` for:
+
 - Agent message streaming
 - Agent status change notifications
 - Feature status updates
@@ -336,12 +349,12 @@ SignalR hub available at `/hubs/agent` for:
 
 System prompts support the following template variables:
 
-| Variable | Description |
-|----------|-------------|
-| `{{ProjectName}}` | Name of the current project |
-| `{{FeatureTitle}}` | Title of the feature being worked on |
-| `{{FeatureDescription}}` | Description of the feature |
-| `{{BranchName}}` | Git branch name for the feature |
-| `{{WorktreePath}}` | Absolute path to the worktree directory |
-| `{{ParentFeature}}` | Title of the parent feature (if any) |
-| `{{ChildFeatures}}` | Comma-separated list of child feature titles |
+| Variable                 | Description                                  |
+|--------------------------|----------------------------------------------|
+| `{{ProjectName}}`        | Name of the current project                  |
+| `{{FeatureTitle}}`       | Title of the feature being worked on         |
+| `{{FeatureDescription}}` | Description of the feature                   |
+| `{{BranchName}}`         | Git branch name for the feature              |
+| `{{WorktreePath}}`       | Absolute path to the worktree directory      |
+| `{{ParentFeature}}`      | Title of the parent feature (if any)         |
+| `{{ChildFeatures}}`      | Comma-separated list of child feature titles |

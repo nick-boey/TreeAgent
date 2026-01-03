@@ -43,7 +43,7 @@ builder.Services.AddSingleton<IClaudeCodeProcessFactory, ClaudeCodeProcessFactor
 builder.Services.AddSingleton<ClaudeCodeProcessManager>();
 builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
 builder.Services.AddSingleton<GitWorktreeService>();
-builder.Services.AddScoped<FeatureService>();
+builder.Services.AddScoped<PullRequestDataService>();
 builder.Services.AddScoped<AgentService>();
 builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();

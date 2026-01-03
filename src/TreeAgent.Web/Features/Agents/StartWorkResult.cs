@@ -6,4 +6,4 @@ namespace TreeAgent.Web.Features.Agents;
 /// <summary>
 /// Result of starting work on a future change.
 /// </summary>
-public record StartWorkResult(Feature? Feature, Agent? Agent);
+public record StartWorkResult(PullRequest? PullRequest, Agent? Agent);

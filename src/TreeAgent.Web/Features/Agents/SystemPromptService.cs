@@ -9,7 +9,7 @@ namespace TreeAgent.Web.Features.Agents;
 /// <summary>
 /// Service for managing and processing system prompt templates
 /// </summary>
-public partial class SystemPromptService(TreeAgentDbContext db, FeatureService featureService)
+public partial class SystemPromptService(TreeAgentDbContext db, PullRequestDataService pullRequestDataService)
 {
     #region Template CRUD
 
@@ -92,20 +92,20 @@ public partial class SystemPromptService(TreeAgentDbContext db, FeatureService f
     /// <summary>
     /// Process a template and substitute variables with actual values
     /// </summary>
-    public async Task<string> ProcessTemplateAsync(string template, string? featureId = null)
+    public async Task<string> ProcessTemplateAsync(string template, string? pullRequestId = null)
     {
         if (string.IsNullOrEmpty(template)) return template;
 
-        Feature? feature = null;
+        PullRequest? pullRequest = null;
         Project? project = null;
 
-        if (!string.IsNullOrEmpty(featureId))
+        if (!string.IsNullOrEmpty(pullRequestId))
         {
-            feature = await db.Features
-                .Include(f => f.Project)
-                .FirstOrDefaultAsync(f => f.Id == featureId);
+            pullRequest = await db.PullRequests
+                .Include(pr => pr.Project)
+                .FirstOrDefaultAsync(pr => pr.Id == pullRequestId);
 
-            project = feature?.Project;
+            project = pullRequest?.Project;
         }
 
         var result = template;
@@ -120,27 +120,34 @@ public partial class SystemPromptService(TreeAgentDbContext db, FeatureService f
             result = result.Replace("{{GITHUB_REPO}}", project.GitHubRepo ?? "");
         }
 
-        // Feature variables
-        if (feature != null)
+        // Pull request variables
+        if (pullRequest != null)
         {
-            result = result.Replace("{{FEATURE_TITLE}}", feature.Title);
-            result = result.Replace("{{FEATURE_DESCRIPTION}}", feature.Description ?? "");
-            result = result.Replace("{{BRANCH_NAME}}", feature.BranchName ?? "");
-            result = result.Replace("{{FEATURE_STATUS}}", feature.Status.ToString());
-            result = result.Replace("{{WORKTREE_PATH}}", feature.WorktreePath ?? "");
+            result = result.Replace("{{FEATURE_TITLE}}", pullRequest.Title);
+            result = result.Replace("{{FEATURE_DESCRIPTION}}", pullRequest.Description ?? "");
+            result = result.Replace("{{BRANCH_NAME}}", pullRequest.BranchName ?? "");
+            result = result.Replace("{{FEATURE_STATUS}}", pullRequest.Status.ToString());
+            result = result.Replace("{{WORKTREE_PATH}}", pullRequest.WorktreePath ?? "");
 
-            // Feature tree context
-            if (result.Contains("{{FEATURE_TREE}}"))
+            // Also support new naming convention
+            result = result.Replace("{{PR_TITLE}}", pullRequest.Title);
+            result = result.Replace("{{PR_DESCRIPTION}}", pullRequest.Description ?? "");
+            result = result.Replace("{{PR_STATUS}}", pullRequest.Status.ToString());
+
+            // Pull request tree context
+            if (result.Contains("{{FEATURE_TREE}}") || result.Contains("{{PR_TREE}}"))
             {
-                var featureTree = await BuildFeatureTreeContextAsync(feature.ProjectId);
-                result = result.Replace("{{FEATURE_TREE}}", featureTree);
+                var prTree = await BuildPullRequestTreeContextAsync(pullRequest.ProjectId);
+                result = result.Replace("{{FEATURE_TREE}}", prTree);
+                result = result.Replace("{{PR_TREE}}", prTree);
             }
 
-            // Related features (siblings)
-            if (result.Contains("{{RELATED_FEATURES}}"))
+            // Related pull requests (siblings)
+            if (result.Contains("{{RELATED_FEATURES}}") || result.Contains("{{RELATED_PRS}}"))
             {
-                var relatedFeatures = await BuildRelatedFeaturesContextAsync(feature);
-                result = result.Replace("{{RELATED_FEATURES}}", relatedFeatures);
+                var relatedPRs = await BuildRelatedPullRequestsContextAsync(pullRequest);
+                result = result.Replace("{{RELATED_FEATURES}}", relatedPRs);
+                result = result.Replace("{{RELATED_PRS}}", relatedPRs);
             }
         }
 
@@ -151,28 +158,28 @@ public partial class SystemPromptService(TreeAgentDbContext db, FeatureService f
     }
 
     /// <summary>
-    /// Get the effective system prompt for a feature, considering feature-specific, project default, and template
+    /// Get the effective system prompt for a pull request, considering project defaults and templates
     /// </summary>
-    public async Task<string?> GetEffectivePromptAsync(string featureId)
+    public async Task<string?> GetEffectivePromptAsync(string pullRequestId)
     {
-        var feature = await db.Features
-            .Include(f => f.Project)
+        var pullRequest = await db.PullRequests
+            .Include(pr => pr.Project)
             .ThenInclude(p => p.DefaultPromptTemplate)
-            .FirstOrDefaultAsync(f => f.Id == featureId);
+            .FirstOrDefaultAsync(pr => pr.Id == pullRequestId);
 
-        if (feature == null) return null;
+        if (pullRequest == null) return null;
 
-        // Priority: Feature-level agent prompt > Project default prompt > Project default template
+        // Priority: Project default prompt > Project default template
         string? rawPrompt = null;
 
         // Check for project-level default
-        if (!string.IsNullOrEmpty(feature.Project.DefaultSystemPrompt))
+        if (!string.IsNullOrEmpty(pullRequest.Project.DefaultSystemPrompt))
         {
-            rawPrompt = feature.Project.DefaultSystemPrompt;
+            rawPrompt = pullRequest.Project.DefaultSystemPrompt;
         }
-        else if (feature.Project.DefaultPromptTemplate != null)
+        else if (pullRequest.Project.DefaultPromptTemplate != null)
         {
-            rawPrompt = feature.Project.DefaultPromptTemplate.Content;
+            rawPrompt = pullRequest.Project.DefaultPromptTemplate.Content;
         }
 
         if (string.IsNullOrEmpty(rawPrompt))
@@ -180,50 +187,50 @@ public partial class SystemPromptService(TreeAgentDbContext db, FeatureService f
             return null;
         }
 
-        return await ProcessTemplateAsync(rawPrompt, featureId);
+        return await ProcessTemplateAsync(rawPrompt, pullRequestId);
     }
 
-    private async Task<string> BuildFeatureTreeContextAsync(string projectId)
+    private async Task<string> BuildPullRequestTreeContextAsync(string projectId)
     {
-        var features = await featureService.GetTreeAsync(projectId);
-        if (features.Count == 0) return "No features defined.";
+        var pullRequests = await pullRequestDataService.GetTreeAsync(projectId);
+        if (pullRequests.Count == 0) return "No pull requests defined.";
 
         var sb = new StringBuilder();
-        sb.AppendLine("Feature Tree:");
+        sb.AppendLine("Pull Request Tree:");
 
-        void AppendFeature(Feature f, int level)
+        void AppendPullRequest(PullRequest pr, int level)
         {
             var indent = new string(' ', level * 2);
-            var status = f.Status.ToString();
-            sb.AppendLine($"{indent}- [{status}] {f.Title}");
+            var status = pr.Status.ToString();
+            sb.AppendLine($"{indent}- [{status}] {pr.Title}");
 
-            foreach (var child in f.Children.OrderBy(c => c.CreatedAt))
+            foreach (var child in pr.Children.OrderBy(c => c.CreatedAt))
             {
-                AppendFeature(child, level + 1);
+                AppendPullRequest(child, level + 1);
             }
         }
 
-        foreach (var feature in features)
+        foreach (var pullRequest in pullRequests)
         {
-            AppendFeature(feature, 0);
+            AppendPullRequest(pullRequest, 0);
         }
 
         return sb.ToString();
     }
 
-    private async Task<string> BuildRelatedFeaturesContextAsync(Feature feature)
+    private async Task<string> BuildRelatedPullRequestsContextAsync(PullRequest pullRequest)
     {
-        var siblings = await db.Features
-            .Where(f => f.ProjectId == feature.ProjectId &&
-                       f.ParentId == feature.ParentId &&
-                       f.Id != feature.Id)
-            .OrderBy(f => f.CreatedAt)
+        var siblings = await db.PullRequests
+            .Where(pr => pr.ProjectId == pullRequest.ProjectId &&
+                       pr.ParentId == pullRequest.ParentId &&
+                       pr.Id != pullRequest.Id)
+            .OrderBy(pr => pr.CreatedAt)
             .ToListAsync();
 
-        if (siblings.Count == 0) return "No related features.";
+        if (siblings.Count == 0) return "No related pull requests.";
 
         var sb = new StringBuilder();
-        sb.AppendLine("Related Features (siblings):");
+        sb.AppendLine("Related Pull Requests (siblings):");
 
         foreach (var sibling in siblings)
         {
@@ -246,13 +253,18 @@ public partial class SystemPromptService(TreeAgentDbContext db, FeatureService f
             new("{{DEFAULT_BRANCH}}", "Default git branch (e.g., main)"),
             new("{{GITHUB_OWNER}}", "GitHub repository owner"),
             new("{{GITHUB_REPO}}", "GitHub repository name"),
-            new("{{FEATURE_TITLE}}", "Title of the current feature"),
-            new("{{FEATURE_DESCRIPTION}}", "Description of the current feature"),
-            new("{{BRANCH_NAME}}", "Git branch name for the feature"),
-            new("{{FEATURE_STATUS}}", "Current status of the feature"),
-            new("{{WORKTREE_PATH}}", "Path to the git worktree for this feature"),
-            new("{{FEATURE_TREE}}", "Hierarchical view of all features in the project"),
-            new("{{RELATED_FEATURES}}", "List of sibling features")
+            new("{{FEATURE_TITLE}}", "Title of the current pull request (legacy)"),
+            new("{{FEATURE_DESCRIPTION}}", "Description of the current pull request (legacy)"),
+            new("{{PR_TITLE}}", "Title of the current pull request"),
+            new("{{PR_DESCRIPTION}}", "Description of the current pull request"),
+            new("{{BRANCH_NAME}}", "Git branch name for the pull request"),
+            new("{{FEATURE_STATUS}}", "Current status of the pull request (legacy)"),
+            new("{{PR_STATUS}}", "Current status of the pull request"),
+            new("{{WORKTREE_PATH}}", "Path to the git worktree for this pull request"),
+            new("{{FEATURE_TREE}}", "Hierarchical view of all pull requests in the project (legacy)"),
+            new("{{PR_TREE}}", "Hierarchical view of all pull requests in the project"),
+            new("{{RELATED_FEATURES}}", "List of sibling pull requests (legacy)"),
+            new("{{RELATED_PRS}}", "List of sibling pull requests")
         ];
     }
 
