@@ -36,11 +36,26 @@ public class GitHubService : IGitHubService
     public async Task<bool> IsConfiguredAsync(string projectId)
     {
         var project = await _db.Projects.FindAsync(projectId);
-        if (project == null) return false;
+        if (project == null)
+        {
+            _logger.LogDebug("GitHub not configured: project {ProjectId} not found", projectId);
+            return false;
+        }
 
-        return !string.IsNullOrEmpty(project.GitHubOwner) &&
-               !string.IsNullOrEmpty(project.GitHubRepo) &&
-               !string.IsNullOrEmpty(GetGitHubToken());
+        if (string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
+        {
+            _logger.LogDebug("GitHub not configured for project {ProjectId}: owner or repo not set", projectId);
+            return false;
+        }
+
+        var token = GetGitHubToken();
+        if (string.IsNullOrEmpty(token))
+        {
+            _logger.LogWarning("GitHub not configured for project {ProjectId}: GITHUB_TOKEN not found in configuration or environment", projectId);
+            return false;
+        }
+
+        return true;
     }
 
     public async Task<List<GitHubPullRequest>> GetOpenPullRequestsAsync(string projectId)

@@ -458,6 +458,113 @@ public class GitHubServiceTests
         Assert.That(result, Is.False);
     }
 
+    [Test]
+    public async Task SyncPullRequests_GitHubApiThrows_ReturnsEmptyButNoException()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<PullRequestRequest>()))
+            .ThrowsAsync(new ApiException("Rate limit exceeded", System.Net.HttpStatusCode.Forbidden));
+
+        // Act - should not throw
+        var result = await _service.SyncPullRequestsAsync(project.Id);
+
+        // Assert - returns empty result since no PRs could be fetched
+        Assert.That(result.Imported, Is.EqualTo(0));
+        Assert.That(result.Updated, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task GetOpenPullRequests_GitHubApiThrows_ReturnsEmptyList()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<PullRequestRequest>()))
+            .ThrowsAsync(new ApiException("Unauthorized", System.Net.HttpStatusCode.Unauthorized));
+
+        // Act
+        var result = await _service.GetOpenPullRequestsAsync(project.Id);
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetClosedPullRequests_GitHubApiThrows_ReturnsEmptyList()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.IsAny<PullRequestRequest>()))
+            .ThrowsAsync(new ApiException("Network error", System.Net.HttpStatusCode.ServiceUnavailable));
+
+        // Act
+        var result = await _service.GetClosedPullRequestsAsync(project.Id);
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public async Task SyncPullRequests_MixedOpenAndClosed_ImportsAll()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+
+        var openPrs = new List<PullRequest>
+        {
+            CreateMockPullRequest(1, "Open PR", ItemState.Open, "feature/open")
+        };
+        var closedPrs = new List<PullRequest>
+        {
+            CreateMockPullRequest(2, "Merged PR", ItemState.Closed, "feature/merged", merged: true),
+            CreateMockPullRequest(3, "Closed PR", ItemState.Closed, "feature/closed", merged: false)
+        };
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Open)))
+            .ReturnsAsync(openPrs);
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Closed)))
+            .ReturnsAsync(closedPrs);
+
+        // Act
+        var result = await _service.SyncPullRequestsAsync(project.Id);
+
+        // Assert
+        Assert.That(result.Imported, Is.EqualTo(3));
+        Assert.That(result.Updated, Is.EqualTo(0));
+        Assert.That(result.Errors, Is.Empty);
+
+        var features = await _db.Features.Where(f => f.ProjectId == project.Id).ToListAsync();
+        Assert.That(features, Has.Count.EqualTo(3));
+
+        var openFeature = features.First(f => f.GitHubPRNumber == 1);
+        Assert.That(openFeature.Status, Is.EqualTo(FeatureStatus.ReadyForReview));
+
+        var mergedFeature = features.First(f => f.GitHubPRNumber == 2);
+        Assert.That(mergedFeature.Status, Is.EqualTo(FeatureStatus.Merged));
+
+        var closedFeature = features.First(f => f.GitHubPRNumber == 3);
+        Assert.That(closedFeature.Status, Is.EqualTo(FeatureStatus.Cancelled));
+    }
+
     // Helper to create mock PullRequest objects
     private static PullRequest CreateMockPullRequest(int number, string title, ItemState state, string branchName, bool merged = false)
     {

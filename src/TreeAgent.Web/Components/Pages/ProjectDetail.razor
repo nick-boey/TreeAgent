@@ -1,8 +1,11 @@
 @page "/projects/{Id}"
 @using TreeAgent.Web.Data.Entities
 @using TreeAgent.Web.Services
+@using TreeAgent.Web.Features.PullRequests.Services
 @inject ProjectService ProjectService
 @inject FeatureService FeatureService
+@inject IGitHubService GitHubService
+@inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
 @rendermode InteractiveServer
 
@@ -66,6 +69,25 @@ else
                                     <a href="https://github.com/@_project.GitHubOwner/@_project.GitHubRepo" target="_blank">
                                         @_project.GitHubOwner/@_project.GitHubRepo
                                     </a>
+                                    @if (_isSyncingPRs)
+                                    {
+                                        <span class="badge bg-info ms-2">
+                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            Syncing PRs...
+                                        </span>
+                                    }
+                                    else if (_syncError != null)
+                                    {
+                                        <span class="badge bg-danger ms-2" title="@_syncError">Sync failed</span>
+                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">Retry</button>
+                                    }
+                                    else if (_lastSyncResult != null)
+                                    {
+                                        <span class="badge bg-success ms-2" title="Imported: @_lastSyncResult.Imported, Updated: @_lastSyncResult.Updated">
+                                            Synced
+                                        </span>
+                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">Refresh</button>
+                                    }
                                 </dd>
                             }
                         </dl>
@@ -84,10 +106,22 @@ else
     private List<Feature>? _rootFeatures;
     private Feature? _selectedFeature;
     private string? _selectedFeatureId;
+    private bool _isSyncingPRs;
+    private string? _syncError;
+    private SyncResult? _lastSyncResult;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _project != null)
+        {
+            // Automatically sync PRs when project page loads (if GitHub is configured)
+            await SyncPullRequestsAsync();
+        }
     }
 
     private async Task LoadData()
@@ -96,6 +130,57 @@ else
         if (_project != null)
         {
             _rootFeatures = await FeatureService.GetTreeAsync(Id);
+        }
+    }
+
+    private async Task SyncPullRequestsAsync()
+    {
+        if (_project == null || _isSyncingPRs)
+            return;
+
+        // Check if GitHub is configured for this project
+        var isConfigured = await GitHubService.IsConfiguredAsync(_project.Id);
+        if (!isConfigured)
+        {
+            Logger.LogDebug("Skipping PR sync for project {ProjectId}: GitHub not configured or token missing", _project.Id);
+            return;
+        }
+
+        _isSyncingPRs = true;
+        _syncError = null;
+        StateHasChanged();
+
+        try
+        {
+            Logger.LogInformation("Starting automatic PR sync for project {ProjectId} ({Owner}/{Repo})",
+                _project.Id, _project.GitHubOwner, _project.GitHubRepo);
+
+            _lastSyncResult = await GitHubService.SyncPullRequestsAsync(_project.Id);
+
+            if (_lastSyncResult.Errors.Count > 0)
+            {
+                _syncError = string.Join("; ", _lastSyncResult.Errors);
+                Logger.LogWarning("PR sync completed with errors for project {ProjectId}: {Errors}",
+                    _project.Id, _syncError);
+            }
+            else
+            {
+                Logger.LogInformation("PR sync completed for project {ProjectId}: {Imported} imported, {Updated} updated",
+                    _project.Id, _lastSyncResult.Imported, _lastSyncResult.Updated);
+            }
+
+            // Refresh the feature tree to show newly synced PRs
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            _syncError = ex.Message;
+            Logger.LogError(ex, "Failed to sync pull requests for project {ProjectId}", _project.Id);
+        }
+        finally
+        {
+            _isSyncingPRs = false;
+            StateHasChanged();
         }
     }
 
