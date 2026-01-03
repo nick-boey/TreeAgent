@@ -1,16 +1,15 @@
 using Microsoft.EntityFrameworkCore;
 using TreeAgent.Web.Components;
-using TreeAgent.Web.Features.Agents.Hubs;
-using TreeAgent.Web.Features.Agents.Services;
 using TreeAgent.Web.Features.Commands;
 using TreeAgent.Web.Features.Git;
 using TreeAgent.Web.Features.GitHub;
+using TreeAgent.Web.Features.OpenCode;
+using TreeAgent.Web.Features.OpenCode.Hubs;
+using TreeAgent.Web.Features.OpenCode.Services;
 using TreeAgent.Web.Features.Projects;
 using TreeAgent.Web.Features.PullRequests;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.Roadmap;
-using TreeAgent.Web.HealthChecks;
-using SystemPromptService = TreeAgent.Web.Features.Agents.SystemPromptService;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,24 +39,25 @@ if (!string.IsNullOrEmpty(dbDirectory) && !Directory.Exists(dbDirectory))
 builder.Services.AddDbContext<TreeAgentDbContext>(options =>
     options.UseSqlite($"Data Source={dbPath}"));
 
+// Core services
 builder.Services.AddScoped<ProjectService>();
-builder.Services.AddSingleton<IClaudeCodeProcessFactory, ClaudeCodeProcessFactory>();
-builder.Services.AddSingleton<ClaudeCodeProcessManager>();
 builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
 builder.Services.AddSingleton<IGitWorktreeService, GitWorktreeService>();
 builder.Services.AddScoped<PullRequestDataService>();
-builder.Services.AddScoped<AgentService>();
 builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<PullRequestWorkflowService>();
 builder.Services.AddScoped<IRoadmapService, RoadmapService>();
-builder.Services.AddScoped<SystemPromptService>();
-builder.Services.AddSingleton<IAgentHubNotifier, AgentHubNotifier>();
+
+// OpenCode services
+builder.Services.Configure<OpenCodeOptions>(
+    builder.Configuration.GetSection(OpenCodeOptions.SectionName));
+builder.Services.AddHttpClient<IOpenCodeClient, OpenCodeClient>();
+builder.Services.AddSingleton<IOpenCodeServerManager, OpenCodeServerManager>();
+builder.Services.AddScoped<IOpenCodeConfigGenerator, OpenCodeConfigGenerator>();
+builder.Services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
 
 builder.Services.AddSignalR();
-builder.Services.AddHealthChecks()
-    .AddCheck<DatabaseHealthCheck>("database")
-    .AddCheck<ProcessManagerHealthCheck>("process_manager");
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -85,7 +85,8 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// Map SignalR hubs
 app.MapHub<AgentHub>("/hubs/agent");
-app.MapHealthChecks("/health");
 
 app.Run();

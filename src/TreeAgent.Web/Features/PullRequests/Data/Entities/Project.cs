@@ -10,19 +10,13 @@ public class Project
     public string DefaultBranch { get; set; } = "main";
 
     /// <summary>
-    /// Default system prompt used for new agents in this project
+    /// Default model used for new agent sessions in this project.
+    /// Format: "provider/model" (e.g., "anthropic/claude-sonnet-4-5")
     /// </summary>
-    public string? DefaultSystemPrompt { get; set; }
-
-    /// <summary>
-    /// Reference to a template used as the default prompt
-    /// </summary>
-    public string? DefaultPromptTemplateId { get; set; }
+    public string? DefaultModel { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-    public SystemPromptTemplate? DefaultPromptTemplate { get; set; }
     public ICollection<PullRequest> PullRequests { get; set; } = [];
-    public ICollection<SystemPromptTemplate> PromptTemplates { get; set; } = [];
 }

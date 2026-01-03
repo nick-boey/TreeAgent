@@ -1,9 +1,10 @@
-@using TreeAgent.Web.Features.Agents.Data
 @using TreeAgent.Web.Features.GitHub
+@using TreeAgent.Web.Features.OpenCode.Services
 @using TreeAgent.Web.Features.PullRequests.Data
 @using TreeAgent.Web.Features.PullRequests.Data.Entities
 @inject PullRequestDataService PullRequestDataService
 @inject IGitHubService GitHubService
+@inject IAgentWorkflowService AgentWorkflowService
 @inject NavigationManager NavigationManager
 
 <div class="card pull-request-detail-panel">
@@ -23,6 +24,10 @@
                    class="badge bg-secondary text-decoration-none ms-1">
                     PR #@PullRequest.GitHubPRNumber
                 </a>
+            }
+            @if (_agentStatus != null)
+            {
+                <span class="badge bg-success ms-1">Agent Running</span>
             }
         </div>
 
@@ -48,19 +53,49 @@
             <dd class="col-8">@PullRequest.UpdatedAt.ToLocalTime().ToString("g")</dd>
         </dl>
 
-        @if (PullRequest.Agents.Any())
+        @* Agent Controls *@
+        @if (!string.IsNullOrEmpty(PullRequest.WorktreePath) && PullRequest.Status == OpenPullRequestStatus.InDevelopment)
         {
-            <hr />
-            <h6>Agents</h6>
-            <ul class="list-group list-group-flush small">
-                @foreach (var agent in PullRequest.Agents)
+            <div class="border-top pt-3 mt-3">
+                <h6>OpenCode Agent</h6>
+                @if (_agentStatus != null)
                 {
-                    <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                        <span>Agent @agent.Id[..8]</span>
-                        <span class="badge @GetAgentStatusBadgeClass(agent.Status)">@agent.Status</span>
-                    </li>
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            Server: <code>@_agentStatus.Server.BaseUrl</code><br/>
+                            Session: <code>@(_agentStatus.ActiveSession?.Id ?? "None")</code>
+                        </small>
+                    </div>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="StopAgent" disabled="@_isAgentLoading">
+                        @if (_isAgentLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Stop Agent
+                    </button>
                 }
-            </ul>
+                else
+                {
+                    <button class="btn btn-sm btn-success" @onclick="StartAgent" disabled="@_isAgentLoading">
+                        @if (_isAgentLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Start Agent
+                    </button>
+                }
+                @if (!string.IsNullOrEmpty(_agentErrorMessage))
+                {
+                    <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_agentErrorMessage</div>
+                }
+            </div>
+        }
+        else if (string.IsNullOrEmpty(PullRequest.WorktreePath))
+        {
+            <div class="border-top pt-3 mt-3">
+                <h6>OpenCode Agent</h6>
+                <p class="text-muted small mb-0">Start development to enable the agent.</p>
+            </div>
         }
     </div>
     <div class="card-footer">
@@ -71,7 +106,8 @@
                     <button class="btn btn-sm btn-warning" @onclick="MarkReadyForReview" disabled="@_isLoading">
                         Ready for Review
                     </button>
-                    <button class="btn btn-sm btn-outline-success" @onclick="CreateGitHubPullRequest" disabled="@_isLoading || !CanCreatePR()">
+                    <button class="btn btn-sm btn-outline-success" @onclick="CreateGitHubPullRequest"
+                            disabled="@_isLoading || !CanCreatePR()">
                         Create PR
                     </button>
                     break;
@@ -86,7 +122,8 @@
                 Delete
             </button>
 
-            <a href="projects/@PullRequest.ProjectId/pull-requests/@PullRequest.Id/edit" class="btn btn-sm btn-outline-secondary">
+            <a href="projects/@PullRequest.ProjectId/pull-requests/@PullRequest.Id/edit"
+               class="btn btn-sm btn-outline-secondary">
                 Edit
             </a>
         </div>
@@ -99,17 +136,71 @@
 </div>
 
 @code {
-    [Parameter]
-    public PullRequest PullRequest { get; set; } = null!;
+    [Parameter] public PullRequest PullRequest { get; set; } = null!;
 
-    [Parameter]
-    public EventCallback OnActionCompleted { get; set; }
+    [Parameter] public EventCallback OnActionCompleted { get; set; }
 
-    [Parameter]
-    public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
 
     private bool _isLoading;
     private string? _errorMessage;
+    private bool _isAgentLoading;
+    private string? _agentErrorMessage;
+    private AgentStatus? _agentStatus;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await RefreshAgentStatus();
+    }
+
+    private async Task RefreshAgentStatus()
+    {
+        try
+        {
+            _agentStatus = await AgentWorkflowService.GetAgentStatusAsync(PullRequest.Id);
+        }
+        catch
+        {
+            _agentStatus = null;
+        }
+    }
+
+    private async Task StartAgent()
+    {
+        _isAgentLoading = true;
+        _agentErrorMessage = null;
+        try
+        {
+            _agentStatus = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequest.Id);
+        }
+        catch (Exception ex)
+        {
+            _agentErrorMessage = ex.Message;
+        }
+        finally
+        {
+            _isAgentLoading = false;
+        }
+    }
+
+    private async Task StopAgent()
+    {
+        _isAgentLoading = true;
+        _agentErrorMessage = null;
+        try
+        {
+            await AgentWorkflowService.StopAgentAsync(PullRequest.Id);
+            _agentStatus = null;
+        }
+        catch (Exception ex)
+        {
+            _agentErrorMessage = ex.Message;
+        }
+        finally
+        {
+            _isAgentLoading = false;
+        }
+    }
 
     private bool CanCreatePR()
     {
@@ -150,6 +241,7 @@
             {
                 _errorMessage = "Failed to create pull request.";
             }
+
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
@@ -168,6 +260,11 @@
         _errorMessage = null;
         try
         {
+            // Stop agent if running
+            if (_agentStatus != null)
+            {
+                await AgentWorkflowService.StopAgentAsync(PullRequest.Id);
+            }
             await PullRequestDataService.CompleteAsync(PullRequest.Id);
             await OnActionCompleted.InvokeAsync();
         }
@@ -187,6 +284,11 @@
         _errorMessage = null;
         try
         {
+            // Stop agent if running
+            if (_agentStatus != null)
+            {
+                await AgentWorkflowService.StopAgentAsync(PullRequest.Id);
+            }
             await PullRequestDataService.DeleteAsync(PullRequest.Id);
             await OnActionCompleted.InvokeAsync();
         }
@@ -210,15 +312,4 @@
         };
     }
 
-    private string GetAgentStatusBadgeClass(AgentStatus status)
-    {
-        return status switch
-        {
-            AgentStatus.Idle => "bg-secondary",
-            AgentStatus.Running => "bg-primary",
-            AgentStatus.Stopped => "bg-dark",
-            AgentStatus.Error => "bg-danger",
-            _ => "bg-secondary"
-        };
-    }
 }

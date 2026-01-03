@@ -41,8 +41,7 @@ public class ProjectService(TreeAgentDbContext db)
         string? gitHubOwner,
         string? gitHubRepo,
         string defaultBranch,
-        string? defaultSystemPrompt = null,
-        string? defaultPromptTemplateId = null)
+        string? defaultModel = null)
     {
         var project = await db.Projects.FindAsync(id);
         if (project == null) return null;
@@ -52,8 +51,7 @@ public class ProjectService(TreeAgentDbContext db)
         project.GitHubOwner = gitHubOwner;
         project.GitHubRepo = gitHubRepo;
         project.DefaultBranch = defaultBranch;
-        project.DefaultSystemPrompt = defaultSystemPrompt;
-        project.DefaultPromptTemplateId = string.IsNullOrEmpty(defaultPromptTemplateId) ? null : defaultPromptTemplateId;
+        project.DefaultModel = defaultModel;
         project.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();

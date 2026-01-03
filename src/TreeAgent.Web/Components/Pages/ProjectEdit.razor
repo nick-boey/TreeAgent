@@ -1,9 +1,7 @@
 @page "/projects/{Id}/edit"
 @using TreeAgent.Web.Features.Projects
 @using TreeAgent.Web.Features.PullRequests.Data.Entities
-@using SystemPromptService = TreeAgent.Web.Features.Agents.SystemPromptService
 @inject ProjectService ProjectService
-@inject SystemPromptService PromptService
 @inject NavigationManager Navigation
 @rendermode InteractiveServer
 
@@ -54,28 +52,17 @@ else
             </div>
 
             <div class="col-md-6">
-                <h5>Default System Prompt</h5>
-                <p class="text-muted small">Configure the default prompt used for new agents in this project.</p>
+                <h5>Agent Settings</h5>
+                <p class="text-muted small">Configure the default settings for OpenCode agents in this project.</p>
 
                 <div class="mb-3">
-                    <label for="templateSelect" class="form-label">Use Template</label>
-                    <select class="form-select" id="templateSelect" @bind="_selectedTemplateId">
-                        <option value="">None (use custom prompt below)</option>
-                        @foreach (var template in _templates)
-                        {
-                            <option value="@template.Id">@template.Name</option>
-                        }
-                    </select>
-                </div>
-
-                <div class="mb-3">
-                    <label for="customPrompt" class="form-label">Custom Prompt</label>
-                    <textarea class="form-control font-monospace" id="customPrompt" rows="8"
-                              @bind="_defaultSystemPrompt"
-                              placeholder="Enter a custom system prompt or leave empty to use template..."></textarea>
+                    <label for="defaultModel" class="form-label">Default Model</label>
+                    <input type="text" class="form-control" id="defaultModel" 
+                           @bind="_defaultModel"
+                           placeholder="anthropic/claude-sonnet-4-5" />
                     <div class="form-text">
-                        Use variables like <code>@("{{FEATURE_TITLE}}")</code> for dynamic content.
-                        <a href="prompts">View all available variables</a>
+                        Model identifier in format <code>provider/model</code> (e.g., <code>anthropic/claude-sonnet-4-5</code>).
+                        Leave empty to use global default.
                     </div>
                 </div>
             </div>
@@ -99,14 +86,10 @@ else
     private string? _gitHubOwner;
     private string? _gitHubRepo;
     private string _defaultBranch = "main";
-    private string? _defaultSystemPrompt;
-    private string? _selectedTemplateId;
-    private List<SystemPromptTemplate> _templates = [];
+    private string? _defaultModel;
 
     protected override async Task OnInitializedAsync()
     {
-        _templates = await PromptService.GetGlobalTemplatesAsync();
-
         var project = await ProjectService.GetByIdAsync(Id);
         if (project == null)
         {
@@ -119,8 +102,7 @@ else
             _gitHubOwner = project.GitHubOwner;
             _gitHubRepo = project.GitHubRepo;
             _defaultBranch = project.DefaultBranch;
-            _defaultSystemPrompt = project.DefaultSystemPrompt;
-            _selectedTemplateId = project.DefaultPromptTemplateId;
+            _defaultModel = project.DefaultModel;
         }
         _loading = false;
     }
@@ -134,8 +116,7 @@ else
             _gitHubOwner,
             _gitHubRepo,
             _defaultBranch,
-            _defaultSystemPrompt,
-            _selectedTemplateId);
+            _defaultModel);
         Navigation.NavigateTo("projects");
     }
 }

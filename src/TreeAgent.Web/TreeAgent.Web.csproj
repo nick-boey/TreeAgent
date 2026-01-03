@@ -17,4 +17,9 @@
     <PackageReference Include="Octokit" Version="14.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <_ContentIncludedByDefault Remove="Features\Agents\Components\Pages\AgentDetail.razor" />
+    <_ContentIncludedByDefault Remove="Features\Agents\Components\Pages\Agents.razor" />
+  </ItemGroup>
+
 </Project>

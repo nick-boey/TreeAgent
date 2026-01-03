@@ -1,4 +1,3 @@
-using TreeAgent.Web.Features.Agents.Data;
 
 namespace TreeAgent.Web.Features.PullRequests.Data.Entities;
 
@@ -20,8 +19,13 @@ public class PullRequest
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Port of the running OpenCode server for this PR, if any.
+    /// Null means no agent is currently running.
+    /// </summary>
+    public int? AgentServerPort { get; set; }
+
     public Project Project { get; set; } = null!;
     public PullRequest? Parent { get; set; }
     public ICollection<PullRequest> Children { get; set; } = [];
-    public ICollection<Agent> Agents { get; set; } = [];
 }
