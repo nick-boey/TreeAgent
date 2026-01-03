@@ -1,5 +1,4 @@
-@using TreeAgent.Web.Models
-
+@using TreeAgent.Web.Features.PullRequests
 <div class="timeline-item @(IsSelected ? "selected" : "") @GetStatusClass()"
      @onclick="HandleClick">
     <div class="item-status-indicator @GetStatusClass()"></div>

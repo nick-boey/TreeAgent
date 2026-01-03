@@ -3,7 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using TreeAgent.Web.Data;
+using TreeAgent.Web.Features.PullRequests.Data;
 
 #nullable disable
 

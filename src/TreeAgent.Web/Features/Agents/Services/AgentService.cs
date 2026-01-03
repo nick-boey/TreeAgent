@@ -1,8 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using TreeAgent.Web.Data;
-using TreeAgent.Web.Data.Entities;
 using TreeAgent.Web.Features.Agents.Data;
 using TreeAgent.Web.Features.Agents.Hubs;
+using TreeAgent.Web.Features.PullRequests.Data;
 
 namespace TreeAgent.Web.Features.Agents.Services;
 

@@ -1,4 +1,4 @@
-using TreeAgent.Web.Data.Entities;
+using TreeAgent.Web.Features.PullRequests.Data.Entities;
 
 namespace TreeAgent.Web.Features.Agents.Data;
 

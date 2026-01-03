@@ -1,7 +1,8 @@
 @page "/projects/{Id}"
-@using TreeAgent.Web.Data.Entities
-@using TreeAgent.Web.Services
-@using TreeAgent.Web.Features.PullRequests.Services
+@using TreeAgent.Web.Features.GitHub
+@using TreeAgent.Web.Features.Projects
+@using TreeAgent.Web.Features.PullRequests.Data
+@using TreeAgent.Web.Features.PullRequests.Data.Entities
 @inject ProjectService ProjectService
 @inject FeatureService FeatureService
 @inject IGitHubService GitHubService

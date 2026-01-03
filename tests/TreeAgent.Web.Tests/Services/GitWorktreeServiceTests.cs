@@ -1,5 +1,6 @@
 using Moq;
-using TreeAgent.Web.Services;
+using TreeAgent.Web.Features.Commands;
+using TreeAgent.Web.Features.Git;
 
 namespace TreeAgent.Web.Tests.Services;
 

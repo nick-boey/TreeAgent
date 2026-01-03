@@ -1,5 +1,4 @@
-@using TreeAgent.Web.Data.Entities
-
+@using TreeAgent.Web.Features.PullRequests.Data.Entities
 <div class="feature-node" style="padding-left: @(Level * 20)px">
     <div class="feature-item @(IsSelected ? "selected" : "") @GetStatusClass()"
          @onclick="HandleClick">

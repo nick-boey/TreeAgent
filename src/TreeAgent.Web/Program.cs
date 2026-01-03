@@ -1,11 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using TreeAgent.Web.Components;
-using TreeAgent.Web.Data;
 using TreeAgent.Web.Features.Agents.Hubs;
 using TreeAgent.Web.Features.Agents.Services;
-using TreeAgent.Web.Features.PullRequests.Services;
+using TreeAgent.Web.Features.Commands;
+using TreeAgent.Web.Features.Git;
+using TreeAgent.Web.Features.GitHub;
+using TreeAgent.Web.Features.Projects;
+using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.HealthChecks;
-using TreeAgent.Web.Services;
+using SystemPromptService = TreeAgent.Web.Features.Agents.SystemPromptService;
 
 var builder = WebApplication.CreateBuilder(args);
 

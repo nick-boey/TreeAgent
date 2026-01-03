@@ -1,4 +1,4 @@
-using TreeAgent.Web.Services;
+using TreeAgent.Web.Features.Git;
 using TreeAgent.Web.Tests.Integration.Fixtures;
 
 namespace TreeAgent.Web.Tests.Integration;

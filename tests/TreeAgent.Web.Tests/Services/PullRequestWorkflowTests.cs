@@ -2,13 +2,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Moq;
 using Octokit;
-using TreeAgent.Web.Data;
-using TreeAgent.Web.Data.Entities;
-using TreeAgent.Web.Features.PullRequests.Services;
-using TreeAgent.Web.Models;
-using TreeAgent.Web.Services;
-using Project = TreeAgent.Web.Data.Entities.Project;
-using PullRequestStatus = TreeAgent.Web.Models.PullRequestStatus;
+using TreeAgent.Web.Features.Commands;
+using TreeAgent.Web.Features.GitHub;
+using TreeAgent.Web.Features.PullRequests;
+using TreeAgent.Web.Features.PullRequests.Data;
+using TreeAgent.Web.Features.PullRequests.Data.Entities;
+using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
+using PullRequestStatus = TreeAgent.Web.Features.PullRequests.PullRequestStatus;
 
 namespace TreeAgent.Web.Tests.Services;
 

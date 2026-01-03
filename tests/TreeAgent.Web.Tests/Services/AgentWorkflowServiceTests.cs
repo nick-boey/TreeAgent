@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Moq;
-using TreeAgent.Web.Data;
-using TreeAgent.Web.Data.Entities;
 using TreeAgent.Web.Features.Agents.Data;
-using TreeAgent.Web.Models;
-using TreeAgent.Web.Services;
-using Project = TreeAgent.Web.Data.Entities.Project;
+using TreeAgent.Web.Features.Agents.Services;
+using TreeAgent.Web.Features.Commands;
+using TreeAgent.Web.Features.Git;
+using TreeAgent.Web.Features.PullRequests.Data;
+using TreeAgent.Web.Features.PullRequests.Data.Entities;
+using TreeAgent.Web.Features.Roadmap;
+using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
 
 namespace TreeAgent.Web.Tests.Services;
 

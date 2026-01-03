@@ -27,27 +27,30 @@ Use Test Driven Development practices where possible:
 
 ### Project Structure (Vertical Slice Architecture)
 
-The project follows Vertical Slice Architecture, organizing code by feature rather than technical layer.
+The project follows Vertical Slice Architecture, organizing code by feature rather than technical layer. Each feature contains its own services, data models, and components.
 
 ```
 src/TreeAgent.Web/
-├── Features/                    # Feature slices
+├── Features/                    # Feature slices (all business logic)
 │   ├── Agents/                  # Claude Code agent management
 │   │   ├── Components/Pages/    # Agent UI pages
-│   │   ├── Data/                # Agent-related entities
-│   │   ├── Hubs/                # SignalR hub for agents
-│   │   └── Services/            # Agent services
-│   └── PullRequests/            # GitHub PR management
-│       └── Services/            # GitHub services
+│   │   ├── Data/                # Agent, AgentStatus, Message entities
+│   │   ├── Hubs/                # SignalR hub for real-time updates
+│   │   └── Services/            # AgentService, ClaudeCodeProcessManager, etc.
+│   ├── Commands/                # Shell command execution
+│   ├── Git/                     # Git worktree operations
+│   ├── GitHub/                  # GitHub API integration (Octokit)
+│   ├── Projects/                # Project management
+│   ├── PullRequests/            # PR workflow and data entities
+│   │   └── Data/                # Feature, Project, TreeAgentDbContext
+│   │       └── Entities/        # EF Core entities
+│   └── Roadmap/                 # Roadmap parsing and management
 ├── Components/                  # Shared Blazor components
 │   ├── Layout/                  # Layout components
-│   ├── Pages/                   # Shared page components
-│   └── Shared/                  # Shared/reusable components
-├── Data/
-│   └── Entities/                # Shared EF Core entities
+│   ├── Pages/                   # Page components
+│   └── Shared/                  # Reusable components
 ├── HealthChecks/                # Health check implementations
 ├── Migrations/                  # EF Core migrations
-├── Services/                    # Shared services
 └── Program.cs                   # Application entry point
 
 tests/TreeAgent.Web.Tests/
@@ -59,13 +62,19 @@ tests/TreeAgent.Web.Tests/
 │       └── Services/            # GitHub service tests
 ├── Integration/
 │   └── Fixtures/                # Test fixtures
-└── Services/                    # Shared service tests
+├── Models/                      # Model unit tests
+└── Services/                    # Service tests (legacy location)
 ```
 
 ### Feature Slices
 
-- **Agents**: Claude Code agent orchestration, process management, message streaming
-- **PullRequests**: GitHub PR synchronization using Octokit
+- **Agents**: Claude Code agent orchestration, process management, message streaming, system prompts
+- **Commands**: Shell command execution abstraction
+- **Git**: Git worktree creation, management, and rebase operations
+- **GitHub**: GitHub PR synchronization and API operations using Octokit
+- **Projects**: Project CRUD operations
+- **PullRequests**: PR workflow, feature management, and core data entities (Feature, Project, DbContext)
+- **Roadmap**: Roadmap file parsing and change tracking
 
 ### Running the Application
 
@@ -97,22 +106,37 @@ dotnet ef migrations add <MigrationName>
 
 ## Key Services
 
-### Shared Services (in Services/)
-- **ProjectService**: CRUD operations for projects
-- **FeatureService**: Feature management with tree structure and worktree integration
-- **GitWorktreeService**: Git worktree operations
-- **SystemPromptService**: Template processing for agent system prompts
-
-### Agents Feature (in Features/Agents/)
+### Agents (Features/Agents/)
 - **AgentService**: Agent lifecycle management with Claude Code process orchestration
+- **AgentWorkflowService**: Orchestrates agent workflow from feature creation to completion
 - **ClaudeCodeProcessManager**: Process pool management for Claude Code instances
+- **ClaudeCodeProcess**: Individual Claude Code process wrapper
 - **ClaudeCodePathResolver**: Platform-aware Claude Code executable discovery
 - **MessageParser**: JSON message parser for Claude Code output
+- **SystemPromptService**: Template processing for agent system prompts
 - **AgentHub**: SignalR hub for real-time agent updates
 
-### PullRequests Feature (in Features/PullRequests/)
+### Commands (Features/Commands/)
+- **CommandRunner**: Shell command execution with output capture
+
+### Git (Features/Git/)
+- **GitWorktreeService**: Git worktree creation, deletion, and rebase operations
+
+### GitHub (Features/GitHub/)
 - **GitHubService**: GitHub PR synchronization using Octokit
 - **GitHubClientWrapper**: Octokit abstraction for testability
+
+### Projects (Features/Projects/)
+- **ProjectService**: CRUD operations for projects
+
+### PullRequests (Features/PullRequests/)
+- **FeatureService**: Feature management with tree structure and worktree integration
+- **PullRequestWorkflowService**: PR creation and management workflow
+- **TreeAgentDbContext**: EF Core database context
+
+### Roadmap (Features/Roadmap/)
+- **RoadmapService**: Roadmap file loading and future change calculations
+- **RoadmapParser**: YAML roadmap file parsing
 
 ## Configuration
 
