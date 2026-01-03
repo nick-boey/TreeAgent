@@ -143,6 +143,8 @@ stateDiagram-v2
     ChecksFailing --> InProgress : Agent fixes issues
     ReadyForReview --> ReadyForMerging : User approves (no comments)
     ReadyForMerging --> [*] : User merges PR
+    InProgress --> Conflict : Rebase fails
+    Conflict --> InProgress : User/agent resolves
 ```
 
 | Status | Color | Description |
@@ -150,6 +152,7 @@ stateDiagram-v2
 | In Progress | Yellow | Agent is actively working on the PR |
 | Ready for Review | Flashing Yellow | Agent completed, awaiting user review |
 | Checks Failing | Red | CI/CD checks have failed |
+| Conflict | Orange | Rebase failed due to merge conflicts |
 | Ready for Merging | Green | Approved and ready to merge |
 | Merged | Purple | PR has been merged (past) |
 | Closed | Red | PR was closed without merging (past) |

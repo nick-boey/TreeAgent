@@ -32,10 +32,13 @@ stateDiagram-v2
     ReadyForReview --> ReadyForMerging : User approves (no comments)
     ChecksFailing --> ReadyForReview : Agent fixes, checks pass
     ReadyForMerging --> [*] : User merges PR
+    InProgress --> Conflict : Rebase fails
+    Conflict --> InProgress : User/agent resolves
 
     note right of InProgress : Yellow status
     note right of ReadyForReview : Flashing yellow status
     note right of ChecksFailing : Red status
+    note right of Conflict : Orange status
     note right of ReadyForMerging : Green status
 ```
 
@@ -46,9 +49,20 @@ stateDiagram-v2
 | In Progress | Yellow | Agent is actively working on the PR |
 | Ready for Review | Flashing Yellow | Agent completed, awaiting user review |
 | Checks Failing | Red | CI/CD checks have failed |
+| Conflict | Orange | Rebase failed due to merge conflicts |
 | Ready for Merging | Green | Approved and ready to merge |
 | Merged | Purple | PR has been merged (past) |
 | Closed | Red | PR was closed without merging (past) |
+
+### Conflict Resolution
+
+When automatic rebasing fails due to conflicts, the PR enters "Conflict" status. The user can then:
+- Manually rebase or merge the changes
+- Spawn an agent to attempt automatic conflict resolution
+
+### Closed PR Ordering
+
+Closed (not merged) PRs are assigned a `t` value based on the PR they were closed closest to in time, placing them in the timeline relative to when they were abandoned.
 
 ---
 
