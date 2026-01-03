@@ -3,6 +3,7 @@ namespace TreeAgent.Web.Features.PullRequests;
 /// <summary>
 /// Represents GitHub PR data. This is a read model - not persisted to EF Core.
 /// The source of truth for PR data is GitHub.
+/// Used by both GitHubService and PullRequestWorkflowService.
 /// </summary>
 public class PullRequestInfo
 {

@@ -21,7 +21,7 @@ else
         <div>
             <h1>Agent @_agent.Id[..8]</h1>
             <p class="text-muted mb-0">
-                Feature: <a href="projects/@_agent.Feature?.ProjectId">@(_agent.Feature?.Title ?? "Unknown")</a>
+                Pull Request: <a href="projects/@_agent.PullRequest?.ProjectId">@(_agent.PullRequest?.Title ?? "Unknown")</a>
             </p>
         </div>
         <div class="d-flex gap-2 align-items-center">

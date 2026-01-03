@@ -65,26 +65,26 @@ public class AgentWorkflowServiceTests
         return project;
     }
 
-    private async Task<Feature> CreateTestFeature(string projectId)
+    private async Task<PullRequest> CreateTestPullRequest(string projectId)
     {
-        var feature = new Feature
+        var pullRequest = new PullRequest
         {
             ProjectId = projectId,
-            Title = "Test Feature",
+            Title = "Test Pull Request",
             BranchName = "feature/test",
-            Status = FeatureStatus.Future
+            Status = OpenPullRequestStatus.InDevelopment
         };
 
-        _db.Features.Add(feature);
+        _db.PullRequests.Add(pullRequest);
         await _db.SaveChangesAsync();
-        return feature;
+        return pullRequest;
     }
 
-    private async Task<Agent> CreateTestAgent(string featureId, AgentStatus status = AgentStatus.Idle)
+    private async Task<Agent> CreateTestAgent(string pullRequestId, AgentStatus status = AgentStatus.Idle)
     {
         var agent = new Agent
         {
-            FeatureId = featureId,
+            PullRequestId = pullRequestId,
             Status = status
         };
 
@@ -100,15 +100,18 @@ public class AgentWorkflowServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id);
-        var agent = await CreateTestAgent(feature.Id);
+        var pullRequest = await CreateTestPullRequest(project.Id);
+        pullRequest.Status = OpenPullRequestStatus.ReadyForReview;
+        await _db.SaveChangesAsync();
+
+        var agent = await CreateTestAgent(pullRequest.Id);
 
         // Act
         await _service.OnAgentStartedAsync(agent.Id);
 
         // Assert
-        var updatedFeature = await _db.Features.FindAsync(feature.Id);
-        Assert.That(updatedFeature!.Status, Is.EqualTo(FeatureStatus.InDevelopment));
+        var updatedPR = await _db.PullRequests.FindAsync(pullRequest.Id);
+        Assert.That(updatedPR!.Status, Is.EqualTo(OpenPullRequestStatus.InDevelopment));
     }
 
     [Test]
@@ -116,18 +119,18 @@ public class AgentWorkflowServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id);
-        feature.Status = FeatureStatus.InDevelopment;
+        var pullRequest = await CreateTestPullRequest(project.Id);
+        pullRequest.Status = OpenPullRequestStatus.InDevelopment;
         await _db.SaveChangesAsync();
 
-        var agent = await CreateTestAgent(feature.Id, AgentStatus.Running);
+        var agent = await CreateTestAgent(pullRequest.Id, AgentStatus.Running);
 
         // Act
         await _service.OnAgentCompletedAsync(agent.Id);
 
         // Assert
-        var updatedFeature = await _db.Features.FindAsync(feature.Id);
-        Assert.That(updatedFeature!.Status, Is.EqualTo(FeatureStatus.ReadyForReview));
+        var updatedPR = await _db.PullRequests.FindAsync(pullRequest.Id);
+        Assert.That(updatedPR!.Status, Is.EqualTo(OpenPullRequestStatus.ReadyForReview));
     }
 
     [Test]
@@ -135,15 +138,15 @@ public class AgentWorkflowServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id);
-        feature.Status = FeatureStatus.InDevelopment;
-        feature.BranchName = "plan-update/add-features";
+        var pullRequest = await CreateTestPullRequest(project.Id);
+        pullRequest.Status = OpenPullRequestStatus.InDevelopment;
+        pullRequest.BranchName = "plan-update/add-features";
         await _db.SaveChangesAsync();
 
-        var agent = await CreateTestAgent(feature.Id, AgentStatus.Running);
+        var agent = await CreateTestAgent(pullRequest.Id, AgentStatus.Running);
 
         // Mock: only ROADMAP.json changed
-        _mockRoadmapService.Setup(r => r.IsPlanUpdateOnlyAsync(feature.Id))
+        _mockRoadmapService.Setup(r => r.IsPlanUpdateOnlyAsync(pullRequest.Id))
             .ReturnsAsync(true);
 
         // Act
@@ -158,14 +161,14 @@ public class AgentWorkflowServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id);
-        feature.Status = FeatureStatus.InDevelopment;
+        var pullRequest = await CreateTestPullRequest(project.Id);
+        pullRequest.Status = OpenPullRequestStatus.InDevelopment;
         await _db.SaveChangesAsync();
 
-        var agent = await CreateTestAgent(feature.Id, AgentStatus.Running);
+        var agent = await CreateTestAgent(pullRequest.Id, AgentStatus.Running);
 
         // Mock: multiple files changed
-        _mockRoadmapService.Setup(r => r.IsPlanUpdateOnlyAsync(feature.Id))
+        _mockRoadmapService.Setup(r => r.IsPlanUpdateOnlyAsync(pullRequest.Id))
             .ReturnsAsync(false);
 
         // Act
@@ -180,20 +183,20 @@ public class AgentWorkflowServiceTests
     #region 5.2 Review Comment Handling
 
     [Test]
-    public async Task ReviewComments_Received_FeatureMovesToInProgress()
+    public async Task ReviewComments_Received_PRMovesToInProgress()
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id);
-        feature.Status = FeatureStatus.ReadyForReview;
+        var pullRequest = await CreateTestPullRequest(project.Id);
+        pullRequest.Status = OpenPullRequestStatus.ReadyForReview;
         await _db.SaveChangesAsync();
 
         // Act
-        await _service.OnReviewCommentsReceivedAsync(feature.Id);
+        await _service.OnReviewCommentsReceivedAsync(pullRequest.Id);
 
         // Assert
-        var updatedFeature = await _db.Features.FindAsync(feature.Id);
-        Assert.That(updatedFeature!.Status, Is.EqualTo(FeatureStatus.InDevelopment));
+        var updatedPR = await _db.PullRequests.FindAsync(pullRequest.Id);
+        Assert.That(updatedPR!.Status, Is.EqualTo(OpenPullRequestStatus.InDevelopment));
     }
 
     [Test]
@@ -201,18 +204,18 @@ public class AgentWorkflowServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id);
-        feature.Status = FeatureStatus.ReadyForReview;
+        var pullRequest = await CreateTestPullRequest(project.Id);
+        pullRequest.Status = OpenPullRequestStatus.ReadyForReview;
         await _db.SaveChangesAsync();
 
         var reviewComments = "Please fix the null check on line 42";
 
         // Act
-        var newAgent = await _service.SpawnAgentForReviewAsync(feature.Id, reviewComments);
+        var newAgent = await _service.SpawnAgentForReviewAsync(pullRequest.Id, reviewComments);
 
         // Assert
         Assert.That(newAgent, Is.Not.Null);
-        Assert.That(newAgent!.FeatureId, Is.EqualTo(feature.Id));
+        Assert.That(newAgent!.PullRequestId, Is.EqualTo(pullRequest.Id));
         Assert.That(newAgent.SystemPrompt, Does.Contain(reviewComments));
     }
 
@@ -221,38 +224,38 @@ public class AgentWorkflowServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id);
-        feature.Status = FeatureStatus.InDevelopment;
+        var pullRequest = await CreateTestPullRequest(project.Id);
+        pullRequest.Status = OpenPullRequestStatus.InDevelopment;
         await _db.SaveChangesAsync();
 
         // Create an agent that will complete
-        var agent = await CreateTestAgent(feature.Id, AgentStatus.Running);
+        var agent = await CreateTestAgent(pullRequest.Id, AgentStatus.Running);
 
         // Act - Simulate agent completion after addressing review
         await _service.OnAgentCompletedAsync(agent.Id);
 
         // Assert
-        var updatedFeature = await _db.Features.FindAsync(feature.Id);
-        Assert.That(updatedFeature!.Status, Is.EqualTo(FeatureStatus.ReadyForReview));
+        var updatedPR = await _db.PullRequests.FindAsync(pullRequest.Id);
+        Assert.That(updatedPR!.Status, Is.EqualTo(OpenPullRequestStatus.ReadyForReview));
     }
 
     [Test]
-    public async Task StartWorkOnFutureChange_CreatesFeatureAndAgent()
+    public async Task StartWorkOnFutureChange_CreatesPullRequestAndAgent()
     {
         // Arrange
         var project = await CreateTestProject();
         var changeId = "new-feature";
-        var mockFeature = new Feature
+        var mockPullRequest = new PullRequest
         {
             Id = Guid.NewGuid().ToString(),
             ProjectId = project.Id,
             Title = "New Feature",
             BranchName = "core/feature/new-feature",
-            Status = FeatureStatus.InDevelopment
+            Status = OpenPullRequestStatus.InDevelopment
         };
 
         _mockRoadmapService.Setup(r => r.PromoteChangeAsync(project.Id, changeId))
-            .ReturnsAsync(mockFeature);
+            .ReturnsAsync(mockPullRequest);
 
         // Mock the FindChangeByIdAsync to return the change with instructions
         var change = new RoadmapChange
@@ -266,17 +269,17 @@ public class AgentWorkflowServiceTests
         _mockRoadmapService.Setup(r => r.FindChangeByIdAsync(project.Id, changeId))
             .ReturnsAsync(change);
 
-        // Save the feature to the database for lookup
-        _db.Features.Add(mockFeature);
+        // Save the pull request to the database for lookup
+        _db.PullRequests.Add(mockPullRequest);
         await _db.SaveChangesAsync();
 
         // Act
         var result = await _service.StartWorkOnFutureChangeAsync(project.Id, changeId);
 
         // Assert
-        Assert.That(result.Feature, Is.Not.Null);
+        Assert.That(result.PullRequest, Is.Not.Null);
         Assert.That(result.Agent, Is.Not.Null);
-        Assert.That(result.Agent!.FeatureId, Is.EqualTo(mockFeature.Id));
+        Assert.That(result.Agent!.PullRequestId, Is.EqualTo(mockPullRequest.Id));
     }
 
     #endregion

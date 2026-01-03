@@ -6,7 +6,9 @@ using TreeAgent.Web.Features.Commands;
 using TreeAgent.Web.Features.Git;
 using TreeAgent.Web.Features.GitHub;
 using TreeAgent.Web.Features.Projects;
+using TreeAgent.Web.Features.PullRequests;
 using TreeAgent.Web.Features.PullRequests.Data;
+using TreeAgent.Web.Features.Roadmap;
 using TreeAgent.Web.HealthChecks;
 using SystemPromptService = TreeAgent.Web.Features.Agents.SystemPromptService;
 
@@ -42,11 +44,13 @@ builder.Services.AddScoped<ProjectService>();
 builder.Services.AddSingleton<IClaudeCodeProcessFactory, ClaudeCodeProcessFactory>();
 builder.Services.AddSingleton<ClaudeCodeProcessManager>();
 builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
-builder.Services.AddSingleton<GitWorktreeService>();
-builder.Services.AddScoped<FeatureService>();
+builder.Services.AddSingleton<IGitWorktreeService, GitWorktreeService>();
+builder.Services.AddScoped<PullRequestDataService>();
 builder.Services.AddScoped<AgentService>();
 builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
+builder.Services.AddScoped<PullRequestWorkflowService>();
+builder.Services.AddScoped<IRoadmapService, RoadmapService>();
 builder.Services.AddScoped<SystemPromptService>();
 builder.Services.AddSingleton<IAgentHubNotifier, AgentHubNotifier>();
 

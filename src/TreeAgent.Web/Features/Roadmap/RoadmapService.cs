@@ -97,9 +97,9 @@ public class RoadmapService(
     #region 3.2 Promote Future Change to Current PR
 
     /// <summary>
-    /// Promotes a future change to an active feature with a worktree.
+    /// Promotes a future change to an active pull request with a worktree.
     /// </summary>
-    public async Task<Feature?> PromoteChangeAsync(string projectId, string changeId)
+    public async Task<PullRequest?> PromoteChangeAsync(string projectId, string changeId)
     {
         var project = await db.Projects.FindAsync(projectId);
         if (project == null) return null;
@@ -129,24 +129,24 @@ public class RoadmapService(
                 branchName);
         }
 
-        // Create feature
-        var feature = new Feature
+        // Create pull request entry
+        var pullRequest = new PullRequest
         {
             ProjectId = projectId,
             Title = change.Title,
             Description = change.Description,
             BranchName = branchName,
-            Status = FeatureStatus.InDevelopment,
+            Status = OpenPullRequestStatus.InDevelopment,
             WorktreePath = worktreePath
         };
 
-        db.Features.Add(feature);
+        db.PullRequests.Add(pullRequest);
         await db.SaveChangesAsync();
 
         // Update roadmap - remove the promoted change and promote children
         await RemoveChangeAndPromoteChildrenAsync(roadmap, changeId, roadmapPath);
 
-        return feature;
+        return pullRequest;
     }
 
     private async Task RemoveChangeAndPromoteChildrenAsync(Roadmap roadmap, string changeId, string roadmapPath)
@@ -201,18 +201,18 @@ public class RoadmapService(
     }
 
     /// <summary>
-    /// Checks if a feature only modifies ROADMAP.json (plan update only).
+    /// Checks if a pull request only modifies ROADMAP.json (plan update only).
     /// </summary>
-    public async Task<bool> IsPlanUpdateOnlyAsync(string featureId)
+    public async Task<bool> IsPlanUpdateOnlyAsync(string pullRequestId)
     {
-        var feature = await db.Features
-            .Include(f => f.Project)
-            .FirstOrDefaultAsync(f => f.Id == featureId);
+        var pullRequest = await db.PullRequests
+            .Include(pr => pr.Project)
+            .FirstOrDefaultAsync(pr => pr.Id == pullRequestId);
 
-        if (feature == null) return false;
+        if (pullRequest == null) return false;
 
-        var workingDir = feature.WorktreePath ?? feature.Project.LocalPath;
-        var baseBranch = feature.Project.DefaultBranch ?? "main";
+        var workingDir = pullRequest.WorktreePath ?? pullRequest.Project.LocalPath;
+        var baseBranch = pullRequest.Project.DefaultBranch ?? "main";
 
         // Get list of changed files
         var result = await commandRunner.RunAsync(
@@ -232,17 +232,17 @@ public class RoadmapService(
     }
 
     /// <summary>
-    /// Validates the ROADMAP.json in a feature's worktree.
+    /// Validates the ROADMAP.json in a pull request's worktree.
     /// </summary>
-    public async Task<bool> ValidateRoadmapAsync(string featureId)
+    public async Task<bool> ValidateRoadmapAsync(string pullRequestId)
     {
-        var feature = await db.Features
-            .Include(f => f.Project)
-            .FirstOrDefaultAsync(f => f.Id == featureId);
+        var pullRequest = await db.PullRequests
+            .Include(pr => pr.Project)
+            .FirstOrDefaultAsync(pr => pr.Id == pullRequestId);
 
-        if (feature == null) return false;
+        if (pullRequest == null) return false;
 
-        var workingDir = feature.WorktreePath ?? feature.Project.LocalPath;
+        var workingDir = pullRequest.WorktreePath ?? pullRequest.Project.LocalPath;
         var roadmapPath = Path.Combine(workingDir, "ROADMAP.json");
 
         if (!File.Exists(roadmapPath)) return true; // No roadmap is valid
@@ -259,9 +259,9 @@ public class RoadmapService(
     }
 
     /// <summary>
-    /// Creates a plan-update feature for modifying the roadmap.
+    /// Creates a plan-update pull request for modifying the roadmap.
     /// </summary>
-    public async Task<Feature?> CreatePlanUpdateFeatureAsync(string projectId, string description)
+    public async Task<PullRequest?> CreatePlanUpdatePullRequestAsync(string projectId, string description)
     {
         var project = await db.Projects.FindAsync(projectId);
         if (project == null) return null;
@@ -277,21 +277,21 @@ public class RoadmapService(
 
         if (worktreePath == null) return null;
 
-        // Create feature
-        var feature = new Feature
+        // Create pull request entry
+        var pullRequest = new PullRequest
         {
             ProjectId = projectId,
             Title = $"Plan Update: {description}",
             Description = "Updates to ROADMAP.json",
             BranchName = branchName,
-            Status = FeatureStatus.InDevelopment,
+            Status = OpenPullRequestStatus.InDevelopment,
             WorktreePath = worktreePath
         };
 
-        db.Features.Add(feature);
+        db.PullRequests.Add(pullRequest);
         await db.SaveChangesAsync();
 
-        return feature;
+        return pullRequest;
     }
 
     #endregion

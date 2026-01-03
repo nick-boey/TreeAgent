@@ -7,7 +7,7 @@ namespace TreeAgent.Web.Features.PullRequests.Data;
 public class TreeAgentDbContext(DbContextOptions<TreeAgentDbContext> options) : DbContext(options)
 {
     public DbSet<Project> Projects => Set<Project>();
-    public DbSet<Feature> Features => Set<Feature>();
+    public DbSet<PullRequest> PullRequests => Set<PullRequest>();
     public DbSet<Agent> Agents => Set<Agent>();
     public DbSet<Message> Messages => Set<Message>();
     public DbSet<SystemPromptTemplate> SystemPromptTemplates => Set<SystemPromptTemplate>();
@@ -22,14 +22,14 @@ public class TreeAgentDbContext(DbContextOptions<TreeAgentDbContext> options) : 
             entity.Property(e => e.DefaultBranch).HasDefaultValue("main");
         });
 
-        modelBuilder.Entity<Feature>(entity =>
+        modelBuilder.Entity<PullRequest>(entity =>
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Title).IsRequired();
             entity.Property(e => e.Status).HasConversion<string>();
 
             entity.HasOne(e => e.Project)
-                .WithMany(p => p.Features)
+                .WithMany(p => p.PullRequests)
                 .HasForeignKey(e => e.ProjectId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -44,9 +44,9 @@ public class TreeAgentDbContext(DbContextOptions<TreeAgentDbContext> options) : 
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Status).HasConversion<string>();
 
-            entity.HasOne(e => e.Feature)
-                .WithMany(f => f.Agents)
-                .HasForeignKey(e => e.FeatureId)
+            entity.HasOne(e => e.PullRequest)
+                .WithMany(pr => pr.Agents)
+                .HasForeignKey(e => e.PullRequestId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

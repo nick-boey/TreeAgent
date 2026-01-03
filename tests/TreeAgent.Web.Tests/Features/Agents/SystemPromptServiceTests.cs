@@ -11,7 +11,7 @@ namespace TreeAgent.Web.Tests.Features.Agents;
 public class SystemPromptServiceTests
 {
     private TreeAgentDbContext _db = null!;
-    private Mock<FeatureService> _mockFeatureService = null!;
+    private Mock<PullRequestDataService> _mockPullRequestDataService = null!;
     private SystemPromptService _service = null!;
 
     [SetUp]
@@ -23,11 +23,11 @@ public class SystemPromptServiceTests
 
         _db = new TreeAgentDbContext(options);
 
-        // Create mock FeatureService
+        // Create mock PullRequestDataService
         var mockWorktreeService = new Mock<GitWorktreeService>();
-        _mockFeatureService = new Mock<FeatureService>(_db, mockWorktreeService.Object);
+        _mockPullRequestDataService = new Mock<PullRequestDataService>(_db, mockWorktreeService.Object);
 
-        _service = new SystemPromptService(_db, _mockFeatureService.Object);
+        _service = new SystemPromptService(_db, _mockPullRequestDataService.Object);
     }
 
     [TearDown]
@@ -52,20 +52,20 @@ public class SystemPromptServiceTests
         return project;
     }
 
-    private async Task<Feature> CreateTestFeature(string projectId)
+    private async Task<PullRequest> CreateTestPullRequest(string projectId)
     {
-        var feature = new Feature
+        var pullRequest = new PullRequest
         {
             ProjectId = projectId,
-            Title = "Test Feature",
+            Title = "Test Pull Request",
             Description = "Test Description",
             BranchName = "feature/test",
-            Status = FeatureStatus.InDevelopment
+            Status = OpenPullRequestStatus.InDevelopment
         };
 
-        _db.Features.Add(feature);
+        _db.PullRequests.Add(pullRequest);
         await _db.SaveChangesAsync();
-        return feature;
+        return pullRequest;
     }
 
     [Test]
@@ -161,12 +161,12 @@ public class SystemPromptServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id);
+        var pullRequest = await CreateTestPullRequest(project.Id);
 
         var template = "Project: {{PROJECT_NAME}}, Branch: {{DEFAULT_BRANCH}}";
 
         // Act
-        var result = await _service.ProcessTemplateAsync(template, feature.Id);
+        var result = await _service.ProcessTemplateAsync(template, pullRequest.Id);
 
         // Assert
         Assert.That(result, Does.Contain("Test Project"));
@@ -174,19 +174,37 @@ public class SystemPromptServiceTests
     }
 
     [Test]
-    public async Task ProcessTemplateAsync_ReplacesFeatureVariables()
+    public async Task ProcessTemplateAsync_ReplacesPullRequestVariables()
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id);
+        var pullRequest = await CreateTestPullRequest(project.Id);
+
+        var template = "PR: {{PR_TITLE}}, Status: {{PR_STATUS}}, Branch: {{BRANCH_NAME}}";
+
+        // Act
+        var result = await _service.ProcessTemplateAsync(template, pullRequest.Id);
+
+        // Assert
+        Assert.That(result, Does.Contain("Test Pull Request"));
+        Assert.That(result, Does.Contain("InDevelopment"));
+        Assert.That(result, Does.Contain("feature/test"));
+    }
+
+    [Test]
+    public async Task ProcessTemplateAsync_SupportsLegacyFeatureVariables()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var pullRequest = await CreateTestPullRequest(project.Id);
 
         var template = "Feature: {{FEATURE_TITLE}}, Status: {{FEATURE_STATUS}}, Branch: {{BRANCH_NAME}}";
 
         // Act
-        var result = await _service.ProcessTemplateAsync(template, feature.Id);
+        var result = await _service.ProcessTemplateAsync(template, pullRequest.Id);
 
         // Assert
-        Assert.That(result, Does.Contain("Test Feature"));
+        Assert.That(result, Does.Contain("Test Pull Request"));
         Assert.That(result, Does.Contain("InDevelopment"));
         Assert.That(result, Does.Contain("feature/test"));
     }
@@ -224,8 +242,8 @@ public class SystemPromptServiceTests
         // Assert
         Assert.That(variables, Is.Not.Empty);
         Assert.That(variables, Has.Some.Matches<TemplateVariable>(v => v.Variable == "{{PROJECT_NAME}}"));
-        Assert.That(variables, Has.Some.Matches<TemplateVariable>(v => v.Variable == "{{FEATURE_TITLE}}"));
+        Assert.That(variables, Has.Some.Matches<TemplateVariable>(v => v.Variable == "{{PR_TITLE}}"));
         Assert.That(variables, Has.Some.Matches<TemplateVariable>(v => v.Variable == "{{BRANCH_NAME}}"));
-        Assert.That(variables, Has.Some.Matches<TemplateVariable>(v => v.Variable == "{{FEATURE_TREE}}"));
+        Assert.That(variables, Has.Some.Matches<TemplateVariable>(v => v.Variable == "{{PR_TREE}}"));
     }
 }

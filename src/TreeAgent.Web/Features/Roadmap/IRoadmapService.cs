@@ -12,9 +12,9 @@ public interface IRoadmapService
     Task<List<FutureChangeWithTime>> GetFutureChangesAsync(string projectId);
     Task<Dictionary<string, List<FutureChangeWithTime>>> GetFutureChangesByGroupAsync(string projectId);
     Task<RoadmapChange?> FindChangeByIdAsync(string projectId, string changeId);
-    Task<Feature?> PromoteChangeAsync(string projectId, string changeId);
-    Task<bool> IsPlanUpdateOnlyAsync(string featureId);
-    Task<bool> ValidateRoadmapAsync(string featureId);
-    Task<Feature?> CreatePlanUpdateFeatureAsync(string projectId, string description);
+    Task<PullRequest?> PromoteChangeAsync(string projectId, string changeId);
+    Task<bool> IsPlanUpdateOnlyAsync(string pullRequestId);
+    Task<bool> ValidateRoadmapAsync(string pullRequestId);
+    Task<PullRequest?> CreatePlanUpdatePullRequestAsync(string projectId, string description);
     string GeneratePlanUpdateBranchName(string description);
 }

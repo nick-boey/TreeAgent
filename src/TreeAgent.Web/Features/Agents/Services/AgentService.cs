@@ -30,15 +30,15 @@ public class AgentService : IDisposable
     public async Task<Agent?> GetByIdAsync(string id)
     {
         return await _db.Agents
-            .Include(a => a.Feature)
-            .ThenInclude(f => f.Project)
+            .Include(a => a.PullRequest)
+            .ThenInclude(pr => pr.Project)
             .FirstOrDefaultAsync(a => a.Id == id);
     }
 
-    public async Task<List<Agent>> GetByFeatureIdAsync(string featureId)
+    public async Task<List<Agent>> GetByPullRequestIdAsync(string pullRequestId)
     {
         return await _db.Agents
-            .Where(a => a.FeatureId == featureId)
+            .Where(a => a.PullRequestId == pullRequestId)
             .OrderByDescending(a => a.CreatedAt)
             .ToListAsync();
     }
@@ -46,17 +46,17 @@ public class AgentService : IDisposable
     public async Task<List<Agent>> GetAllActiveAsync()
     {
         return await _db.Agents
-            .Include(a => a.Feature)
-            .ThenInclude(f => f.Project)
+            .Include(a => a.PullRequest)
+            .ThenInclude(pr => pr.Project)
             .Where(a => a.Status == AgentStatus.Running || a.Status == AgentStatus.Idle)
             .ToListAsync();
     }
 
-    public async Task<Agent> CreateAsync(string featureId, string? systemPrompt = null)
+    public async Task<Agent> CreateAsync(string pullRequestId, string? systemPrompt = null)
     {
         var agent = new Agent
         {
-            FeatureId = featureId,
+            PullRequestId = pullRequestId,
             SystemPrompt = systemPrompt,
             Status = AgentStatus.Idle
         };
@@ -69,14 +69,14 @@ public class AgentService : IDisposable
     public async Task<bool> StartAsync(string agentId)
     {
         var agent = await _db.Agents
-            .Include(a => a.Feature)
-            .ThenInclude(f => f.Project)
+            .Include(a => a.PullRequest)
+            .ThenInclude(pr => pr.Project)
             .FirstOrDefaultAsync(a => a.Id == agentId);
 
         if (agent == null)
             return false;
 
-        var workingDirectory = agent.Feature.WorktreePath ?? agent.Feature.Project.LocalPath;
+        var workingDirectory = agent.PullRequest.WorktreePath ?? agent.PullRequest.Project.LocalPath;
 
         var success = await _processManager.StartAgentAsync(agentId, workingDirectory, agent.SystemPrompt);
 

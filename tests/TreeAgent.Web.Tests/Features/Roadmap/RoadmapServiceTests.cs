@@ -6,6 +6,7 @@ using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
 using TreeAgent.Web.Features.Roadmap;
 using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
+using TrackedPullRequest = TreeAgent.Web.Features.PullRequests.Data.Entities.PullRequest;
 
 namespace TreeAgent.Web.Tests.Features.Roadmap;
 
@@ -310,7 +311,7 @@ public class RoadmapServiceTests
         Assert.That(result!.Title, Is.EqualTo("New Feature Title"));
         Assert.That(result.Description, Is.EqualTo("Detailed description of the feature"));
         Assert.That(result.BranchName, Is.EqualTo("core/feature/new-feature"));
-        Assert.That(result.Status, Is.EqualTo(FeatureStatus.InDevelopment));
+        Assert.That(result.Status, Is.EqualTo(OpenPullRequestStatus.InDevelopment));
     }
 
     [Test]
@@ -417,14 +418,14 @@ public class RoadmapServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = new Feature
+        var pullRequest = new TrackedPullRequest
         {
             ProjectId = project.Id,
             Title = "Update Roadmap",
             BranchName = "plan-update/add-features",
-            Status = FeatureStatus.InDevelopment
+            Status = OpenPullRequestStatus.InDevelopment
         };
-        _db.Features.Add(feature);
+        _db.PullRequests.Add(pullRequest);
         await _db.SaveChangesAsync();
 
         // Mock git diff showing only ROADMAP.json changed
@@ -432,7 +433,7 @@ public class RoadmapServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "ROADMAP.json" });
 
         // Act
-        var result = await _service.IsPlanUpdateOnlyAsync(feature.Id);
+        var result = await _service.IsPlanUpdateOnlyAsync(pullRequest.Id);
 
         // Assert
         Assert.That(result, Is.True);
@@ -443,14 +444,14 @@ public class RoadmapServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = new Feature
+        var pullRequest = new TrackedPullRequest
         {
             ProjectId = project.Id,
             Title = "Mixed Changes",
             BranchName = "core/feature/mixed",
-            Status = FeatureStatus.InDevelopment
+            Status = OpenPullRequestStatus.InDevelopment
         };
-        _db.Features.Add(feature);
+        _db.PullRequests.Add(pullRequest);
         await _db.SaveChangesAsync();
 
         // Mock git diff showing multiple files changed
@@ -458,7 +459,7 @@ public class RoadmapServiceTests
             .ReturnsAsync(new CommandResult { Success = true, Output = "ROADMAP.json\nsrc/SomeCode.cs" });
 
         // Act
-        var result = await _service.IsPlanUpdateOnlyAsync(feature.Id);
+        var result = await _service.IsPlanUpdateOnlyAsync(pullRequest.Id);
 
         // Assert
         Assert.That(result, Is.False);

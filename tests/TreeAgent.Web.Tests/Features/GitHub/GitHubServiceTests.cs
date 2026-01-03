@@ -5,9 +5,11 @@ using Moq;
 using Octokit;
 using TreeAgent.Web.Features.Commands;
 using TreeAgent.Web.Features.GitHub;
+using TreeAgent.Web.Features.PullRequests;
 using TreeAgent.Web.Features.PullRequests.Data;
 using TreeAgent.Web.Features.PullRequests.Data.Entities;
 using Project = TreeAgent.Web.Features.PullRequests.Data.Entities.Project;
+using TrackedPullRequest = TreeAgent.Web.Features.PullRequests.Data.Entities.PullRequest;
 
 namespace TreeAgent.Web.Tests.Features.GitHub;
 
@@ -61,21 +63,21 @@ public class GitHubServiceTests
         return project;
     }
 
-    private async Task<Feature> CreateTestFeature(string projectId, string? branchName = "feature/test", int? prNumber = null)
+    private async Task<TrackedPullRequest> CreateTestPullRequest(string projectId, string? branchName = "feature/test", int? prNumber = null)
     {
-        var feature = new Feature
+        var pullRequest = new TrackedPullRequest
         {
             ProjectId = projectId,
-            Title = "Test Feature",
+            Title = "Test Pull Request",
             Description = "Test Description",
             BranchName = branchName,
             GitHubPRNumber = prNumber,
-            Status = FeatureStatus.InDevelopment
+            Status = OpenPullRequestStatus.InDevelopment
         };
 
-        _db.Features.Add(feature);
+        _db.PullRequests.Add(pullRequest);
         await _db.SaveChangesAsync();
-        return feature;
+        return pullRequest;
     }
 
     [Test]
@@ -152,7 +154,7 @@ public class GitHubServiceTests
         // Arrange
         var project = await CreateTestProject();
 
-        var mockPrs = new List<PullRequest>
+        var mockPrs = new List<Octokit.PullRequest>
         {
             CreateMockPullRequest(1, "PR 1", ItemState.Open, "feature/one"),
             CreateMockPullRequest(2, "PR 2", ItemState.Open, "feature/two")
@@ -192,7 +194,7 @@ public class GitHubServiceTests
         // Arrange
         var project = await CreateTestProject();
 
-        var mockPrs = new List<PullRequest>
+        var mockPrs = new List<Octokit.PullRequest>
         {
             CreateMockPullRequest(1, "PR 1", ItemState.Closed, "feature/one", merged: true)
         };
@@ -208,7 +210,7 @@ public class GitHubServiceTests
 
         // Assert
         Assert.That(result, Has.Count.EqualTo(1));
-        Assert.That(result[0].Merged, Is.True);
+        Assert.That(result[0].Status, Is.EqualTo(PullRequestStatus.Merged));
     }
 
     [Test]
@@ -289,7 +291,7 @@ public class GitHubServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id);
+        var feature = await CreateTestPullRequest(project.Id);
 
         _mockRunner.Setup(r => r.RunAsync("git", It.IsAny<string>(), project.LocalPath))
             .ReturnsAsync(new CommandResult { Success = true });
@@ -309,9 +311,9 @@ public class GitHubServiceTests
         Assert.That(result!.Number, Is.EqualTo(123));
 
         // Verify feature was updated
-        var updatedFeature = await _db.Features.FindAsync(feature.Id);
+        var updatedFeature = await _db.PullRequests.FindAsync(feature.Id);
         Assert.That(updatedFeature!.GitHubPRNumber, Is.EqualTo(123));
-        Assert.That(updatedFeature.Status, Is.EqualTo(FeatureStatus.ReadyForReview));
+        Assert.That(updatedFeature.Status, Is.EqualTo(OpenPullRequestStatus.ReadyForReview));
     }
 
     [Test]
@@ -319,7 +321,7 @@ public class GitHubServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id);
+        var feature = await CreateTestPullRequest(project.Id);
 
         _mockRunner.Setup(r => r.RunAsync("git", It.IsAny<string>(), project.LocalPath))
             .ReturnsAsync(new CommandResult { Success = false });
@@ -336,7 +338,7 @@ public class GitHubServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id, branchName: null);
+        var feature = await CreateTestPullRequest(project.Id, branchName: null);
 
         // Act
         var result = await _service.CreatePullRequestAsync(project.Id, feature.Id);
@@ -351,11 +353,11 @@ public class GitHubServiceTests
         // Arrange
         var project = await CreateTestProject();
 
-        var openPrs = new List<PullRequest>
+        var openPrs = new List<Octokit.PullRequest>
         {
             CreateMockPullRequest(1, "New Feature", ItemState.Open, "feature/new")
         };
-        var closedPrs = new List<PullRequest>();
+        var closedPrs = new List<Octokit.PullRequest>();
 
         _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
             project.GitHubOwner!,
@@ -377,25 +379,24 @@ public class GitHubServiceTests
         Assert.That(result.Updated, Is.EqualTo(0));
         Assert.That(result.Errors, Is.Empty);
 
-        var features = await _db.Features.Where(f => f.ProjectId == project.Id).ToListAsync();
+        var features = await _db.PullRequests.Where(f => f.ProjectId == project.Id).ToListAsync();
         Assert.That(features, Has.Count.EqualTo(1));
         Assert.That(features[0].Title, Is.EqualTo("New Feature"));
         Assert.That(features[0].GitHubPRNumber, Is.EqualTo(1));
     }
 
     [Test]
-    public async Task SyncPullRequests_UpdatesExistingFeatures()
+    public async Task SyncPullRequests_UpdatesExistingOpenPullRequests()
     {
         // Arrange
         var project = await CreateTestProject();
-        var existingFeature = await CreateTestFeature(project.Id, "feature/existing", prNumber: 1);
-        existingFeature.Status = FeatureStatus.ReadyForReview;
+        var existingPullRequest = await CreateTestPullRequest(project.Id, "feature/existing", prNumber: 1);
+        existingPullRequest.Title = "Old Title";
         await _db.SaveChangesAsync();
 
-        var openPrs = new List<PullRequest>();
-        var closedPrs = new List<PullRequest>
+        var openPrs = new List<Octokit.PullRequest>
         {
-            CreateMockPullRequest(1, "Existing Feature", ItemState.Closed, "feature/existing", merged: true)
+            CreateMockPullRequest(1, "Updated Title", ItemState.Open, "feature/existing")
         };
 
         _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
@@ -404,12 +405,6 @@ public class GitHubServiceTests
             It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Open)))
             .ReturnsAsync(openPrs);
 
-        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
-            project.GitHubOwner!,
-            project.GitHubRepo!,
-            It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Closed)))
-            .ReturnsAsync(closedPrs);
-
         // Act
         var result = await _service.SyncPullRequestsAsync(project.Id);
 
@@ -417,8 +412,37 @@ public class GitHubServiceTests
         Assert.That(result.Imported, Is.EqualTo(0));
         Assert.That(result.Updated, Is.EqualTo(1));
 
-        var updatedFeature = await _db.Features.FindAsync(existingFeature.Id);
-        Assert.That(updatedFeature!.Status, Is.EqualTo(FeatureStatus.Merged));
+        var updatedPullRequest = await _db.PullRequests.FindAsync(existingPullRequest.Id);
+        Assert.That(updatedPullRequest!.Title, Is.EqualTo("Updated Title"));
+    }
+
+    [Test]
+    public async Task SyncPullRequests_RemovesClosedPullRequests()
+    {
+        // Arrange
+        var project = await CreateTestProject();
+        var existingPullRequest = await CreateTestPullRequest(project.Id, "feature/existing", prNumber: 1);
+        existingPullRequest.Status = OpenPullRequestStatus.ReadyForReview;
+        await _db.SaveChangesAsync();
+
+        // PR is no longer in open PRs list (it was closed/merged on GitHub)
+        var openPrs = new List<Octokit.PullRequest>();
+
+        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
+            project.GitHubOwner!,
+            project.GitHubRepo!,
+            It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Open)))
+            .ReturnsAsync(openPrs);
+
+        // Act
+        var result = await _service.SyncPullRequestsAsync(project.Id);
+
+        // Assert
+        Assert.That(result.Removed, Is.EqualTo(1));
+        Assert.That(result.Updated, Is.EqualTo(0));
+
+        var removedPullRequest = await _db.PullRequests.FindAsync(existingPullRequest.Id);
+        Assert.That(removedPullRequest, Is.Null);
     }
 
     [Test]
@@ -437,14 +461,14 @@ public class GitHubServiceTests
     {
         // Arrange
         var project = await CreateTestProject();
-        var feature = await CreateTestFeature(project.Id);
+        var feature = await CreateTestPullRequest(project.Id);
 
         // Act
         var result = await _service.LinkPullRequestAsync(feature.Id, 42);
 
         // Assert
         Assert.That(result, Is.True);
-        var updatedFeature = await _db.Features.FindAsync(feature.Id);
+        var updatedFeature = await _db.PullRequests.FindAsync(feature.Id);
         Assert.That(updatedFeature!.GitHubPRNumber, Is.EqualTo(42));
     }
 
@@ -517,19 +541,15 @@ public class GitHubServiceTests
     }
 
     [Test]
-    public async Task SyncPullRequests_MixedOpenAndClosed_ImportsAll()
+    public async Task SyncPullRequests_OnlyImportsOpenPRs()
     {
         // Arrange
         var project = await CreateTestProject();
 
-        var openPrs = new List<PullRequest>
+        var openPrs = new List<Octokit.PullRequest>
         {
-            CreateMockPullRequest(1, "Open PR", ItemState.Open, "feature/open")
-        };
-        var closedPrs = new List<PullRequest>
-        {
-            CreateMockPullRequest(2, "Merged PR", ItemState.Closed, "feature/merged", merged: true),
-            CreateMockPullRequest(3, "Closed PR", ItemState.Closed, "feature/closed", merged: false)
+            CreateMockPullRequest(1, "Open PR 1", ItemState.Open, "feature/open1"),
+            CreateMockPullRequest(2, "Open PR 2", ItemState.Open, "feature/open2")
         };
 
         _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
@@ -538,35 +558,21 @@ public class GitHubServiceTests
             It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Open)))
             .ReturnsAsync(openPrs);
 
-        _mockGitHubClient.Setup(c => c.GetPullRequestsAsync(
-            project.GitHubOwner!,
-            project.GitHubRepo!,
-            It.Is<PullRequestRequest>(r => r.State == ItemStateFilter.Closed)))
-            .ReturnsAsync(closedPrs);
-
         // Act
         var result = await _service.SyncPullRequestsAsync(project.Id);
 
         // Assert
-        Assert.That(result.Imported, Is.EqualTo(3));
+        Assert.That(result.Imported, Is.EqualTo(2));
         Assert.That(result.Updated, Is.EqualTo(0));
         Assert.That(result.Errors, Is.Empty);
 
-        var features = await _db.Features.Where(f => f.ProjectId == project.Id).ToListAsync();
-        Assert.That(features, Has.Count.EqualTo(3));
-
-        var openFeature = features.First(f => f.GitHubPRNumber == 1);
-        Assert.That(openFeature.Status, Is.EqualTo(FeatureStatus.ReadyForReview));
-
-        var mergedFeature = features.First(f => f.GitHubPRNumber == 2);
-        Assert.That(mergedFeature.Status, Is.EqualTo(FeatureStatus.Merged));
-
-        var closedFeature = features.First(f => f.GitHubPRNumber == 3);
-        Assert.That(closedFeature.Status, Is.EqualTo(FeatureStatus.Cancelled));
+        var pullRequests = await _db.PullRequests.Where(pr => pr.ProjectId == project.Id).ToListAsync();
+        Assert.That(pullRequests, Has.Count.EqualTo(2));
+        Assert.That(pullRequests, Has.All.Matches<TrackedPullRequest>(pr => pr.Status == OpenPullRequestStatus.ReadyForReview));
     }
 
-    // Helper to create mock PullRequest objects
-    private static PullRequest CreateMockPullRequest(int number, string title, ItemState state, string branchName, bool merged = false)
+    // Helper to create mock Octokit PullRequest objects
+    private static Octokit.PullRequest CreateMockPullRequest(int number, string title, ItemState state, string branchName, bool merged = false)
     {
         // Using reflection to create PullRequest since it has no public constructor
         var headRef = new GitReference(
@@ -579,7 +585,7 @@ public class GitHubServiceTests
             repository: null
         );
 
-        return new PullRequest(
+        return new Octokit.PullRequest(
             id: number,
             nodeId: $"node-{number}",
             url: $"https://api.github.com/repos/owner/repo/pulls/{number}",

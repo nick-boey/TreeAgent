@@ -1,3 +1,5 @@
+using TreeAgent.Web.Features.PullRequests;
+
 namespace TreeAgent.Web.Features.GitHub;
 
 /// <summary>
@@ -13,22 +15,22 @@ public interface IGitHubService
     /// <summary>
     /// Fetch all open pull requests
     /// </summary>
-    Task<List<GitHubPullRequest>> GetOpenPullRequestsAsync(string projectId);
+    Task<List<PullRequestInfo>> GetOpenPullRequestsAsync(string projectId);
 
     /// <summary>
     /// Fetch all closed/merged pull requests
     /// </summary>
-    Task<List<GitHubPullRequest>> GetClosedPullRequestsAsync(string projectId);
+    Task<List<PullRequestInfo>> GetClosedPullRequestsAsync(string projectId);
 
     /// <summary>
     /// Get a specific pull request by number
     /// </summary>
-    Task<GitHubPullRequest?> GetPullRequestAsync(string projectId, int prNumber);
+    Task<PullRequestInfo?> GetPullRequestAsync(string projectId, int prNumber);
 
     /// <summary>
     /// Create a pull request from a feature branch
     /// </summary>
-    Task<GitHubPullRequest?> CreatePullRequestAsync(string projectId, string featureId);
+    Task<PullRequestInfo?> CreatePullRequestAsync(string projectId, string featureId);
 
     /// <summary>
     /// Push a branch to the remote and create a PR

@@ -4,118 +4,122 @@ using TreeAgent.Web.Features.PullRequests.Data.Entities;
 
 namespace TreeAgent.Web.Features.PullRequests.Data;
 
-public class FeatureService(TreeAgentDbContext db, GitWorktreeService worktreeService)
+/// <summary>
+/// Service for managing locally tracked pull requests.
+/// Only open PRs are stored in the database.
+/// </summary>
+public class PullRequestDataService(TreeAgentDbContext db, IGitWorktreeService worktreeService)
 {
-    public async Task<List<Feature>> GetByProjectIdAsync(string projectId)
+    public async Task<List<PullRequest>> GetByProjectIdAsync(string projectId)
     {
-        return await db.Features
-            .Where(f => f.ProjectId == projectId)
-            .OrderBy(f => f.CreatedAt)
+        return await db.PullRequests
+            .Where(pr => pr.ProjectId == projectId)
+            .OrderBy(pr => pr.CreatedAt)
             .ToListAsync();
     }
 
-    public async Task<Feature?> GetByIdAsync(string id)
+    public async Task<PullRequest?> GetByIdAsync(string id)
     {
-        return await db.Features
-            .Include(f => f.Project)
-            .Include(f => f.Children)
-            .FirstOrDefaultAsync(f => f.Id == id);
+        return await db.PullRequests
+            .Include(pr => pr.Project)
+            .Include(pr => pr.Children)
+            .FirstOrDefaultAsync(pr => pr.Id == id);
     }
 
-    public async Task<List<Feature>> GetTreeAsync(string projectId)
+    public async Task<List<PullRequest>> GetTreeAsync(string projectId)
     {
-        var features = await db.Features
-            .Where(f => f.ProjectId == projectId)
-            .Include(f => f.Children)
-            .OrderBy(f => f.CreatedAt)
+        var pullRequests = await db.PullRequests
+            .Where(pr => pr.ProjectId == projectId)
+            .Include(pr => pr.Children)
+            .OrderBy(pr => pr.CreatedAt)
             .ToListAsync();
 
-        // Return only root features (those without parents)
-        return features.Where(f => f.ParentId == null).ToList();
+        // Return only root pull requests (those without parents)
+        return pullRequests.Where(pr => pr.ParentId == null).ToList();
     }
 
-    public async Task<Feature> CreateAsync(
+    public async Task<PullRequest> CreateAsync(
         string projectId,
         string title,
         string? description = null,
         string? branchName = null,
         string? parentId = null)
     {
-        var feature = new Feature
+        var pullRequest = new PullRequest
         {
             ProjectId = projectId,
             ParentId = parentId,
             Title = title,
             Description = description,
             BranchName = branchName,
-            Status = FeatureStatus.Future
+            Status = OpenPullRequestStatus.InDevelopment
         };
 
-        db.Features.Add(feature);
+        db.PullRequests.Add(pullRequest);
         await db.SaveChangesAsync();
-        return feature;
+        return pullRequest;
     }
 
-    public async Task<Feature?> UpdateAsync(
+    public async Task<PullRequest?> UpdateAsync(
         string id,
         string title,
         string? description,
         string? branchName,
-        FeatureStatus status)
+        OpenPullRequestStatus status)
     {
-        var feature = await db.Features.FindAsync(id);
-        if (feature == null) return null;
+        var pullRequest = await db.PullRequests.FindAsync(id);
+        if (pullRequest == null) return null;
 
-        feature.Title = title;
-        feature.Description = description;
-        feature.BranchName = branchName;
-        feature.Status = status;
-        feature.UpdatedAt = DateTime.UtcNow;
+        pullRequest.Title = title;
+        pullRequest.Description = description;
+        pullRequest.BranchName = branchName;
+        pullRequest.Status = status;
+        pullRequest.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
-        return feature;
+        return pullRequest;
     }
 
     public async Task<bool> DeleteAsync(string id)
     {
-        var feature = await db.Features
-            .Include(f => f.Project)
-            .FirstOrDefaultAsync(f => f.Id == id);
+        var pullRequest = await db.PullRequests
+            .Include(pr => pr.Project)
+            .FirstOrDefaultAsync(pr => pr.Id == id);
 
-        if (feature == null) return false;
+        if (pullRequest == null) return false;
 
         // Clean up worktree if exists
-        if (!string.IsNullOrEmpty(feature.WorktreePath))
+        if (!string.IsNullOrEmpty(pullRequest.WorktreePath))
         {
-            await worktreeService.RemoveWorktreeAsync(feature.Project.LocalPath, feature.WorktreePath);
+            await worktreeService.RemoveWorktreeAsync(pullRequest.Project.LocalPath, pullRequest.WorktreePath);
         }
 
-        db.Features.Remove(feature);
+        db.PullRequests.Remove(pullRequest);
         await db.SaveChangesAsync();
         return true;
     }
 
     public async Task<bool> StartDevelopmentAsync(string id)
     {
-        var feature = await db.Features
-            .Include(f => f.Project)
-            .FirstOrDefaultAsync(f => f.Id == id);
+        var pullRequest = await db.PullRequests
+            .Include(pr => pr.Project)
+            .FirstOrDefaultAsync(pr => pr.Id == id);
 
-        if (feature == null) return false;
-        if (string.IsNullOrEmpty(feature.BranchName)) return false;
+        if (pullRequest == null) return false;
+        if (string.IsNullOrEmpty(pullRequest.BranchName)) return false;
 
-        // Create worktree for the feature
+        // Create worktree for the pull request
         var worktreePath = await worktreeService.CreateWorktreeAsync(
-            feature.Project.LocalPath,
-            feature.BranchName,
+            pullRequest.Project.LocalPath,
+            pullRequest.BranchName,
             createBranch: true,
-            baseBranch: feature.Project.DefaultBranch);
+            baseBranch: pullRequest.Project.DefaultBranch);
 
         if (worktreePath == null) return false;
 
-        feature.WorktreePath = worktreePath;
-        feature.Status = FeatureStatus.InDevelopment;
-        feature.UpdatedAt = DateTime.UtcNow;
+        pullRequest.WorktreePath = worktreePath;
+        pullRequest.Status = OpenPullRequestStatus.InDevelopment;
+        pullRequest.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
         return true;
@@ -123,47 +127,49 @@ public class FeatureService(TreeAgentDbContext db, GitWorktreeService worktreeSe
 
     public async Task<bool> MarkReadyForReviewAsync(string id)
     {
-        var feature = await db.Features.FindAsync(id);
-        if (feature == null) return false;
+        var pullRequest = await db.PullRequests.FindAsync(id);
+        if (pullRequest == null) return false;
 
-        feature.Status = FeatureStatus.ReadyForReview;
-        feature.UpdatedAt = DateTime.UtcNow;
+        pullRequest.Status = OpenPullRequestStatus.ReadyForReview;
+        pullRequest.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
         return true;
     }
 
-    public async Task<bool> CompleteAsync(string id, bool merged)
+    /// <summary>
+    /// Completes a pull request by removing it from local tracking.
+    /// Merged/cancelled PRs should be retrieved from GitHub, not stored locally.
+    /// </summary>
+    public async Task<bool> CompleteAsync(string id)
     {
-        var feature = await db.Features
-            .Include(f => f.Project)
-            .FirstOrDefaultAsync(f => f.Id == id);
+        var pullRequest = await db.PullRequests
+            .Include(pr => pr.Project)
+            .FirstOrDefaultAsync(pr => pr.Id == id);
 
-        if (feature == null) return false;
+        if (pullRequest == null) return false;
 
         // Clean up worktree
-        if (!string.IsNullOrEmpty(feature.WorktreePath))
+        if (!string.IsNullOrEmpty(pullRequest.WorktreePath))
         {
-            await worktreeService.RemoveWorktreeAsync(feature.Project.LocalPath, feature.WorktreePath);
-            feature.WorktreePath = null;
+            await worktreeService.RemoveWorktreeAsync(pullRequest.Project.LocalPath, pullRequest.WorktreePath);
         }
 
-        feature.Status = merged ? FeatureStatus.Merged : FeatureStatus.Cancelled;
-        feature.UpdatedAt = DateTime.UtcNow;
-
+        // Remove from local tracking - merged/cancelled PRs should be fetched from GitHub
+        db.PullRequests.Remove(pullRequest);
         await db.SaveChangesAsync();
         return true;
     }
 
     public async Task<bool> SetParentAsync(string id, string? parentId)
     {
-        var feature = await db.Features.FindAsync(id);
-        if (feature == null) return false;
+        var pullRequest = await db.PullRequests.FindAsync(id);
+        if (pullRequest == null) return false;
 
         // Prevent circular references
         if (parentId != null)
         {
-            var parent = await db.Features.FindAsync(parentId);
+            var parent = await db.PullRequests.FindAsync(parentId);
             if (parent == null) return false;
 
             // Check if setting this parent would create a cycle
@@ -172,19 +178,19 @@ public class FeatureService(TreeAgentDbContext db, GitWorktreeService worktreeSe
             {
                 if (currentParent.Id == id) return false;
                 currentParent = currentParent.ParentId != null
-                    ? await db.Features.FindAsync(currentParent.ParentId)
+                    ? await db.PullRequests.FindAsync(currentParent.ParentId)
                     : null;
             }
         }
 
-        feature.ParentId = parentId;
-        feature.UpdatedAt = DateTime.UtcNow;
+        pullRequest.ParentId = parentId;
+        pullRequest.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
         return true;
     }
 
-    public async Task CleanupStalWorktreesAsync(string projectId)
+    public async Task CleanupStaleWorktreesAsync(string projectId)
     {
         var project = await db.Projects.FindAsync(projectId);
         if (project == null) return;

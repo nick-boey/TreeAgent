@@ -23,6 +23,6 @@ public class Project
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public SystemPromptTemplate? DefaultPromptTemplate { get; set; }
-    public ICollection<Feature> Features { get; set; } = [];
+    public ICollection<PullRequest> PullRequests { get; set; } = [];
     public ICollection<SystemPromptTemplate> PromptTemplates { get; set; } = [];
 }

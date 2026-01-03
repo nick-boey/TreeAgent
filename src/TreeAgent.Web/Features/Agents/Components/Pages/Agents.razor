@@ -34,9 +34,9 @@ else
                     </div>
                     <div class="card-body">
                         <dl class="row mb-0 small">
-                            <dt class="col-4">Feature</dt>
+                            <dt class="col-4">Pull Request</dt>
                             <dd class="col-8">
-                                <a href="projects/@agent.Feature?.ProjectId">@(agent.Feature?.Title ?? "Unknown")</a>
+                                <a href="projects/@agent.PullRequest?.ProjectId">@(agent.PullRequest?.Title ?? "Unknown")</a>
                             </dd>
                             <dt class="col-4">Started</dt>
                             <dd class="col-8">@agent.CreatedAt.ToLocalTime().ToString("g")</dd>
@@ -87,7 +87,7 @@ else
             var fullAgent = await AgentService.GetByIdAsync(agent.Id);
             if (fullAgent != null)
             {
-                agent.Feature = fullAgent.Feature;
+                agent.PullRequest = fullAgent.PullRequest;
             }
         }
     }

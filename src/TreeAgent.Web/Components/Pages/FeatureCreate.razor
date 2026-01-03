@@ -1,15 +1,15 @@
-@page "/projects/{ProjectId}/features/create"
+@page "/projects/{ProjectId}/pull-requests/create"
 @using TreeAgent.Web.Features.Projects
 @using TreeAgent.Web.Features.PullRequests.Data
 @using TreeAgent.Web.Features.PullRequests.Data.Entities
 @inject ProjectService ProjectService
-@inject FeatureService FeatureService
+@inject PullRequestDataService PullRequestDataService
 @inject NavigationManager NavigationManager
 @rendermode InteractiveServer
 
-<PageTitle>New Feature</PageTitle>
+<PageTitle>New Pull Request</PageTitle>
 
-<h1>New Feature</h1>
+<h1>New Pull Request</h1>
 
 @if (_project == null)
 {
@@ -17,11 +17,11 @@
 }
 else
 {
-    <p class="text-muted">Creating feature for @_project.Name</p>
+    <p class="text-muted">Creating pull request for @_project.Name</p>
 
     <div class="row">
         <div class="col-md-8">
-            <EditForm Model="_model" OnValidSubmit="HandleSubmit" FormName="CreateFeature">
+            <EditForm Model="_model" OnValidSubmit="HandleSubmit" FormName="CreatePullRequest">
                 <DataAnnotationsValidator />
                 <ValidationSummary class="text-danger" />
 
@@ -43,15 +43,15 @@ else
                 </div>
 
                 <div class="mb-3">
-                    <label for="parentId" class="form-label">Parent Feature</label>
+                    <label for="parentId" class="form-label">Parent Pull Request</label>
                     <InputSelect id="parentId" class="form-select" @bind-Value="_model.ParentId">
-                        <option value="">None (root feature)</option>
-                        @foreach (var feature in _allFeatures)
+                        <option value="">None (root)</option>
+                        @foreach (var pr in _allPullRequests)
                         {
-                            <option value="@feature.Id">@feature.Title</option>
+                            <option value="@pr.Id">@pr.Title</option>
                         }
                     </InputSelect>
-                    <div class="form-text">Optional. Select a parent to nest this feature.</div>
+                    <div class="form-text">Optional. Select a parent to nest this pull request.</div>
                 </div>
 
                 <div class="d-flex gap-2">
@@ -60,7 +60,7 @@ else
                         {
                             <span class="spinner-border spinner-border-sm me-1"></span>
                         }
-                        Create Feature
+                        Create Pull Request
                     </button>
                     <a href="projects/@ProjectId" class="btn btn-secondary">Cancel</a>
                 </div>
@@ -74,8 +74,8 @@ else
     public string ProjectId { get; set; } = "";
 
     private Project? _project;
-    private List<Feature> _allFeatures = [];
-    private FeatureModel _model = new();
+    private List<PullRequest> _allPullRequests = [];
+    private PullRequestModel _model = new();
     private bool _isSubmitting;
 
     protected override async Task OnInitializedAsync()
@@ -83,7 +83,7 @@ else
         _project = await ProjectService.GetByIdAsync(ProjectId);
         if (_project != null)
         {
-            _allFeatures = await FeatureService.GetByProjectIdAsync(ProjectId);
+            _allPullRequests = await PullRequestDataService.GetByProjectIdAsync(ProjectId);
         }
     }
 
@@ -92,7 +92,7 @@ else
         _isSubmitting = true;
         try
         {
-            await FeatureService.CreateAsync(
+            await PullRequestDataService.CreateAsync(
                 ProjectId,
                 _model.Title,
                 _model.Description,
@@ -107,7 +107,7 @@ else
         }
     }
 
-    private class FeatureModel
+    private class PullRequestModel
     {
         public string Title { get; set; } = "";
         public string? Description { get; set; }
