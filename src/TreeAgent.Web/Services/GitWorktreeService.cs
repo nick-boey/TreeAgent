@@ -2,7 +2,7 @@ using System.Text.RegularExpressions;
 
 namespace TreeAgent.Web.Services;
 
-public class GitWorktreeService
+public class GitWorktreeService : IGitWorktreeService
 {
     private readonly ICommandRunner _commandRunner;
 
