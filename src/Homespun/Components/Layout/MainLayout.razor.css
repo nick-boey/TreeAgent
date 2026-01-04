@@ -66,6 +66,65 @@
 }
 
 /* ==========================================================================
+   Top Bar Spacer
+   ========================================================================== */
+
+.top-bar-spacer {
+    flex: 1;
+}
+
+/* ==========================================================================
+   Theme Toggle
+   ========================================================================== */
+
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color var(--transition-fast);
+}
+
+.theme-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.theme-toggle:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
+.theme-icon {
+    display: block;
+    width: 1rem;
+    height: 1rem;
+    background-repeat: no-repeat;
+    background-size: contain;
+    background-position: center;
+}
+
+/* Sun icon for light mode */
+.theme-icon.light {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.8)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3ccircle cx='12' cy='12' r='5'/%3e%3cline x1='12' y1='1' x2='12' y2='3'/%3e%3cline x1='12' y1='21' x2='12' y2='23'/%3e%3cline x1='4.22' y1='4.22' x2='5.64' y2='5.64'/%3e%3cline x1='18.36' y1='18.36' x2='19.78' y2='19.78'/%3e%3cline x1='1' y1='12' x2='3' y2='12'/%3e%3cline x1='21' y1='12' x2='23' y2='12'/%3e%3cline x1='4.22' y1='19.78' x2='5.64' y2='18.36'/%3e%3cline x1='18.36' y1='5.64' x2='19.78' y2='4.22'/%3e%3c/svg%3e");
+}
+
+/* Moon icon for dark mode */
+.theme-icon.dark {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.8)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z'/%3e%3c/svg%3e");
+}
+
+/* Auto icon (circle half filled) */
+.theme-icon.auto {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.8)' stroke-width='2'%3e%3ccircle cx='12' cy='12' r='9'/%3e%3cpath d='M12 3v18' stroke='rgba(255,255,255,0.8)'/%3e%3cpath d='M12 3a9 9 0 0 1 0 18' fill='rgba(255,255,255,0.8)'/%3e%3c/svg%3e");
+}
+
+/* ==========================================================================
    Breadcrumbs
    ========================================================================== */
 

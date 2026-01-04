@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 
 <div class="page @(_sidebarOpen ? "sidebar-open" : "sidebar-closed")">
     <header class="top-bar">
@@ -21,6 +22,10 @@
                 }
             }
         </nav>
+        <div class="top-bar-spacer"></div>
+        <button class="theme-toggle" @onclick="CycleTheme" title="@GetThemeTooltip()">
+            <span class="theme-icon @_currentTheme"></span>
+        </button>
     </header>
 
     <aside class="sidebar">
@@ -43,11 +48,21 @@
 @code {
     private bool _sidebarOpen = true;
     private List<Breadcrumb> _breadcrumbs = new();
+    private string _currentTheme = "auto";
 
     protected override void OnInitialized()
     {
         NavigationManager.LocationChanged += OnLocationChanged;
         UpdateBreadcrumbs();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _currentTheme = await JSRuntime.InvokeAsync<string>("themeManager.getTheme") ?? "auto";
+            StateHasChanged();
+        }
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
@@ -102,6 +117,25 @@
     {
         _sidebarOpen = !_sidebarOpen;
     }
+
+    private async Task CycleTheme()
+    {
+        _currentTheme = _currentTheme switch
+        {
+            "auto" => "light",
+            "light" => "dark",
+            "dark" => "auto",
+            _ => "auto"
+        };
+        await JSRuntime.InvokeVoidAsync("themeManager.setTheme", _currentTheme);
+    }
+
+    private string GetThemeTooltip() => _currentTheme switch
+    {
+        "light" => "Theme: Light (click to switch to Dark)",
+        "dark" => "Theme: Dark (click to switch to Auto)",
+        _ => "Theme: Auto (click to switch to Light)"
+    };
 
     public void Dispose()
     {

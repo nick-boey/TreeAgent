@@ -16,12 +16,38 @@
     <ImportMap />
     <link rel="icon" type="image/png" href="favicon.png" />
     <HeadOutlet />
+    <!-- Apply theme before render to prevent flash -->
+    <script>
+        (function() {
+            var theme = localStorage.getItem('homespun-theme') || 'auto';
+            if (theme === 'auto') {
+                document.documentElement.removeAttribute('data-theme');
+            } else {
+                document.documentElement.setAttribute('data-theme', theme);
+            }
+        })();
+    </script>
 </head>
 
 <body>
     <Routes />
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script>
+        window.themeManager = {
+            getTheme: function() {
+                return localStorage.getItem('homespun-theme') || 'auto';
+            },
+            setTheme: function(theme) {
+                localStorage.setItem('homespun-theme', theme);
+                if (theme === 'auto') {
+                    document.documentElement.removeAttribute('data-theme');
+                } else {
+                    document.documentElement.setAttribute('data-theme', theme);
+                }
+            }
+        };
+    </script>
 </body>
 
 </html>
