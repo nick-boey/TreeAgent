@@ -308,6 +308,264 @@ public class OpenCodeIntegrationTests
     }
 
     /// <summary>
+    /// Debug test for investigating server startup failures.
+    /// Creates a fake worktree with a file and tests the full agent workflow.
+    /// This mirrors the flow in FeatureDetailPanel.StartAgent -> AgentWorkflowService.StartAgentForPullRequestAsync
+    /// </summary>
+    [Test]
+    [Explicit("Requires OpenCode to be installed and API keys configured. Run manually for debugging.")]
+    public async Task DebugAgentStartup_WithFakeWorktree_AsksAboutFile()
+    {
+        // Arrange - Create a fake worktree with a test file
+        // This simulates what would exist after PullRequestDataService.StartDevelopmentAsync creates a worktree
+        var worktreePath = _tempDir; // Use temp dir directly as the "worktree"
+        
+        var testFileName = "Calculator.cs";
+        var testFilePath = Path.Combine(worktreePath, testFileName);
+        var testFileContent = """
+            namespace TestProject;
+            
+            public class Calculator
+            {
+                public int Add(int a, int b) => a + b;
+                
+                public int Subtract(int a, int b) => a - b;
+                
+                public int Multiply(int a, int b) => a * b;
+                
+                public double Divide(int a, int b)
+                {
+                    if (b == 0)
+                        throw new DivideByZeroException("Cannot divide by zero");
+                    return (double)a / b;
+                }
+            }
+            """;
+        
+        await File.WriteAllTextAsync(testFilePath, testFileContent);
+        Console.WriteLine($"=== Test Setup ===");
+        Console.WriteLine($"Worktree path: {worktreePath}");
+        Console.WriteLine($"Created test file: {testFilePath}");
+        
+        // Step 1: Generate config (mirrors AgentWorkflowService line 91-93)
+        Console.WriteLine();
+        Console.WriteLine("=== Step 1: Generate OpenCode Config ===");
+        var config = _configGenerator.CreateDefaultConfig();
+        Console.WriteLine($"Model: {config.Model}");
+        
+        try
+        {
+            await _configGenerator.GenerateConfigAsync(worktreePath, config);
+            Console.WriteLine("Config file generated successfully");
+            
+            // Show the generated config
+            var configPath = Path.Combine(worktreePath, "opencode.json");
+            if (File.Exists(configPath))
+            {
+                var configContent = await File.ReadAllTextAsync(configPath);
+                Console.WriteLine($"Config content:\n{configContent}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"FAILED to generate config: {ex.Message}");
+            throw;
+        }
+
+        // List all files in worktree
+        var files = Directory.GetFiles(worktreePath);
+        Console.WriteLine($"Files in worktree: {string.Join(", ", files.Select(Path.GetFileName))}");
+
+        // Step 2: Start server (mirrors AgentWorkflowService line 96)
+        Console.WriteLine();
+        Console.WriteLine("=== Step 2: Start OpenCode Server ===");
+        OpenCodeServer? server = null;
+        
+        // First, verify opencode is available
+        Console.WriteLine("Verifying OpenCode installation...");
+        try
+        {
+            var versionProcess = new System.Diagnostics.Process
+            {
+                StartInfo = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "opencode",
+                    Arguments = "--version",
+                    WorkingDirectory = worktreePath,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                }
+            };
+            versionProcess.Start();
+            var versionOutput = await versionProcess.StandardOutput.ReadToEndAsync();
+            var versionError = await versionProcess.StandardError.ReadToEndAsync();
+            await versionProcess.WaitForExitAsync();
+            
+            Console.WriteLine($"OpenCode version: {versionOutput.Trim()}");
+            if (!string.IsNullOrWhiteSpace(versionError))
+                Console.WriteLine($"Version stderr: {versionError}");
+            Console.WriteLine($"Version exit code: {versionProcess.ExitCode}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"WARNING: Could not verify OpenCode installation: {ex.Message}");
+        }
+        
+        // Try to start the server and capture detailed error info
+        try
+        {
+            Console.WriteLine($"Starting server on port {_options.Value.BasePort}...");
+            Console.WriteLine($"Working directory: {worktreePath}");
+            
+            // Start server - this mirrors the call in AgentWorkflowService
+            server = await _serverManager.StartServerAsync("debug-test-pr", worktreePath, continueSession: false);
+            
+            Console.WriteLine($"Server started successfully!");
+            Console.WriteLine($"Port: {server.Port}");
+            Console.WriteLine($"URL: {server.BaseUrl}");
+            Console.WriteLine($"Status: {server.Status}");
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("exited with code"))
+        {
+            Console.WriteLine();
+            Console.WriteLine($"!!! SERVER STARTUP FAILED !!!");
+            Console.WriteLine($"Error: {ex.Message}");
+            Console.WriteLine();
+            Console.WriteLine("Attempting to run 'opencode serve' manually to capture error output...");
+            
+            try
+            {
+                var serveProcess = new System.Diagnostics.Process
+                {
+                    StartInfo = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "opencode",
+                        Arguments = $"serve --port {_options.Value.BasePort} --hostname 127.0.0.1",
+                        WorkingDirectory = worktreePath,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true
+                    }
+                };
+                serveProcess.Start();
+                
+                // Wait a short time for it to fail or output something
+                var outputTask = serveProcess.StandardOutput.ReadToEndAsync();
+                var errorTask = serveProcess.StandardError.ReadToEndAsync();
+                
+                // Give it 5 seconds to start or fail
+                var completed = serveProcess.WaitForExit(5000);
+                
+                var output = await outputTask;
+                var error = await errorTask;
+                
+                Console.WriteLine($"Serve stdout: {output}");
+                Console.WriteLine($"Serve stderr: {error}");
+                Console.WriteLine($"Exit code: {(completed ? serveProcess.ExitCode.ToString() : "still running")}");
+                
+                if (!completed && !serveProcess.HasExited)
+                {
+                    serveProcess.Kill();
+                }
+            }
+            catch (Exception serveEx)
+            {
+                Console.WriteLine($"Failed to run serve command: {serveEx.Message}");
+            }
+            
+            Console.WriteLine();
+            Console.WriteLine("Common causes of exit code 1:");
+            Console.WriteLine("1. Missing or invalid opencode.json config file");
+            Console.WriteLine("2. Missing API keys (ANTHROPIC_API_KEY environment variable)");
+            Console.WriteLine("3. Invalid model specified in config");
+            Console.WriteLine("4. Port already in use");
+            Console.WriteLine("5. Permission issues with the working directory");
+            
+            throw;
+        }
+
+        try
+        {
+            // Step 3: Check health
+            Console.WriteLine();
+            Console.WriteLine("=== Step 3: Health Check ===");
+            var health = await _client.GetHealthAsync(server.BaseUrl);
+            Console.WriteLine($"Healthy: {health.Healthy}");
+            Console.WriteLine($"Version: {health.Version}");
+            Assert.That(health.Healthy, Is.True, "Server should be healthy");
+
+            // Step 4: Create session (mirrors AgentWorkflowService line 104)
+            Console.WriteLine();
+            Console.WriteLine("=== Step 4: Create Session ===");
+            var session = await _client.CreateSessionAsync(server.BaseUrl, "Debug Test Session");
+            Console.WriteLine($"Session ID: {session.Id}");
+            Console.WriteLine($"Session Title: {session.Title}");
+
+            // Step 5: Send prompt and get response
+            Console.WriteLine();
+            Console.WriteLine("=== Step 5: Send Prompt ===");
+            var prompt = PromptRequest.FromText(
+                $"Look at the file {testFileName} in the current directory. " +
+                "What methods does the Calculator class have? List them briefly.");
+            
+            Console.WriteLine($"Prompt: Look at the file {testFileName}...");
+            Console.WriteLine("Waiting for response...");
+            
+            var response = await _client.SendPromptAsync(server.BaseUrl, session.Id, prompt);
+            Console.WriteLine("Response received!");
+
+            // Assert and print response
+            Assert.That(response, Is.Not.Null);
+            Assert.That(response.Parts, Is.Not.Empty);
+
+            Console.WriteLine();
+            Console.WriteLine("=== Agent Response ===");
+            foreach (var part in response.Parts)
+            {
+                if (part.Type == "text" && !string.IsNullOrEmpty(part.Text))
+                {
+                    Console.WriteLine(part.Text);
+                }
+                else if (part.Type == "tool_use")
+                {
+                    Console.WriteLine($"[Tool Used: {part.ToolUseName}]");
+                }
+            }
+            Console.WriteLine("=== End Response ===");
+
+            // Verify the response mentions the calculator methods
+            var responseText = string.Join(" ", response.Parts
+                .Where(p => p.Type == "text" && !string.IsNullOrEmpty(p.Text))
+                .Select(p => p.Text));
+            
+            var mentionsMethods = responseText.Contains("Add") || 
+                                  responseText.Contains("Subtract") || 
+                                  responseText.Contains("Multiply") || 
+                                  responseText.Contains("Divide");
+            
+            Assert.That(mentionsMethods, Is.True, 
+                "Expected response to mention at least one Calculator method (Add, Subtract, Multiply, or Divide)");
+            
+            Console.WriteLine();
+            Console.WriteLine("=== TEST PASSED ===");
+            Console.WriteLine("Agent correctly identified the Calculator methods.");
+        }
+        finally
+        {
+            if (server != null)
+            {
+                Console.WriteLine();
+                Console.WriteLine("=== Cleanup: Stopping Server ===");
+                await _serverManager.StopServerAsync("debug-test-pr");
+                Console.WriteLine("Server stopped.");
+            }
+        }
+    }
+
+    /// <summary>
     /// Tests the full workflow: start server, create session, send prompt, get response.
     /// </summary>
     [Test]
