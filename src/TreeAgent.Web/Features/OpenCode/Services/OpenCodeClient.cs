@@ -16,7 +16,8 @@ public class OpenCodeClient : IOpenCodeClient
     private readonly ILogger<OpenCodeClient> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
 
     public OpenCodeClient(HttpClient httpClient, ILogger<OpenCodeClient> logger)

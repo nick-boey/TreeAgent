@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using TreeAgent.Web.Features.OpenCode.Models;
@@ -16,6 +17,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
     private readonly ILogger<OpenCodeServerManager> _logger;
     private readonly ConcurrentDictionary<string, OpenCodeServer> _servers = new();
     private readonly ConcurrentBag<int> _releasedPorts = [];
+    private readonly string _resolvedExecutablePath;
     private int _nextPort;
     private int _allocatedCount;
     private bool _disposed;
@@ -29,6 +31,45 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         _client = client;
         _logger = logger;
         _nextPort = _options.BasePort;
+        _resolvedExecutablePath = ResolveExecutablePath(_options.ExecutablePath);
+        _logger.LogDebug("Resolved OpenCode executable path: {Path}", _resolvedExecutablePath);
+    }
+
+    /// <summary>
+    /// Resolves the full path to an executable by searching PATH.
+    /// </summary>
+    private static string ResolveExecutablePath(string executableName)
+    {
+        // If it's already an absolute path, use it directly
+        if (Path.IsPathRooted(executableName) && File.Exists(executableName))
+        {
+            return executableName;
+        }
+
+        // Get the PATH environment variable
+        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var pathSeparator = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
+        var paths = pathEnv.Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries);
+
+        // Extensions to try on Windows
+        var extensions = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? new[] { ".cmd", ".exe", ".bat", "" }
+            : new[] { "" };
+
+        foreach (var path in paths)
+        {
+            foreach (var ext in extensions)
+            {
+                var fullPath = Path.Combine(path, executableName + ext);
+                if (File.Exists(fullPath))
+                {
+                    return fullPath;
+                }
+            }
+        }
+
+        // If not found, return the original name and let the process fail with a clear error
+        return executableName;
     }
 
     public int AllocatePort()
@@ -170,7 +211,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
     {
         var startInfo = new ProcessStartInfo
         {
-            FileName = _options.ExecutablePath,
+            FileName = _resolvedExecutablePath,
             Arguments = $"serve --port {port} --hostname 127.0.0.1",
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
@@ -179,6 +220,8 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             CreateNoWindow = true
         };
 
+        _logger.LogDebug("Starting OpenCode: {FileName} {Arguments}", startInfo.FileName, startInfo.Arguments);
+        
         var process = new Process { StartInfo = startInfo };
         process.Start();
         
