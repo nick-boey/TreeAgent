@@ -294,7 +294,7 @@ else
         align-items: stretch;
         gap: var(--spacing-sm);
         padding: 0 var(--spacing-sm);
-        min-height: 1.5rem;
+        min-height: 1rem;
     }
     
     .timeline-divider-inline .divider-graph {
@@ -315,14 +315,17 @@ else
         flex: 1;
         display: flex;
         align-items: center;
+        position: relative;
     }
     
     .timeline-divider-inline .divider-line::before {
         content: '';
-        flex: 1;
+        position: absolute;
+        left: 0;
+        right: 0;
         height: 1px;
-        background: var(--border-color);
-        opacity: 0.5;
+        background: var(--text-muted);
+        opacity: 0.3;
     }
     
     .timeline-divider-inline .divider-content {
