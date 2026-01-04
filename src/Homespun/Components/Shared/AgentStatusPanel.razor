@@ -1,0 +1,276 @@
+@using Homespun.Features.OpenCode.Hubs
+@using Homespun.Features.OpenCode.Services
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+@inject IAgentWorkflowService AgentWorkflowService
+@inject NavigationManager NavigationManager
+
+<div class="agent-status-panel @(IsRunning ? "running" : "")">
+    <div class="panel-header">
+        <h6>OpenCode Agent</h6>
+        @if (IsRunning)
+        {
+            <span class="status-indicator running"></span>
+        }
+    </div>
+    
+    @if (IsLoading)
+    {
+        <div class="panel-body">
+            <div class="d-flex justify-content-center py-3">
+                <div class="spinner-border spinner-border-sm" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    }
+    else if (AgentStatus != null)
+    {
+        <div class="panel-body">
+            <div class="status-info">
+                <small class="text-muted">
+                    Server: <code>localhost:@AgentStatus.Server.Port</code>
+                </small>
+                @if (AgentStatus.ActiveSession != null)
+                {
+                    <small class="text-muted d-block">
+                        Session: <code>@AgentStatus.ActiveSession.Id[..8]...</code>
+                    </small>
+                }
+            </div>
+            
+            @if (!string.IsNullOrEmpty(LastMessage))
+            {
+                <div class="last-message mt-2">
+                    <small class="text-muted">Last activity:</small>
+                    <div class="message-content">@LastMessage</div>
+                </div>
+            }
+        </div>
+        <div class="panel-footer">
+            <button class="btn btn-sm btn-outline-danger" @onclick="StopAgent" disabled="@IsLoading">
+                Stop Agent
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="panel-body">
+            <p class="text-muted small mb-0">No agent running.</p>
+        </div>
+        @if (CanStart)
+        {
+            <div class="panel-footer">
+                <button class="btn btn-sm btn-success" @onclick="StartAgent" disabled="@IsLoading">
+                    Start Agent
+                </button>
+            </div>
+        }
+    }
+    
+    @if (!string.IsNullOrEmpty(ErrorMessage))
+    {
+        <div class="alert alert-danger m-2 py-1 px-2 small mb-0">@ErrorMessage</div>
+    }
+</div>
+
+<style>
+    .agent-status-panel {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-color);
+    }
+    
+    .agent-status-panel.running {
+        border-color: var(--status-success);
+    }
+    
+    .panel-header {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .panel-header h6 {
+        margin: 0;
+        font-size: 0.8125rem;
+    }
+    
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-muted);
+    }
+    
+    .status-indicator.running {
+        background: var(--status-success);
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    .panel-body {
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+    
+    .panel-footer {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-top: 1px solid var(--border-color);
+    }
+    
+    .status-info code {
+        font-size: 0.6875rem;
+    }
+    
+    .message-content {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        max-height: 3rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    @@keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+</style>
+
+@code {
+    [Parameter] public string PullRequestId { get; set; } = "";
+    [Parameter] public bool CanStart { get; set; } = true;
+    [Parameter] public EventCallback OnStatusChanged { get; set; }
+    
+    private AgentStatus? AgentStatus { get; set; }
+    private bool IsLoading { get; set; }
+    private string? ErrorMessage { get; set; }
+    private string? LastMessage { get; set; }
+    private HubConnection? _hubConnection;
+    
+    private bool IsRunning => AgentStatus != null;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshStatus();
+        await SetupSignalRConnection();
+    }
+    
+    private async Task SetupSignalRConnection()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/agent"))
+                .WithAutomaticReconnect()
+                .Build();
+                
+            _hubConnection.On<string, object>("AgentEvent", (pullRequestId, evt) =>
+            {
+                if (pullRequestId == PullRequestId)
+                {
+                    // Update last message
+                    LastMessage = "Agent activity detected...";
+                    InvokeAsync(StateHasChanged);
+                }
+            });
+            
+            _hubConnection.On<string, AgentStatus>("AgentStarted", (pullRequestId, status) =>
+            {
+                if (pullRequestId == PullRequestId)
+                {
+                    AgentStatus = status;
+                    InvokeAsync(async () =>
+                    {
+                        StateHasChanged();
+                        await OnStatusChanged.InvokeAsync();
+                    });
+                }
+            });
+            
+            _hubConnection.On<string>("AgentStopped", pullRequestId =>
+            {
+                if (pullRequestId == PullRequestId)
+                {
+                    AgentStatus = null;
+                    InvokeAsync(async () =>
+                    {
+                        StateHasChanged();
+                        await OnStatusChanged.InvokeAsync();
+                    });
+                }
+            });
+            
+            await _hubConnection.StartAsync();
+            await _hubConnection.InvokeAsync("JoinAgentGroup", PullRequestId);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to connect to SignalR: {ex.Message}";
+        }
+    }
+    
+    private async Task RefreshStatus()
+    {
+        try
+        {
+            AgentStatus = await AgentWorkflowService.GetAgentStatusAsync(PullRequestId);
+        }
+        catch
+        {
+            AgentStatus = null;
+        }
+    }
+    
+    private async Task StartAgent()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+        try
+        {
+            AgentStatus = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequestId);
+            await OnStatusChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+    
+    private async Task StopAgent()
+    {
+        IsLoading = true;
+        ErrorMessage = null;
+        try
+        {
+            await AgentWorkflowService.StopAgentAsync(PullRequestId);
+            AgentStatus = null;
+            await OnStatusChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = ex.Message;
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            try
+            {
+                await _hubConnection.InvokeAsync("LeaveAgentGroup", PullRequestId);
+                await _hubConnection.DisposeAsync();
+            }
+            catch { }
+        }
+    }
+}

@@ -88,6 +88,15 @@
     animation: pulse 1.5s ease-in-out infinite;
 }
 
+.graph-node.status-has-review-comments {
+    background-color: var(--status-error);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.graph-node.status-approved {
+    background-color: var(--status-success);
+}
+
 .graph-node.status-feature {
     background-color: var(--color-ocean);
 }

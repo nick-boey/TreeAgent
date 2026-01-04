@@ -308,6 +308,8 @@
         {
             OpenPullRequestStatus.InDevelopment => "bg-primary",
             OpenPullRequestStatus.ReadyForReview => "bg-warning text-dark",
+            OpenPullRequestStatus.HasReviewComments => "bg-danger",
+            OpenPullRequestStatus.Approved => "bg-success",
             _ => "bg-secondary"
         };
     }
