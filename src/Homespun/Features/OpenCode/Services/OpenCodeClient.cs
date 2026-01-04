@@ -81,9 +81,19 @@ public class OpenCodeClient : IOpenCodeClient
 
     public async Task<OpenCodeMessage> SendPromptAsync(string baseUrl, string sessionId, PromptRequest request, CancellationToken ct = default)
     {
-        var content = new StringContent(JsonSerializer.Serialize(request, JsonOptions), Encoding.UTF8, "application/json");
+        var requestJson = JsonSerializer.Serialize(request, JsonOptions);
+        _logger.LogInformation(
+            "OpenCodeClient.SendPromptAsync: POST {Url}/session/{SessionId}/message. Request body: {RequestBody}",
+            baseUrl, sessionId, requestJson);
+        
+        var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
         
         var response = await _httpClient.PostAsync($"{baseUrl}/session/{sessionId}/message", content, ct);
+        
+        _logger.LogInformation(
+            "OpenCodeClient.SendPromptAsync: Response status {StatusCode} for session {SessionId}",
+            (int)response.StatusCode, sessionId);
+        
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<OpenCodeMessage>(JsonOptions, ct) 
                ?? throw new InvalidOperationException("Failed to parse prompt response");
@@ -91,9 +101,19 @@ public class OpenCodeClient : IOpenCodeClient
 
     public async Task SendPromptAsyncNoWait(string baseUrl, string sessionId, PromptRequest request, CancellationToken ct = default)
     {
-        var content = new StringContent(JsonSerializer.Serialize(request, JsonOptions), Encoding.UTF8, "application/json");
+        var requestJson = JsonSerializer.Serialize(request, JsonOptions);
+        _logger.LogInformation(
+            "OpenCodeClient.SendPromptAsyncNoWait: POST {Url}/session/{SessionId}/prompt_async. Request body: {RequestBody}",
+            baseUrl, sessionId, requestJson);
+        
+        var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
         
         var response = await _httpClient.PostAsync($"{baseUrl}/session/{sessionId}/prompt_async", content, ct);
+        
+        _logger.LogInformation(
+            "OpenCodeClient.SendPromptAsyncNoWait: Response status {StatusCode} for session {SessionId}",
+            (int)response.StatusCode, sessionId);
+        
         response.EnsureSuccessStatusCode();
     }
 

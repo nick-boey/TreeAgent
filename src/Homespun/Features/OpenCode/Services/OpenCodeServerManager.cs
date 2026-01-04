@@ -235,7 +235,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             
             if (server.Process is { HasExited: false })
             {
-                try { server.Process.Kill(); } catch { /* ignore */ }
+                try { server.Process.Kill(entireProcessTree: true); } catch { /* ignore */ }
             }
             
             _logger.LogError(ex, "Failed to start OpenCode server for PR {PullRequestId}", pullRequestId);
@@ -251,17 +251,30 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             return;
         }
 
+        _logger.LogInformation(
+            "Stopping OpenCode server for PR {PullRequestId}, port {Port}, PID {ProcessId}",
+            pullRequestId, server.Port, server.Process?.Id);
+
         if (server.Process is { HasExited: false })
         {
             try
             {
-                server.Process.Kill();
+                // On Windows, .cmd scripts spawn child processes that need to be killed separately
+                // Use Kill(entireProcessTree: true) to kill the process and all its children
+                _logger.LogDebug("Killing process tree for PID {ProcessId}", server.Process.Id);
+                server.Process.Kill(entireProcessTree: true);
                 await server.Process.WaitForExitAsync(ct);
+                _logger.LogDebug("Process {ProcessId} exited with code {ExitCode}", 
+                    server.Process.Id, server.Process.ExitCode);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error killing server process for PR {PullRequestId}", pullRequestId);
             }
+        }
+        else
+        {
+            _logger.LogDebug("Process already exited for PR {PullRequestId}", pullRequestId);
         }
 
         _portAllocationService.ReleasePort(server.Port);
@@ -364,7 +377,8 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             {
                 try
                 {
-                    server.Process.Kill();
+                    _logger.LogDebug("Disposing: killing process tree for PID {ProcessId}", server.Process.Id);
+                    server.Process.Kill(entireProcessTree: true);
                 }
                 catch (Exception ex)
                 {

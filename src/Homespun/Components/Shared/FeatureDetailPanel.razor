@@ -59,7 +59,12 @@
                 <h6>OpenCode Agent</h6>
                 <div class="mb-2">
                     <span class="badge bg-success">Running</span>
-                    <small class="text-muted ms-2">
+                    <a href="@_agentStatus.Server.BaseUrl" target="_blank" class="btn btn-sm btn-outline-primary ms-2">
+                        Open Web View
+                    </a>
+                </div>
+                <div class="mb-2">
+                    <small class="text-muted">
                         Server: <code>@_agentStatus.Server.BaseUrl</code>
                     </small>
                 </div>
@@ -168,6 +173,10 @@
         try
         {
             _agentStatus = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequest.Id);
+            
+            // Update status to InDevelopment (working) when agent starts
+            await PullRequestDataService.UpdateStatusAsync(PullRequest.Id, OpenPullRequestStatus.InDevelopment);
+            await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
         {

@@ -201,6 +201,12 @@ public class AgentWorkflowService : IAgentWorkflowService
 
     public async Task<OpenCodeMessage> SendPromptAsync(string pullRequestId, string prompt, CancellationToken ct = default)
     {
+        _logger.LogInformation(
+            "SendPromptAsync called for PR {PullRequestId}. Prompt length: {PromptLength} chars. Preview: {PromptPreview}",
+            pullRequestId,
+            prompt.Length,
+            prompt.Length > 100 ? prompt[..100] + "..." : prompt);
+        
         var server = _serverManager.GetServerForPullRequest(pullRequestId)
             ?? throw new InvalidOperationException($"No agent running for PR {pullRequestId}");
 
@@ -209,8 +215,18 @@ public class AgentWorkflowService : IAgentWorkflowService
             throw new InvalidOperationException($"No active session for PR {pullRequestId}");
         }
 
+        _logger.LogInformation(
+            "Sending prompt to agent at {BaseUrl}, session {SessionId}",
+            server.BaseUrl, server.ActiveSessionId);
+
         var request = PromptRequest.FromText(prompt);
-        return await _client.SendPromptAsync(server.BaseUrl, server.ActiveSessionId, request, ct);
+        var response = await _client.SendPromptAsync(server.BaseUrl, server.ActiveSessionId, request, ct);
+        
+        _logger.LogInformation(
+            "Prompt sent successfully to PR {PullRequestId}. Response message ID: {MessageId}",
+            pullRequestId, response.Info.Id);
+        
+        return response;
     }
 
     private async Task<AgentStatus> BuildAgentStatusAsync(OpenCodeServer server, CancellationToken ct)
