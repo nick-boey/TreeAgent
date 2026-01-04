@@ -37,39 +37,155 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
     }
 
     /// <summary>
-    /// Resolves the full path to an executable by searching PATH.
+    /// Resolves the full path to an executable by searching PATH and common installation locations.
     /// </summary>
-    private static string ResolveExecutablePath(string executableName)
+    private string ResolveExecutablePath(string executableName)
     {
         // If it's already an absolute path, use it directly
         if (Path.IsPathRooted(executableName) && File.Exists(executableName))
         {
+            _logger.LogDebug("Using absolute path for OpenCode: {Path}", executableName);
             return executableName;
         }
-
-        // Get the PATH environment variable
-        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
-        var pathSeparator = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
-        var paths = pathEnv.Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries);
 
         // Extensions to try on Windows
         var extensions = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? new[] { ".cmd", ".exe", ".bat", "" }
             : new[] { "" };
 
-        foreach (var path in paths)
+        // Build list of directories to search
+        var searchPaths = new List<string>();
+        
+        // 1. Add PATH directories
+        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var pathSeparator = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ';' : ':';
+        searchPaths.AddRange(pathEnv.Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries));
+        
+        // 2. Add common installation locations
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            // npm global installation paths on Windows
+            searchPaths.Add(Path.Combine(appData, "npm"));
+            searchPaths.Add(Path.Combine(localAppData, "npm"));
+            searchPaths.Add(Path.Combine(userProfile, "AppData", "Roaming", "npm"));
+            
+            // pnpm global installation path
+            searchPaths.Add(Path.Combine(localAppData, "pnpm"));
+            
+            // yarn global bin
+            searchPaths.Add(Path.Combine(localAppData, "Yarn", "bin"));
+            
+            // nvm for Windows
+            var nvmHome = Environment.GetEnvironmentVariable("NVM_HOME");
+            if (!string.IsNullOrEmpty(nvmHome))
+            {
+                searchPaths.Add(nvmHome);
+            }
+            
+            // Scoop
+            searchPaths.Add(Path.Combine(userProfile, "scoop", "shims"));
+            
+            // Chocolatey
+            var chocoPath = Environment.GetEnvironmentVariable("ChocolateyInstall");
+            if (!string.IsNullOrEmpty(chocoPath))
+            {
+                searchPaths.Add(Path.Combine(chocoPath, "bin"));
+            }
+            else
+            {
+                searchPaths.Add(@"C:\ProgramData\chocolatey\bin");
+            }
+            
+            // Volta
+            searchPaths.Add(Path.Combine(localAppData, "Volta", "bin"));
+            
+            // fnm (Fast Node Manager)
+            searchPaths.Add(Path.Combine(localAppData, "fnm_multishells"));
+            var fnmDir = Path.Combine(localAppData, "fnm_multishells");
+            if (Directory.Exists(fnmDir))
+            {
+                try
+                {
+                    // fnm creates subdirectories for each shell session
+                    foreach (var dir in Directory.GetDirectories(fnmDir))
+                    {
+                        searchPaths.Add(dir);
+                    }
+                }
+                catch { /* ignore directory access errors */ }
+            }
+        }
+        else
+        {
+            // Unix-like systems (macOS, Linux)
+            
+            // npm global paths
+            searchPaths.Add(Path.Combine(userProfile, ".npm-global", "bin"));
+            searchPaths.Add("/usr/local/bin");
+            searchPaths.Add("/usr/bin");
+            searchPaths.Add(Path.Combine(userProfile, ".local", "bin"));
+            
+            // nvm
+            var nvmDir = Environment.GetEnvironmentVariable("NVM_DIR") 
+                         ?? Path.Combine(userProfile, ".nvm");
+            if (Directory.Exists(nvmDir))
+            {
+                // Try to find the current node version's bin directory
+                var versionsDir = Path.Combine(nvmDir, "versions", "node");
+                if (Directory.Exists(versionsDir))
+                {
+                    try
+                    {
+                        foreach (var versionDir in Directory.GetDirectories(versionsDir))
+                        {
+                            searchPaths.Add(Path.Combine(versionDir, "bin"));
+                        }
+                    }
+                    catch { /* ignore */ }
+                }
+            }
+            
+            // pnpm
+            searchPaths.Add(Path.Combine(userProfile, ".local", "share", "pnpm"));
+            
+            // yarn
+            searchPaths.Add(Path.Combine(userProfile, ".yarn", "bin"));
+            
+            // Homebrew (macOS)
+            searchPaths.Add("/opt/homebrew/bin");
+            searchPaths.Add("/usr/local/Cellar");
+            
+            // Volta
+            searchPaths.Add(Path.Combine(userProfile, ".volta", "bin"));
+            
+            // asdf
+            searchPaths.Add(Path.Combine(userProfile, ".asdf", "shims"));
+        }
+
+        // Search all paths
+        foreach (var searchPath in searchPaths.Where(p => !string.IsNullOrWhiteSpace(p)))
         {
             foreach (var ext in extensions)
             {
-                var fullPath = Path.Combine(path, executableName + ext);
+                var fullPath = Path.Combine(searchPath, executableName + ext);
                 if (File.Exists(fullPath))
                 {
+                    _logger.LogDebug("Found OpenCode at: {Path}", fullPath);
                     return fullPath;
                 }
             }
         }
 
         // If not found, return the original name and let the process fail with a clear error
+        _logger.LogWarning(
+            "Could not find '{ExecutableName}' in PATH or common installation locations. " +
+            "Searched {PathCount} directories. The process may fail to start.",
+            executableName, searchPaths.Count);
+        
         return executableName;
     }
 
