@@ -76,12 +76,6 @@ else
                                   IsFirst="@isFirstInTimeline"
                                   IsLast="false" />
                     }
-                    <div class="timeline-divider-inline">
-                        <div class="divider-graph">
-                            <div class="graph-line"></div>
-                        </div>
-                        <div class="divider-line"></div>
-                    </div>
                 }
 
                 @* Current PRs - from database *@
@@ -92,15 +86,22 @@ else
                         <span class="section-count">@GetTotalCurrentPRCount()</span>
                     }
                 </div>
-                @if (_rootPullRequests == null || _rootPullRequests.Count == 0)
+                @if (_pastPRs != null && _pastPRs.Count > 0)
                 {
-                    <div class="timeline-divider-inline">
-                        <div class="divider-graph">
+                    <div class="timeline-section-label">
+                        <div class="label-graph">
                             <div class="graph-line"></div>
                         </div>
-                        <div class="divider-content">
-                            <span class="empty-message-inline">No open pull requests</span>
+                        <div class="label-text">Current</div>
+                    </div>
+                }
+                @if (_rootPullRequests == null || _rootPullRequests.Count == 0)
+                {
+                    <div class="timeline-section-label">
+                        <div class="label-graph">
+                            <div class="graph-line"></div>
                         </div>
+                        <div class="label-text">No open pull requests</div>
                     </div>
                 }
                 else
@@ -109,7 +110,6 @@ else
                     {
                         var pr = _flattenedCurrentPRs[i];
                         var isFirst = i == 0;
-                        var isLast = i == _flattenedCurrentPRs.Count - 1;
                         <WorkItem Title="@pr.PullRequest.Title"
                                   Number="@pr.PullRequest.GitHubPRNumber"
                                   StatusColor="@GetCurrentPRStatusColor(pr.PullRequest.Status)"
@@ -122,12 +122,6 @@ else
                                   IsLast="false"
                                   OnClick="@(() => SelectPullRequest(pr.PullRequest.Id))" />
                     }
-                    <div class="timeline-divider-inline">
-                        <div class="divider-graph">
-                            <div class="graph-line"></div>
-                        </div>
-                        <div class="divider-line"></div>
-                    </div>
                 }
 
                 @* Future Changes - from ROADMAP.json *@
@@ -137,6 +131,12 @@ else
                     {
                         <span class="section-count">@_futureChanges.Count</span>
                     }
+                </div>
+                <div class="timeline-section-label">
+                    <div class="label-graph">
+                        <div class="graph-line"></div>
+                    </div>
+                    <div class="label-text">Future</div>
                 </div>
                 @if (_futureChanges == null || _futureChanges.Count == 0)
                 {
@@ -288,16 +288,16 @@ else
         font-size: 0.6875rem;
     }
     
-    /* Inline divider with continuous graph line */
-    .timeline-divider-inline {
+    /* Inline section label with continuous graph line */
+    .timeline-section-label {
         display: flex;
         align-items: stretch;
         gap: var(--spacing-sm);
         padding: 0 var(--spacing-sm);
-        min-height: 1rem;
+        min-height: 1.25rem;
     }
     
-    .timeline-divider-inline .divider-graph {
+    .timeline-section-label .label-graph {
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -305,39 +305,20 @@ else
         flex-shrink: 0;
     }
     
-    .timeline-divider-inline .graph-line {
+    .timeline-section-label .graph-line {
         width: 2px;
         flex: 1;
         background-color: var(--border-color);
     }
     
-    .timeline-divider-inline .divider-line {
+    .timeline-section-label .label-text {
         flex: 1;
         display: flex;
         align-items: center;
-        position: relative;
-    }
-    
-    .timeline-divider-inline .divider-line::before {
-        content: '';
-        position: absolute;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: var(--text-muted);
-        opacity: 0.3;
-    }
-    
-    .timeline-divider-inline .divider-content {
-        flex: 1;
-        display: flex;
-        align-items: center;
-    }
-    
-    .empty-message-inline {
         font-size: 0.6875rem;
         color: var(--text-muted);
-        opacity: 0.7;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
     }
     
     /* Timeline action buttons (load more, add item) */
