@@ -1,22 +1,30 @@
+/* ==========================================================================
+   Timeline Item Styles
+   ========================================================================== */
+
 .timeline-item {
     display: flex;
     align-items: center;
     gap: 0.75rem;
     padding: 0.75rem;
-    border-radius: 0.375rem;
+    border-radius: var(--radius-md);
     cursor: pointer;
-    transition: background-color 0.15s ease;
+    transition: background-color var(--transition-fast);
     border: 1px solid transparent;
 }
 
 .timeline-item:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: var(--bg-hover);
 }
 
 .timeline-item.selected {
-    background-color: rgba(13, 110, 253, 0.1);
-    border-color: #0d6efd;
+    background-color: var(--bg-selected);
+    border-color: var(--border-selected);
 }
+
+/* ==========================================================================
+   Status Indicators
+   ========================================================================== */
 
 .item-status-indicator {
     width: 12px;
@@ -25,34 +33,33 @@
     flex-shrink: 0;
 }
 
-/* Status colors matching ROADMAP.md definitions */
 .item-status-indicator.status-in-progress {
-    background-color: #ffc107; /* Yellow */
+    background-color: var(--status-warning);
 }
 
 .item-status-indicator.status-ready-for-review {
-    background-color: #ffc107; /* Yellow - flashing handled below */
+    background-color: var(--status-warning);
     animation: pulse 1.5s ease-in-out infinite;
 }
 
 .item-status-indicator.status-checks-failing {
-    background-color: #dc3545; /* Red */
+    background-color: var(--status-error);
 }
 
 .item-status-indicator.status-conflict {
-    background-color: #fd7e14; /* Orange */
+    background-color: var(--status-conflict);
 }
 
 .item-status-indicator.status-ready-for-merging {
-    background-color: #198754; /* Green */
+    background-color: var(--status-success);
 }
 
 .item-status-indicator.status-merged {
-    background-color: #6f42c1; /* Purple */
+    background-color: var(--status-merged);
 }
 
 .item-status-indicator.status-closed {
-    background-color: #dc3545; /* Red */
+    background-color: var(--status-error);
 }
 
 /* Flashing animation for Ready for Review */
@@ -67,33 +74,38 @@
     }
 }
 
+/* ==========================================================================
+   Item Content
+   ========================================================================== */
+
 .item-content {
     flex-grow: 1;
     min-width: 0;
 }
 
 .item-title {
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--text-primary);
 }
 
 .item-number {
-    font-weight: normal;
-    color: #6c757d;
-    margin-left: 0.5rem;
+    font-weight: var(--font-weight-normal);
+    color: var(--text-muted);
+    margin-left: var(--spacing-sm);
 }
 
 .item-group {
     font-size: 0.75rem;
-    color: #6c757d;
+    color: var(--text-muted);
     text-transform: capitalize;
 }
 
 .item-time {
     font-size: 0.7rem;
-    color: #adb5bd;
+    color: var(--text-secondary);
     font-family: monospace;
     white-space: nowrap;
 }

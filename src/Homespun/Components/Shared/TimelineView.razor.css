@@ -1,23 +1,29 @@
+/* ==========================================================================
+   Timeline View Styles
+   ========================================================================== */
+
 .timeline-view {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: var(--spacing-lg);
 }
 
 .timeline-section {
-    border-radius: 0.5rem;
-    border: 1px solid #dee2e6;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
     overflow: hidden;
+    background-color: var(--bg-card);
 }
 
 .section-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    background-color: #f8f9fa;
-    border-bottom: 1px solid #dee2e6;
-    font-weight: 600;
+    gap: var(--spacing-sm);
+    padding: 0.75rem var(--spacing-md);
+    background-color: var(--bg-tertiary);
+    border-bottom: 1px solid var(--border-color);
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-primary);
 }
 
 .section-icon {
@@ -29,40 +35,46 @@
 }
 
 .section-count {
-    background-color: #6c757d;
-    color: white;
-    padding: 0.125rem 0.5rem;
-    border-radius: 1rem;
+    background-color: var(--color-basalt-light);
+    color: var(--color-white);
+    padding: 0.125rem var(--spacing-sm);
+    border-radius: var(--radius-full);
     font-size: 0.75rem;
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
 }
 
 .section-items {
-    padding: 0.5rem;
+    padding: var(--spacing-sm);
 }
 
 .parallel-items {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 0.5rem;
+    gap: var(--spacing-sm);
 }
 
-/* Section-specific styling */
+/* ==========================================================================
+   Section-specific Styling
+   ========================================================================== */
+
 .past-section .section-header {
-    background-color: #e9ecef;
+    background-color: var(--section-past-bg);
 }
 
 .current-section .section-header {
-    background-color: #fff3cd;
+    background-color: var(--section-current-bg);
 }
 
 .future-section .section-header {
-    background-color: #d1e7dd;
+    background-color: var(--section-future-bg);
 }
 
-/* Group styling */
+/* ==========================================================================
+   Group Styling
+   ========================================================================== */
+
 .group-section {
-    margin-bottom: 1rem;
+    margin-bottom: var(--spacing-md);
 }
 
 .group-section:last-child {
@@ -70,16 +82,16 @@
 }
 
 .group-header {
-    padding: 0.25rem 0.5rem;
-    margin-bottom: 0.5rem;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    margin-bottom: var(--spacing-sm);
 }
 
 .group-badge {
     display: inline-block;
-    padding: 0.25rem 0.75rem;
-    border-radius: 1rem;
-    color: white;
+    padding: var(--spacing-xs) 0.75rem;
+    border-radius: var(--radius-full);
+    color: var(--color-white);
     font-size: 0.8rem;
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     text-transform: capitalize;
 }

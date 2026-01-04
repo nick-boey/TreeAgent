@@ -1,3 +1,7 @@
+/* ==========================================================================
+   Feature Node Styles
+   ========================================================================== */
+
 .feature-node {
     user-select: none;
 }
@@ -5,26 +9,26 @@
 .feature-item {
     display: flex;
     align-items: center;
-    padding: 0.5rem 0.75rem;
+    padding: var(--spacing-sm) 0.75rem;
     cursor: pointer;
-    border-radius: 0.25rem;
-    transition: background-color 0.15s ease;
+    border-radius: var(--radius-sm);
+    transition: background-color var(--transition-fast);
 }
 
 .feature-item:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: var(--bg-hover);
 }
 
 .feature-item.selected {
-    background-color: rgba(13, 110, 253, 0.15);
-    border-left: 3px solid #0d6efd;
+    background-color: var(--bg-selected);
+    border-left: 3px solid var(--border-selected);
 }
 
 .tree-toggle {
     font-family: monospace;
     width: 1.5rem;
     cursor: pointer;
-    color: #6c757d;
+    color: var(--text-muted);
 }
 
 .tree-toggle-spacer {
@@ -32,46 +36,49 @@
     display: inline-block;
 }
 
+/* ==========================================================================
+   Status Indicators
+   ========================================================================== */
+
 .status-indicator {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    margin-right: 0.5rem;
+    margin-right: var(--spacing-sm);
     flex-shrink: 0;
 }
 
 .status-indicator.status-future {
-    background-color: #6c757d;
+    background-color: var(--status-muted);
 }
 
 .status-indicator.status-in-development {
-    background-color: #ffc107; /* Yellow - In Progress */
+    background-color: var(--status-warning);
 }
 
 .status-indicator.status-ready-for-review {
-    background-color: #ffc107; /* Yellow - flashing */
+    background-color: var(--status-warning);
     animation: pulse 1.5s ease-in-out infinite;
 }
 
 .status-indicator.status-merged {
-    background-color: #6f42c1; /* Purple */
+    background-color: var(--status-merged);
 }
 
 .status-indicator.status-cancelled {
-    background-color: #dc3545; /* Red */
+    background-color: var(--status-error);
 }
 
-/* Additional PR workflow statuses */
 .status-indicator.status-checks-failing {
-    background-color: #dc3545; /* Red */
+    background-color: var(--status-error);
 }
 
 .status-indicator.status-conflict {
-    background-color: #fd7e14; /* Orange */
+    background-color: var(--status-conflict);
 }
 
 .status-indicator.status-ready-for-merging {
-    background-color: #198754; /* Green */
+    background-color: var(--status-success);
 }
 
 /* Flashing animation for Ready for Review */
@@ -86,14 +93,19 @@
     }
 }
 
+/* ==========================================================================
+   Feature Content
+   ========================================================================== */
+
 .feature-title {
     flex-grow: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: var(--text-primary);
 }
 
 .feature-children {
-    border-left: 1px dashed #dee2e6;
+    border-left: 1px dashed var(--border-color);
     margin-left: 0.75rem;
 }

@@ -1,22 +1,30 @@
+/* ==========================================================================
+   Future Change Item Styles
+   ========================================================================== */
+
 .future-change-item {
     display: flex;
     align-items: center;
     gap: 0.75rem;
     padding: 0.75rem;
-    border-radius: 0.375rem;
+    border-radius: var(--radius-md);
     cursor: pointer;
-    transition: background-color 0.15s ease;
+    transition: background-color var(--transition-fast);
     border: 1px solid transparent;
 }
 
 .future-change-item:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: var(--bg-hover);
 }
 
 .future-change-item.selected {
-    background-color: rgba(13, 110, 253, 0.1);
-    border-color: #0d6efd;
+    background-color: var(--bg-selected);
+    border-color: var(--border-selected);
 }
+
+/* ==========================================================================
+   Type Indicators
+   ========================================================================== */
 
 .item-type-indicator {
     width: 4px;
@@ -26,30 +34,33 @@
     flex-shrink: 0;
 }
 
-/* Type colors */
 .item-type-indicator.type-feature {
-    background-color: #0d6efd; /* Blue */
+    background-color: var(--color-ocean);
 }
 
 .item-type-indicator.type-bug {
-    background-color: #dc3545; /* Red */
+    background-color: var(--color-red);
 }
 
 .item-type-indicator.type-refactor {
-    background-color: #6f42c1; /* Purple */
+    background-color: var(--status-merged);
 }
 
 .item-type-indicator.type-docs {
-    background-color: #20c997; /* Teal */
+    background-color: var(--color-lagoon);
 }
 
 .item-type-indicator.type-test {
-    background-color: #0dcaf0; /* Cyan */
+    background-color: var(--color-gum);
 }
 
 .item-type-indicator.type-chore {
-    background-color: #6c757d; /* Gray */
+    background-color: var(--color-basalt-light);
 }
+
+/* ==========================================================================
+   Item Content
+   ========================================================================== */
 
 .item-content {
     flex-grow: 1;
@@ -57,84 +68,98 @@
 }
 
 .item-title {
-    font-weight: 500;
+    font-weight: var(--font-weight-medium);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    margin-bottom: 0.25rem;
+    margin-bottom: var(--spacing-xs);
+    color: var(--text-primary);
 }
 
 .item-meta {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--spacing-sm);
     flex-wrap: wrap;
 }
 
+/* ==========================================================================
+   Type Badges
+   ========================================================================== */
+
 .item-type-badge {
     font-size: 0.65rem;
-    padding: 0.125rem 0.375rem;
-    border-radius: 0.25rem;
+    padding: 0.125rem var(--spacing-sm);
+    border-radius: var(--radius-sm);
     text-transform: uppercase;
-    font-weight: 600;
-    color: white;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-white);
 }
 
 .item-type-badge.type-feature {
-    background-color: #0d6efd;
+    background-color: var(--color-ocean);
 }
 
 .item-type-badge.type-bug {
-    background-color: #dc3545;
+    background-color: var(--color-red);
 }
 
 .item-type-badge.type-refactor {
-    background-color: #6f42c1;
+    background-color: var(--status-merged);
 }
 
 .item-type-badge.type-docs {
-    background-color: #20c997;
+    background-color: var(--color-lagoon);
 }
 
 .item-type-badge.type-test {
-    background-color: #0dcaf0;
+    background-color: var(--color-gum);
+    color: var(--color-black);
 }
 
 .item-type-badge.type-chore {
-    background-color: #6c757d;
+    background-color: var(--color-basalt-light);
 }
+
+/* ==========================================================================
+   Priority Badges
+   ========================================================================== */
 
 .item-priority {
     font-size: 0.65rem;
-    padding: 0.125rem 0.375rem;
-    border-radius: 0.25rem;
-    font-weight: 500;
+    padding: 0.125rem var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    font-weight: var(--font-weight-medium);
 }
 
 .item-priority.priority-high {
-    background-color: #f8d7da;
-    color: #842029;
+    background-color: rgba(218, 26, 50, 0.15);
+    color: var(--color-red);
 }
 
 .item-priority.priority-medium {
-    background-color: #fff3cd;
-    color: #664d03;
+    background-color: rgba(255, 234, 118, 0.4);
+    color: var(--color-basalt);
 }
 
 .item-priority.priority-low {
-    background-color: #d1e7dd;
-    color: #0f5132;
+    background-color: rgba(54, 163, 144, 0.15);
+    color: var(--color-lagoon);
 }
+
+/* ==========================================================================
+   Complexity & Time
+   ========================================================================== */
 
 .item-complexity {
     font-size: 0.65rem;
-    color: #6c757d;
+    color: var(--text-muted);
     text-transform: capitalize;
 }
 
 .item-time {
     font-size: 0.7rem;
-    color: #adb5bd;
+    color: var(--text-secondary);
     font-family: monospace;
     white-space: nowrap;
 }
