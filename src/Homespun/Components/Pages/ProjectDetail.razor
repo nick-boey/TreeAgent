@@ -52,25 +52,36 @@ else
                     </div>
                     @if (hiddenCount > 0)
                     {
-                        <button class="load-more-btn" @onclick="LoadMorePastPRs">
-                            ... and @hiddenCount older PRs (click to load @Math.Min(5, hiddenCount) more)
+                        <button class="timeline-action-btn" @onclick="LoadMorePastPRs">
+                            <div class="item-graph">
+                                <div class="graph-line graph-line-top hidden"></div>
+                                <div class="graph-node status-load-more">...</div>
+                                <div class="graph-line graph-line-bottom"></div>
+                            </div>
+                            <div class="item-body">
+                                <span class="item-title action-title">@hiddenCount older PRs (load @Math.Min(5, hiddenCount) more)</span>
+                            </div>
                         </button>
                     }
                     @for (var i = 0; i < visiblePastPRs.Count; i++)
                     {
                         var prWithTime = visiblePastPRs[i];
-                        var isFirst = i == 0 && hiddenCount == 0;
-                        var isLast = i == visiblePastPRs.Count - 1;
+                        var isFirstInTimeline = i == 0 && hiddenCount == 0;
                         <WorkItem Title="@prWithTime.PullRequest.Title"
                                   Number="@prWithTime.PullRequest.Number"
                                   Url="@prWithTime.PullRequest.HtmlUrl"
                                   StatusColor="@GetPastPRStatusColor(prWithTime.PullRequest.Status)"
                                   StatusTooltip="@prWithTime.PullRequest.Status.ToString()"
                                   Subtitle="@GetPastPRSubtitle(prWithTime.PullRequest)"
-                                  IsFirst="@isFirst"
-                                  IsLast="@isLast" />
+                                  IsFirst="@isFirstInTimeline"
+                                  IsLast="false" />
                     }
-                    <div class="timeline-divider"></div>
+                    <div class="timeline-divider-inline">
+                        <div class="divider-graph">
+                            <div class="graph-line"></div>
+                        </div>
+                        <div class="divider-line"></div>
+                    </div>
                 }
 
                 @* Current PRs - from database *@
@@ -83,7 +94,14 @@ else
                 </div>
                 @if (_rootPullRequests == null || _rootPullRequests.Count == 0)
                 {
-                    <div class="empty-message">No open pull requests.</div>
+                    <div class="timeline-divider-inline">
+                        <div class="divider-graph">
+                            <div class="graph-line"></div>
+                        </div>
+                        <div class="divider-content">
+                            <span class="empty-message-inline">No open pull requests</span>
+                        </div>
+                    </div>
                 }
                 else
                 {
@@ -101,11 +119,16 @@ else
                                   IsSelected="@(_selectedPullRequestId == pr.PullRequest.Id)"
                                   IsClickable="true"
                                   IsFirst="@isFirst"
-                                  IsLast="@isLast"
+                                  IsLast="false"
                                   OnClick="@(() => SelectPullRequest(pr.PullRequest.Id))" />
                     }
+                    <div class="timeline-divider-inline">
+                        <div class="divider-graph">
+                            <div class="graph-line"></div>
+                        </div>
+                        <div class="divider-line"></div>
+                    </div>
                 }
-                <div class="timeline-divider"></div>
 
                 @* Future Changes - from ROADMAP.json *@
                 <div class="timeline-section-header">
@@ -265,37 +288,158 @@ else
         font-size: 0.6875rem;
     }
     
-    .timeline-divider {
+    /* Inline divider with continuous graph line */
+    .timeline-divider-inline {
+        display: flex;
+        align-items: stretch;
+        gap: var(--spacing-sm);
+        padding: 0 var(--spacing-sm);
+        min-height: 1.5rem;
+    }
+    
+    .timeline-divider-inline .divider-graph {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 16px;
+        flex-shrink: 0;
+    }
+    
+    .timeline-divider-inline .graph-line {
+        width: 2px;
+        flex: 1;
+        background-color: var(--border-color);
+    }
+    
+    .timeline-divider-inline .divider-line {
+        flex: 1;
+        display: flex;
+        align-items: center;
+    }
+    
+    .timeline-divider-inline .divider-line::before {
+        content: '';
+        flex: 1;
         height: 1px;
         background: var(--border-color);
-        margin: var(--spacing-sm) 0;
+        opacity: 0.5;
     }
     
-    .empty-message {
+    .timeline-divider-inline .divider-content {
+        flex: 1;
+        display: flex;
+        align-items: center;
+    }
+    
+    .empty-message-inline {
+        font-size: 0.6875rem;
+        color: var(--text-muted);
+        opacity: 0.7;
+    }
+    
+    /* Timeline action buttons (load more, add item) */
+    .timeline-action-btn,
+    .add-item {
+        display: flex;
+        align-items: stretch;
+        gap: var(--spacing-sm);
+        padding: 0 var(--spacing-sm);
+        border-radius: var(--radius-sm);
+        transition: background-color var(--transition-fast);
+        min-height: 2.25rem;
+        text-decoration: none;
+        cursor: pointer;
+        background: transparent;
+        border: none;
+        width: 100%;
+        text-align: left;
+    }
+    
+    .timeline-action-btn:hover,
+    .add-item:hover {
+        background-color: var(--bg-hover);
+    }
+    
+    .timeline-action-btn .item-graph,
+    .add-item .item-graph {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 16px;
+        flex-shrink: 0;
+    }
+    
+    .timeline-action-btn .graph-line,
+    .add-item .graph-line {
+        width: 2px;
+        flex: 1;
+        background-color: var(--border-color);
+    }
+    
+    .timeline-action-btn .graph-line.hidden,
+    .add-item .graph-line.hidden {
+        visibility: hidden;
+    }
+    
+    .timeline-action-btn .graph-line-top,
+    .add-item .graph-line-top {
+        min-height: 4px;
+    }
+    
+    .timeline-action-btn .graph-line-bottom,
+    .add-item .graph-line-bottom {
+        min-height: 4px;
+    }
+    
+    .timeline-action-btn .graph-node,
+    .add-item .graph-node {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        border: 2px solid var(--bg-primary);
+        box-sizing: content-box;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.5rem;
+        font-weight: bold;
+        color: white;
+    }
+    
+    .timeline-action-btn .graph-node.status-load-more {
+        background-color: var(--text-muted);
+        font-size: 0.625rem;
+        letter-spacing: -0.5px;
+    }
+    
+    .add-item .graph-node.status-add {
+        background-color: var(--color-ocean);
+    }
+    
+    .timeline-action-btn .item-body,
+    .add-item .item-body {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: var(--spacing-xs) 0;
+    }
+    
+    .timeline-action-btn .action-title,
+    .add-item .add-title {
         font-size: 0.8125rem;
         color: var(--text-muted);
-        padding: var(--spacing-xs) var(--spacing-sm);
+        font-style: italic;
     }
     
-    .load-more-btn {
-        display: block;
-        width: 100%;
-        padding: var(--spacing-xs) var(--spacing-sm);
-        margin-bottom: var(--spacing-xs);
-        background: var(--bg-tertiary);
-        border: 1px dashed var(--border-color);
-        border-radius: var(--radius-sm);
-        color: var(--text-muted);
-        font-size: 0.75rem;
-        text-align: left;
-        cursor: pointer;
-        transition: all var(--transition-fast);
-    }
-    
-    .load-more-btn:hover {
-        background: var(--bg-hover);
+    .timeline-action-btn:hover .action-title {
         color: var(--text-primary);
-        border-color: var(--border-color-light);
+    }
+    
+    .add-item:hover .add-title {
+        color: var(--color-ocean);
     }
     
     .info-list {
@@ -318,86 +462,6 @@ else
         margin-top: 0.125rem;
     }
     
-    /* Add item button styling */
-    .add-item {
-        display: flex;
-        align-items: stretch;
-        gap: var(--spacing-sm);
-        padding: 0 var(--spacing-sm);
-        border-radius: var(--radius-sm);
-        transition: background-color var(--transition-fast);
-        min-height: 2.25rem;
-        text-decoration: none;
-        cursor: pointer;
-    }
-    
-    .add-item:hover {
-        background-color: var(--bg-hover);
-    }
-    
-    .add-item .item-graph {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        width: 16px;
-        flex-shrink: 0;
-    }
-    
-    .add-item .graph-line {
-        width: 2px;
-        flex: 1;
-        background-color: var(--border-color);
-    }
-    
-    .add-item .graph-line.hidden {
-        visibility: hidden;
-    }
-    
-    .add-item .graph-line-top {
-        min-height: 4px;
-    }
-    
-    .add-item .graph-line-bottom {
-        min-height: 4px;
-    }
-    
-    .add-item .graph-node {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        flex-shrink: 0;
-        border: 2px solid var(--bg-primary);
-        box-sizing: content-box;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.625rem;
-        font-weight: bold;
-        color: white;
-    }
-    
-    .add-item .graph-node.status-add {
-        background-color: var(--color-ocean);
-    }
-    
-    .add-item .item-body {
-        flex: 1;
-        min-width: 0;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        padding: var(--spacing-xs) 0;
-    }
-    
-    .add-item .add-title {
-        font-size: 0.8125rem;
-        color: var(--text-muted);
-        font-style: italic;
-    }
-    
-    .add-item:hover .add-title {
-        color: var(--color-ocean);
-    }
 </style>
 
 @code {
