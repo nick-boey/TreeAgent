@@ -1,5 +1,6 @@
 using Homespun.Features.Commands;
 using Homespun.Features.Git;
+using Microsoft.Extensions.Logging;
 using Moq;
 
 namespace Homespun.Tests.Features.Git;
@@ -14,7 +15,7 @@ public class GitWorktreeServiceTests
     public void SetUp()
     {
         _mockRunner = new Mock<ICommandRunner>();
-        _service = new GitWorktreeService(_mockRunner.Object);
+        _service = new GitWorktreeService(_mockRunner.Object, Mock.Of<ILogger<GitWorktreeService>>());
     }
 
     [Test]

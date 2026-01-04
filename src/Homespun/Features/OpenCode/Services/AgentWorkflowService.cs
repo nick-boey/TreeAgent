@@ -62,8 +62,17 @@ public class AgentWorkflowService : IAgentWorkflowService
             var success = await _pullRequestService.StartDevelopmentAsync(pullRequestId);
             if (!success)
             {
+                _logger.LogError(
+                    "Failed to create worktree for PR {PullRequestId} branch {BranchName}. " +
+                    "Project: {ProjectId}, LocalPath: {LocalPath}",
+                    pullRequestId, 
+                    pullRequest.BranchName,
+                    pullRequest.ProjectId,
+                    pullRequest.Project?.LocalPath ?? "unknown");
+                
                 throw new InvalidOperationException(
-                    $"Failed to create worktree for pull request {pullRequestId}");
+                    $"Failed to create worktree for pull request {pullRequestId} " +
+                    $"(branch: {pullRequest.BranchName}). Check logs for git error details.");
             }
 
             // Refresh pull request to get the worktree path

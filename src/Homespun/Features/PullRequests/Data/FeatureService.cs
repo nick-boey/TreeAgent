@@ -1,5 +1,6 @@
 using Homespun.Features.Git;
 using Homespun.Features.PullRequests.Data.Entities;
+using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.PullRequests.Data;
 
@@ -7,7 +8,10 @@ namespace Homespun.Features.PullRequests.Data;
 /// Service for managing locally tracked pull requests.
 /// Only open PRs are stored.
 /// </summary>
-public class PullRequestDataService(IDataStore dataStore, IGitWorktreeService worktreeService)
+public class PullRequestDataService(
+    IDataStore dataStore, 
+    IGitWorktreeService worktreeService,
+    ILogger<PullRequestDataService> logger)
 {
     public Task<List<PullRequest>> GetByProjectIdAsync(string projectId)
     {
@@ -109,12 +113,32 @@ public class PullRequestDataService(IDataStore dataStore, IGitWorktreeService wo
 
     public async Task<bool> StartDevelopmentAsync(string id)
     {
+        logger.LogDebug("Starting development for pull request {PullRequestId}", id);
+        
         var pullRequest = dataStore.GetPullRequest(id);
-        if (pullRequest == null) return false;
-        if (string.IsNullOrEmpty(pullRequest.BranchName)) return false;
+        if (pullRequest == null)
+        {
+            logger.LogError("Pull request {PullRequestId} not found", id);
+            return false;
+        }
+        
+        if (string.IsNullOrEmpty(pullRequest.BranchName))
+        {
+            logger.LogError("Pull request {PullRequestId} has no branch name", id);
+            return false;
+        }
 
         var project = dataStore.GetProject(pullRequest.ProjectId);
-        if (project == null) return false;
+        if (project == null)
+        {
+            logger.LogError("Project {ProjectId} not found for pull request {PullRequestId}", 
+                pullRequest.ProjectId, id);
+            return false;
+        }
+
+        logger.LogInformation(
+            "Creating worktree for PR {PullRequestId} branch {BranchName} in {LocalPath}",
+            id, pullRequest.BranchName, project.LocalPath);
 
         // Create worktree for the pull request
         var worktreePath = await worktreeService.CreateWorktreeAsync(
@@ -123,7 +147,17 @@ public class PullRequestDataService(IDataStore dataStore, IGitWorktreeService wo
             createBranch: true,
             baseBranch: project.DefaultBranch);
 
-        if (worktreePath == null) return false;
+        if (worktreePath == null)
+        {
+            logger.LogError(
+                "Failed to create worktree for PR {PullRequestId} branch {BranchName}. " +
+                "Check git logs for details.",
+                id, pullRequest.BranchName);
+            return false;
+        }
+
+        logger.LogInformation("Worktree created at {WorktreePath} for PR {PullRequestId}", 
+            worktreePath, id);
 
         pullRequest.WorktreePath = worktreePath;
         pullRequest.Status = OpenPullRequestStatus.InDevelopment;
