@@ -4,7 +4,7 @@ This file contains instructions for working on this project.
 
 ## Overview
 
-TreeAgent is a Blazor web application for managing development features and AI agents. It provides:
+Homespun is a Blazor web application for managing development features and AI agents. It provides:
 - Project and feature management with hierarchical tree visualization
 - Git worktree integration for isolated feature development
 - GitHub PR synchronization
@@ -30,7 +30,7 @@ Use Test Driven Development practices where possible:
 The project follows Vertical Slice Architecture, organizing code by feature rather than technical layer. Each feature contains its own services, data models, and components.
 
 ```
-src/TreeAgent.Web/
+src/Homespun/
 ├── Features/                    # Feature slices (all business logic)
 │   ├── Agents/                  # Claude Code agent management
 │   │   ├── Components/Pages/    # Agent UI pages
@@ -42,7 +42,7 @@ src/TreeAgent.Web/
 │   ├── GitHub/                  # GitHub API integration (Octokit)
 │   ├── Projects/                # Project management
 │   ├── PullRequests/            # PR workflow and data entities
-│   │   └── Data/                # Feature, Project, TreeAgentDbContext
+│   │   └── Data/                # Feature, Project, HomespunDbContext
 │   │       └── Entities/        # EF Core entities
 │   └── Roadmap/                 # Roadmap parsing and management
 ├── Components/                  # Shared Blazor components
@@ -53,7 +53,7 @@ src/TreeAgent.Web/
 ├── Migrations/                  # EF Core migrations
 └── Program.cs                   # Application entry point
 
-tests/TreeAgent.Web.Tests/
+tests/Homespun.Tests/
 ├── Features/                    # Tests organized by feature
 │   ├── Agents/
 │   │   ├── Services/            # Agent service unit tests
@@ -79,7 +79,7 @@ tests/TreeAgent.Web.Tests/
 ### Running the Application
 
 ```bash
-cd src/TreeAgent.Web
+cd src/Homespun
 dotnet run
 ```
 
@@ -95,12 +95,12 @@ dotnet test
 
 - SQLite database with EF Core
 - Migrations applied automatically on startup
-- Database file: `treeagent.db` (gitignored)
+- Database file: `homespun.db` (gitignored)
 
 ### Creating Migrations
 
 ```bash
-cd src/TreeAgent.Web
+cd src/Homespun
 dotnet ef migrations add <MigrationName>
 ```
 
@@ -132,7 +132,7 @@ dotnet ef migrations add <MigrationName>
 ### PullRequests (Features/PullRequests/)
 - **FeatureService**: Feature management with tree structure and worktree integration
 - **PullRequestWorkflowService**: PR creation and management workflow
-- **TreeAgentDbContext**: EF Core database context
+- **HomespunDbContext**: EF Core database context
 
 ### Roadmap (Features/Roadmap/)
 - **RoadmapService**: Roadmap file loading and future change calculations
@@ -141,9 +141,9 @@ dotnet ef migrations add <MigrationName>
 ## Configuration
 
 Environment variables:
-- `TREEAGENT_DB_PATH`: Path to SQLite database (default: `treeagent.db`)
+- `HOMESPUN_DB_PATH`: Path to SQLite database (default: `homespun.db`)
 - `GITHUB_TOKEN`: GitHub personal access token for PR operations
-- `TREEAGENT_VERBOSE_SQL`: Set to `true` to enable detailed EF Core SQL logging
+- `HOMESPUN_VERBOSE_SQL`: Set to `true` to enable detailed EF Core SQL logging
 
 ## Health Checks
 

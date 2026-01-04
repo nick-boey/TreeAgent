@@ -1,10 +1,10 @@
-# TreeAgent
+# Homespun
 
-TreeAgent is a .NET application for managing software development workflows using Git, GitHub, and agentic AI tools like Claude Code. It models development as a tree where each node represents a feature or fix aligned with GitHub pull requests.
+Homespun is a .NET application for managing software development workflows using Git, GitHub, and agentic AI tools like Claude Code. It models development as a tree where each node represents a feature or fix aligned with GitHub pull requests.
 
 ## Overview
 
-TreeAgent provides a visual interface for planning and executing software development through AI agents. It manages:
+Homespun provides a visual interface for planning and executing software development through AI agents. It manages:
 
 - **Feature Tree**: Visualize past, present, and future pull requests as a tree structure
 - **Multiple Projects**: Work on multiple repositories simultaneously
@@ -48,8 +48,8 @@ TreeAgent provides a visual interface for planning and executing software develo
 ### Installation
 
 ```bash
-git clone https://github.com/your-org/TreeAgent.git
-cd TreeAgent
+git clone https://github.com/your-org/Homespun.git
+cd Homespun
 dotnet restore
 dotnet build
 ```
@@ -60,21 +60,21 @@ Set the following environment variables before running:
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `TREEAGENT_DB_PATH` | Path to SQLite database | `treeagent.db` |
+| `HOMESPUN_DB_PATH` | Path to SQLite database | `homespun.db` |
 | `GITHUB_TOKEN` | GitHub personal access token for PR operations | (required for GitHub sync) |
-| `TREEAGENT_WORKTREE_ROOT` | Base directory for worktrees | (uses project path) |
+| `HOMESPUN_WORKTREE_ROOT` | Base directory for worktrees | (uses project path) |
 | `CLAUDE_CODE_PATH` | Path to Claude Code CLI executable | (uses PATH) |
 
 Example:
 ```bash
 export GITHUB_TOKEN="ghp_your_token_here"
-export TREEAGENT_DB_PATH="/data/treeagent.db"
+export HOMESPUN_DB_PATH="/data/homespun.db"
 ```
 
 ### Running
 
 ```bash
-dotnet run --project src/TreeAgent.Web
+dotnet run --project src/Homespun
 ```
 
 The application will be available at `https://localhost:5001` (or the configured port).
@@ -108,7 +108,7 @@ The application will be available at `https://localhost:5001` (or the configured
 
 ### System Prompts
 
-TreeAgent supports customizable system prompts with template variables:
+Homespun supports customizable system prompts with template variables:
 
 | Variable | Description |
 |----------|-------------|
@@ -122,7 +122,7 @@ Create prompt templates in the Prompt Templates page to reuse across features an
 
 ### Pull Request Workflow
 
-TreeAgent organizes development as a continuous chain of pull requests across three time stages:
+Homespun organizes development as a continuous chain of pull requests across three time stages:
 
 #### Time Dimension
 
@@ -190,7 +190,7 @@ Note: When a future change is promoted to a current PR, the `ROADMAP.json` is al
 
 - **Past PRs**: Imported from closed/merged PRs with correct time ordering
 - **Current PRs**: Synced with open PRs, status reflects review/check state
-- **Create PRs**: Push branches and create PRs directly from TreeAgent
+- **Create PRs**: Push branches and create PRs directly from Homespun
 
 ## API Endpoints
 
@@ -204,7 +204,7 @@ Returns application health status including database connectivity and process ma
 
 ## Real-time Updates
 
-TreeAgent uses SignalR for real-time updates. Connect to `/hubs/agent` for:
+Homespun uses SignalR for real-time updates. Connect to `/hubs/agent` for:
 - Agent message streaming
 - Agent status changes
 - Feature status changes
@@ -225,7 +225,7 @@ dotnet test
 ### Creating Database Migrations
 
 ```bash
-cd src/TreeAgent.Web
+cd src/Homespun
 dotnet ef migrations add <MigrationName>
 ```
 

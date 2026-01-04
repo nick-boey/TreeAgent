@@ -1,8 +1,8 @@
-# TreeAgent Specification
+# Homespun Specification
 
 ## 1. Introduction
 
-TreeAgent is an application for managing software development using Git, GitHub, and agentic AI tools. It treats
+Homespun is an application for managing software development using Git, GitHub, and agentic AI tools. It treats
 development as a tree where each node represents a feature or fix that corresponds to a GitHub pull request.
 
 ## 2. System Overview
@@ -102,9 +102,9 @@ Features are color-coded by status:
 Single-project architecture for simplicity:
 
 ```
-TreeAgent/
+Homespun/
 ├── src/
-│   └── TreeAgent.Web/
+│   └── Homespun/
 │       ├── Components/       # Blazor components
 │       │   ├── Layout/      # Layout components (MainLayout, NavMenu)
 │       │   ├── Pages/       # Routed page components
@@ -117,8 +117,8 @@ TreeAgent/
 │       ├── Services/        # Business logic services
 │       └── Program.cs
 ├── tests/
-│   └── TreeAgent.Web.Tests/ # Unit and integration tests
-└── TreeAgent.sln
+│   └── Homespun.Tests/ # Unit and integration tests
+└── Homespun.sln
 ```
 
 ### 3.4 Core Services
@@ -325,8 +325,8 @@ git clone https://github.com/slopus/happy-cli .tmp/happy-cli
 
 Environment variables:
 
-- `TREEAGENT_DB_PATH`: SQLite database path
-- `TREEAGENT_WORKTREE_ROOT`: Base directory for worktrees
+- `HOMESPUN_DB_PATH`: SQLite database path
+- `HOMESPUN_WORKTREE_ROOT`: Base directory for worktrees
 - `GITHUB_TOKEN`: GitHub API access token
 - `CLAUDE_CODE_PATH`: Path to Claude Code CLI executable
 

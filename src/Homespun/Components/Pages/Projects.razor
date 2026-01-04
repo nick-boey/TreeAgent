@@ -1,0 +1,79 @@
+@page "/projects"
+@using Homespun.Features.Projects
+@using Homespun.Features.PullRequests.Data.Entities
+@inject ProjectService ProjectService
+@rendermode InteractiveServer
+
+<PageTitle>Projects</PageTitle>
+
+<h1>Projects</h1>
+
+<p><a href="projects/create" class="btn btn-primary">New Project</a></p>
+
+@if (_projects == null)
+{
+    <p>Loading...</p>
+}
+else if (_projects.Count == 0)
+{
+    <p>No projects yet. Create one to get started.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Local Path</th>
+                <th>GitHub</th>
+                <th>Default Branch</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var project in _projects)
+            {
+                <tr>
+                    <td><a href="projects/@project.Id">@project.Name</a></td>
+                    <td><code>@project.LocalPath</code></td>
+                    <td>
+                        @if (!string.IsNullOrEmpty(project.GitHubOwner) && !string.IsNullOrEmpty(project.GitHubRepo))
+                        {
+                            <span>@project.GitHubOwner/@project.GitHubRepo</span>
+                        }
+                        else
+                        {
+                            <span class="text-muted">-</span>
+                        }
+                    </td>
+                    <td>@project.DefaultBranch</td>
+                    <td>
+                        <a href="projects/@project.Id" class="btn btn-sm btn-primary">View</a>
+                        <a href="projects/@project.Id/edit" class="btn btn-sm btn-outline-secondary">Edit</a>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteProject(project.Id)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<Project>? _projects;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProjects();
+    }
+
+    private async Task LoadProjects()
+    {
+        _projects = await ProjectService.GetAllAsync();
+    }
+
+    private async Task DeleteProject(string id)
+    {
+        await ProjectService.DeleteAsync(id);
+        await LoadProjects();
+    }
+}

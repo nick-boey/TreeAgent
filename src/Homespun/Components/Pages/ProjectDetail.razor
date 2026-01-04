@@ -1,0 +1,402 @@
+@page "/projects/{Id}"
+@using Homespun.Features.GitHub
+@using Homespun.Features.Projects
+@using Homespun.Features.PullRequests
+@using Homespun.Features.PullRequests.Data
+@using Homespun.Features.PullRequests.Data.Entities
+@using Homespun.Features.Roadmap
+@inject ProjectService ProjectService
+@inject PullRequestDataService PullRequestDataService
+@inject PullRequestWorkflowService PullRequestWorkflowService
+@inject IRoadmapService RoadmapService
+@inject IGitHubService GitHubService
+@inject ILogger<ProjectDetail> Logger
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>@(_project?.Name ?? "Project")</PageTitle>
+
+@if (_project == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>@_project.Name</h1>
+        <div>
+            <a href="projects/@Id/edit" class="btn btn-outline-secondary">Edit Project</a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            @* Past PRs - from GitHub *@
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Past Pull Requests</span>
+                    <span class="badge bg-secondary">t ≤ 0</span>
+                </div>
+                <div class="card-body">
+                    @if (_isLoadingPastPRs)
+                    {
+                        <div class="text-center">
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            Loading past PRs from GitHub...
+                        </div>
+                    }
+                    else if (_pastPRs == null || _pastPRs.Count == 0)
+                    {
+                        <p class="text-muted mb-0">No past pull requests found.</p>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var prWithTime in _pastPRs.Take(10))
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-start px-0">
+                                    <div class="me-auto">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge @GetPastPRBadgeClass(prWithTime.PullRequest.Status)">
+                                                @prWithTime.PullRequest.Status
+                                            </span>
+                                            <a href="@prWithTime.PullRequest.HtmlUrl" target="_blank" class="text-decoration-none">
+                                                #@prWithTime.PullRequest.Number @prWithTime.PullRequest.Title
+                                            </a>
+                                        </div>
+                                        <small class="text-muted">
+                                            @if (prWithTime.PullRequest.MergedAt.HasValue)
+                                            {
+                                                <span>Merged @prWithTime.PullRequest.MergedAt.Value.ToString("MMM d, yyyy")</span>
+                                            }
+                                            else if (prWithTime.PullRequest.ClosedAt.HasValue)
+                                            {
+                                                <span>Closed @prWithTime.PullRequest.ClosedAt.Value.ToString("MMM d, yyyy")</span>
+                                            }
+                                            @if (!string.IsNullOrEmpty(prWithTime.PullRequest.Group))
+                                            {
+                                                <span class="ms-2 badge bg-light text-dark">@prWithTime.PullRequest.Group</span>
+                                            }
+                                        </small>
+                                    </div>
+                                    <span class="badge bg-secondary">t=@prWithTime.Time</span>
+                                </div>
+                            }
+                            @if (_pastPRs.Count > 10)
+                            {
+                                <div class="list-group-item px-0 text-muted">
+                                    <small>... and @(_pastPRs.Count - 10) more past PRs</small>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            @* Current PRs - from database *@
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Current Pull Requests</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-primary">t = 1</span>
+                        <a href="projects/@Id/pull-requests/create" class="btn btn-sm btn-primary">New</a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    @if (_rootPullRequests == null || _rootPullRequests.Count == 0)
+                    {
+                        <p class="text-muted mb-0">No open pull requests. Create one to get started.</p>
+                    }
+                    else
+                    {
+                        <FeatureTree PullRequests="_rootPullRequests"
+                                     SelectedPullRequestId="@_selectedPullRequestId"
+                                     OnPullRequestSelected="SelectPullRequest" />
+                    }
+                </div>
+            </div>
+
+            @* Future Changes - from ROADMAP.json *@
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>Future Changes</span>
+                    <span class="badge bg-info">t ≥ 2</span>
+                </div>
+                <div class="card-body">
+                    @if (_futureChanges == null || _futureChanges.Count == 0)
+                    {
+                        <p class="text-muted mb-0">No future changes defined in ROADMAP.json.</p>
+                    }
+                    else
+                    {
+                        <div class="list-group list-group-flush">
+                            @foreach (var change in _futureChanges)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-start px-0" style="padding-left: @(change.Depth * 20)px !important;">
+                                    <div class="me-auto">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge @GetChangeTypeBadgeClass(change.Change.Type)">
+                                                @change.Change.Type
+                                            </span>
+                                            <span>@change.Change.Title</span>
+                                        </div>
+                                        <small class="text-muted">
+                                            <span class="badge bg-light text-dark">@change.Change.Group</span>
+                                            @if (!string.IsNullOrEmpty(change.Change.Description))
+                                            {
+                                                <span class="ms-2">@change.Change.Description</span>
+                                            }
+                                        </small>
+                                    </div>
+                                    <span class="badge bg-info">t=@change.Time</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            @if (_selectedPullRequest != null)
+            {
+                <FeatureDetailPanel PullRequest="_selectedPullRequest"
+                                    OnActionCompleted="RefreshData"
+                                    OnClose="() => _selectedPullRequest = null" />
+            }
+            else
+            {
+                <div class="card">
+                    <div class="card-header">Project Info</div>
+                    <div class="card-body">
+                        <dl>
+                            <dt>Local Path</dt>
+                            <dd><code>@_project.LocalPath</code></dd>
+                            <dt>Default Branch</dt>
+                            <dd>@_project.DefaultBranch</dd>
+                            @if (!string.IsNullOrEmpty(_project.GitHubOwner) && !string.IsNullOrEmpty(_project.GitHubRepo))
+                            {
+                                <dt>GitHub</dt>
+                                <dd>
+                                    <a href="https://github.com/@_project.GitHubOwner/@_project.GitHubRepo" target="_blank">
+                                        @_project.GitHubOwner/@_project.GitHubRepo
+                                    </a>
+                                    @if (_isSyncingPRs)
+                                    {
+                                        <span class="badge bg-info ms-2">
+                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                            Syncing PRs...
+                                        </span>
+                                    }
+                                    else if (_tokenMissing)
+                                    {
+                                        <span class="badge bg-warning text-dark ms-2" title="Set GITHUB_TOKEN environment variable to enable PR sync">Token missing</span>
+                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">Retry</button>
+                                    }
+                                    else if (_syncError != null)
+                                    {
+                                        <span class="badge bg-danger ms-2" title="@_syncError">Sync failed</span>
+                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">Retry</button>
+                                    }
+                                    else if (_lastSyncResult != null)
+                                    {
+                                        <span class="badge bg-success ms-2" title="Imported: @_lastSyncResult.Imported, Updated: @_lastSyncResult.Updated, Removed: @_lastSyncResult.Removed">
+                                            Synced
+                                        </span>
+                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">Refresh</button>
+                                    }
+                                </dd>
+                            }
+                        </dl>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string Id { get; set; } = "";
+
+    private Project? _project;
+    private List<PullRequest>? _rootPullRequests;
+    private PullRequest? _selectedPullRequest;
+    private string? _selectedPullRequestId;
+    private bool _isSyncingPRs;
+    private bool _isLoadingPastPRs;
+    private bool _tokenMissing;
+    private string? _syncError;
+    private SyncResult? _lastSyncResult;
+    private List<PullRequestWithTime>? _pastPRs;
+    private List<FutureChangeWithTime>? _futureChanges;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _project != null)
+        {
+            // Automatically sync PRs and load past PRs when project page loads
+            await SyncPullRequestsAsync();
+            await LoadPastPRsAsync();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        _project = await ProjectService.GetByIdAsync(Id);
+        if (_project != null)
+        {
+            _rootPullRequests = await PullRequestDataService.GetTreeAsync(Id);
+
+            // Load future changes from ROADMAP.json
+            try
+            {
+                _futureChanges = await RoadmapService.GetFutureChangesAsync(Id);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to load future changes for project {ProjectId}", Id);
+                _futureChanges = [];
+            }
+        }
+    }
+
+    private async Task LoadPastPRsAsync()
+    {
+        if (_project == null)
+            return;
+
+        var isConfigured = await GitHubService.IsConfiguredAsync(_project.Id);
+        if (!isConfigured)
+            return;
+
+        _isLoadingPastPRs = true;
+        StateHasChanged();
+
+        try
+        {
+            // Get merged PRs
+            var mergedPRs = await PullRequestWorkflowService.GetMergedPullRequestsWithTimeAsync(Id);
+
+            // Get closed (not merged) PRs
+            var closedPRs = await PullRequestWorkflowService.GetClosedPullRequestsWithTimeAsync(Id);
+
+            // Combine and sort by time (most recent first)
+            _pastPRs = mergedPRs
+                .Concat(closedPRs)
+                .OrderByDescending(pr => pr.Time)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load past PRs for project {ProjectId}", Id);
+            _pastPRs = [];
+        }
+        finally
+        {
+            _isLoadingPastPRs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SyncPullRequestsAsync()
+    {
+        if (_project == null || _isSyncingPRs)
+            return;
+
+        // Check if GitHub owner/repo are configured
+        var hasGitHubConfig = !string.IsNullOrEmpty(_project.GitHubOwner) &&
+                              !string.IsNullOrEmpty(_project.GitHubRepo);
+        if (!hasGitHubConfig)
+        {
+            // No GitHub config at all - nothing to sync
+            return;
+        }
+
+        // Check if GitHub is fully configured (including token)
+        var isConfigured = await GitHubService.IsConfiguredAsync(_project.Id);
+        if (!isConfigured)
+        {
+            // GitHub owner/repo set but token missing
+            _tokenMissing = true;
+            Logger.LogWarning("PR sync skipped for project {ProjectId}: GITHUB_TOKEN not configured", _project.Id);
+            StateHasChanged();
+            return;
+        }
+
+        _isSyncingPRs = true;
+        _tokenMissing = false;
+        _syncError = null;
+        StateHasChanged();
+
+        try
+        {
+            Logger.LogInformation("Starting automatic PR sync for project {ProjectId} ({Owner}/{Repo})",
+                _project.Id, _project.GitHubOwner, _project.GitHubRepo);
+
+            _lastSyncResult = await GitHubService.SyncPullRequestsAsync(_project.Id);
+
+            if (_lastSyncResult.Errors.Count > 0)
+            {
+                _syncError = string.Join("; ", _lastSyncResult.Errors);
+                Logger.LogWarning("PR sync completed with errors for project {ProjectId}: {Errors}",
+                    _project.Id, _syncError);
+            }
+            else
+            {
+                Logger.LogInformation("PR sync completed for project {ProjectId}: {Imported} imported, {Updated} updated, {Removed} removed",
+                    _project.Id, _lastSyncResult.Imported, _lastSyncResult.Updated, _lastSyncResult.Removed);
+            }
+
+            // Refresh the pull request tree to show newly synced PRs
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            _syncError = ex.Message;
+            Logger.LogError(ex, "Failed to sync pull requests for project {ProjectId}", _project.Id);
+        }
+        finally
+        {
+            _isSyncingPRs = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        await LoadData();
+        if (_selectedPullRequestId != null)
+        {
+            _selectedPullRequest = await PullRequestDataService.GetByIdAsync(_selectedPullRequestId);
+        }
+    }
+
+    private async Task SelectPullRequest(string pullRequestId)
+    {
+        _selectedPullRequestId = pullRequestId;
+        _selectedPullRequest = await PullRequestDataService.GetByIdAsync(pullRequestId);
+    }
+
+    private static string GetPastPRBadgeClass(PullRequestStatus status) => status switch
+    {
+        PullRequestStatus.Merged => "bg-success",
+        PullRequestStatus.Closed => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private static string GetChangeTypeBadgeClass(ChangeType type) => type switch
+    {
+        ChangeType.Feature => "bg-primary",
+        ChangeType.Bug => "bg-danger",
+        ChangeType.Chore => "bg-secondary",
+        ChangeType.Docs => "bg-info",
+        ChangeType.Refactor => "bg-warning text-dark",
+        ChangeType.Test => "bg-success",
+        _ => "bg-secondary"
+    };
+}

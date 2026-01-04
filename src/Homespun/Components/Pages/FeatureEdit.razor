@@ -1,0 +1,173 @@
+@page "/projects/{ProjectId}/pull-requests/{PullRequestId}/edit"
+@using Homespun.Features.PullRequests.Data
+@using Homespun.Features.PullRequests.Data.Entities
+@inject PullRequestDataService PullRequestDataService
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>Edit Pull Request</PageTitle>
+
+<h1>Edit Pull Request</h1>
+
+@if (_pullRequest == null)
+{
+    <p>Loading...</p>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-8">
+            <EditForm Model="_model" OnValidSubmit="HandleSubmit" FormName="EditPullRequest">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" />
+
+                <div class="mb-3">
+                    <label for="title" class="form-label">Title</label>
+                    <InputText id="title" class="form-control" @bind-Value="_model.Title" />
+                    <ValidationMessage For="() => _model.Title" class="text-danger" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <InputTextArea id="description" class="form-control" rows="3" @bind-Value="_model.Description" />
+                </div>
+
+                <div class="mb-3">
+                    <label for="branchName" class="form-label">Branch Name</label>
+                    <InputText id="branchName" class="form-control" @bind-Value="_model.BranchName" placeholder="feature/my-feature" />
+                    <div class="form-text">Required for development and PR creation.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="status" class="form-label">Status</label>
+                    <InputSelect id="status" class="form-select" @bind-Value="_model.Status">
+                        @foreach (var status in Enum.GetValues<OpenPullRequestStatus>())
+                        {
+                            <option value="@status">@status</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="mb-3">
+                    <label for="parentId" class="form-label">Parent Pull Request</label>
+                    <InputSelect id="parentId" class="form-select" @bind-Value="_model.ParentId">
+                        <option value="">None (root)</option>
+                        @foreach (var pr in _availableParents)
+                        {
+                            <option value="@pr.Id">@pr.Title</option>
+                        }
+                    </InputSelect>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary" disabled="@_isSubmitting">
+                        @if (_isSubmitting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        Save Changes
+                    </button>
+                    <a href="projects/@ProjectId" class="btn btn-secondary">Cancel</a>
+                    <button type="button" class="btn btn-danger ms-auto" @onclick="HandleDelete" disabled="@_isSubmitting">
+                        Delete
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string ProjectId { get; set; } = "";
+
+    [Parameter]
+    public string PullRequestId { get; set; } = "";
+
+    private PullRequest? _pullRequest;
+    private List<PullRequest> _availableParents = [];
+    private PullRequestModel _model = new();
+    private bool _isSubmitting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _pullRequest = await PullRequestDataService.GetByIdAsync(PullRequestId);
+        if (_pullRequest != null)
+        {
+            _model = new PullRequestModel
+            {
+                Title = _pullRequest.Title,
+                Description = _pullRequest.Description,
+                BranchName = _pullRequest.BranchName,
+                Status = _pullRequest.Status,
+                ParentId = _pullRequest.ParentId
+            };
+
+            // Get all pull requests except this one and its descendants
+            var allPullRequests = await PullRequestDataService.GetByProjectIdAsync(ProjectId);
+            _availableParents = allPullRequests.Where(pr => pr.Id != PullRequestId && !IsDescendant(pr, allPullRequests)).ToList();
+        }
+    }
+
+    private bool IsDescendant(PullRequest potentialParent, List<PullRequest> allPullRequests)
+    {
+        // Check if potentialParent is a descendant of the current pull request
+        var current = potentialParent;
+        while (current != null)
+        {
+            if (current.ParentId == PullRequestId) return true;
+            current = allPullRequests.FirstOrDefault(pr => pr.Id == current.ParentId);
+        }
+        return false;
+    }
+
+    private async Task HandleSubmit()
+    {
+        _isSubmitting = true;
+        try
+        {
+            await PullRequestDataService.UpdateAsync(
+                PullRequestId,
+                _model.Title,
+                _model.Description,
+                _model.BranchName,
+                _model.Status);
+
+            // Handle parent change separately
+            if (_pullRequest!.ParentId != _model.ParentId)
+            {
+                await PullRequestDataService.SetParentAsync(PullRequestId,
+                    string.IsNullOrEmpty(_model.ParentId) ? null : _model.ParentId);
+            }
+
+            NavigationManager.NavigateTo($"projects/{ProjectId}");
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private async Task HandleDelete()
+    {
+        _isSubmitting = true;
+        try
+        {
+            await PullRequestDataService.DeleteAsync(PullRequestId);
+            NavigationManager.NavigateTo($"projects/{ProjectId}");
+        }
+        finally
+        {
+            _isSubmitting = false;
+        }
+    }
+
+    private class PullRequestModel
+    {
+        public string Title { get; set; } = "";
+        public string? Description { get; set; }
+        public string? BranchName { get; set; }
+        public OpenPullRequestStatus Status { get; set; }
+        public string? ParentId { get; set; }
+    }
+}
