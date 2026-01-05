@@ -17,7 +17,10 @@ public class GitHubService(
 {
     private string? GetGitHubToken()
     {
-        return configuration["GITHUB_TOKEN"] ?? Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        // Priority: 1. User secrets (GitHub:Token), 2. Config/env var (GITHUB_TOKEN), 3. Direct env var
+        return configuration["GitHub:Token"]
+            ?? configuration["GITHUB_TOKEN"]
+            ?? Environment.GetEnvironmentVariable("GITHUB_TOKEN");
     }
 
     public async Task<string?> GetDefaultBranchAsync(string owner, string repo)

@@ -151,9 +151,25 @@ dotnet ef migrations add <MigrationName>
 
 ## Configuration
 
-Environment variables:
+### GitHub Authentication
+
+The application looks for a GitHub personal access token in the following order:
+
+1. **User secrets** (recommended for development): `GitHub:Token`
+2. **Configuration/environment variable**: `GITHUB_TOKEN`
+3. **Direct environment variable**: `GITHUB_TOKEN`
+
+To set up user secrets for local development:
+
+```bash
+cd src/Homespun
+dotnet user-secrets set "GitHub:Token" "ghp_your_token_here"
+```
+
+### Environment Variables
+
 - `HOMESPUN_DB_PATH`: Path to SQLite database (default: `homespun.db`)
-- `GITHUB_TOKEN`: GitHub personal access token for PR operations
+- `GITHUB_TOKEN`: GitHub personal access token for PR operations (alternative to user secrets)
 - `HOMESPUN_VERBOSE_SQL`: Set to `true` to enable detailed EF Core SQL logging
 
 ## Health Checks
