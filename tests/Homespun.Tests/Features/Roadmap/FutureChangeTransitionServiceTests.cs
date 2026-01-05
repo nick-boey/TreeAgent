@@ -125,7 +125,6 @@ public class FutureChangeTransitionServiceTests
         // Arrange
         var projectId = "project1";
         var changeId = "core/feature/test-change";
-        var prNumber = 42;
         var change = CreateChange(changeId, FutureChangeStatus.InProgress);
         
         _mockRoadmapService.Setup(s => s.FindChangeByIdAsync(projectId, changeId))
@@ -134,13 +133,12 @@ public class FutureChangeTransitionServiceTests
             .ReturnsAsync(true);
 
         // Act
-        var result = await _sut.TransitionToAwaitingPRAsync(projectId, changeId, prNumber);
+        var result = await _sut.TransitionToAwaitingPRAsync(projectId, changeId);
 
         // Assert
         Assert.That(result.Success, Is.True);
         Assert.That(result.PreviousStatus, Is.EqualTo(FutureChangeStatus.InProgress));
         Assert.That(result.NewStatus, Is.EqualTo(FutureChangeStatus.AwaitingPR));
-        Assert.That(result.PrNumber, Is.EqualTo(prNumber));
     }
 
     [Test]
@@ -149,7 +147,6 @@ public class FutureChangeTransitionServiceTests
         // Arrange - Allow direct transition from Pending to AwaitingPR (for manual PR creation)
         var projectId = "project1";
         var changeId = "core/feature/test-change";
-        var prNumber = 42;
         var change = CreateChange(changeId, FutureChangeStatus.Pending);
         
         _mockRoadmapService.Setup(s => s.FindChangeByIdAsync(projectId, changeId))
@@ -158,11 +155,10 @@ public class FutureChangeTransitionServiceTests
             .ReturnsAsync(true);
 
         // Act
-        var result = await _sut.TransitionToAwaitingPRAsync(projectId, changeId, prNumber);
+        var result = await _sut.TransitionToAwaitingPRAsync(projectId, changeId);
 
         // Assert
         Assert.That(result.Success, Is.True);
-        Assert.That(result.PrNumber, Is.EqualTo(prNumber));
     }
 
     [Test]
@@ -171,14 +167,13 @@ public class FutureChangeTransitionServiceTests
         // Arrange
         var projectId = "project1";
         var changeId = "core/feature/test-change";
-        var prNumber = 42;
         var change = CreateChange(changeId, FutureChangeStatus.Complete);
         
         _mockRoadmapService.Setup(s => s.FindChangeByIdAsync(projectId, changeId))
             .ReturnsAsync(change);
 
         // Act
-        var result = await _sut.TransitionToAwaitingPRAsync(projectId, changeId, prNumber);
+        var result = await _sut.TransitionToAwaitingPRAsync(projectId, changeId);
 
         // Assert
         Assert.That(result.Success, Is.False);

@@ -66,4 +66,17 @@ public class FutureChange
     [JsonPropertyName("status")]
     [JsonConverter(typeof(FutureChangeStatusConverter))]
     public FutureChangeStatus Status { get; set; } = FutureChangeStatus.Pending;
+
+    /// <summary>
+    /// The server ID of the active OpenCode agent working on this change.
+    /// Null when no agent is active.
+    /// </summary>
+    [JsonPropertyName("activeAgentServerId")]
+    public string? ActiveAgentServerId { get; set; }
+
+    /// <summary>
+    /// Path to the worktree for this change when in InProgress/AwaitingPR status.
+    /// </summary>
+    [JsonPropertyName("worktreePath")]
+    public string? WorktreePath { get; set; }
 }

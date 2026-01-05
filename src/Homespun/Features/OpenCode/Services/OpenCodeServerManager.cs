@@ -186,24 +186,24 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         return executableName;
     }
 
-    public async Task<OpenCodeServer> StartServerAsync(string pullRequestId, string worktreePath, bool continueSession = false, CancellationToken ct = default)
+    public async Task<OpenCodeServer> StartServerAsync(string entityId, string worktreePath, bool continueSession = false, CancellationToken ct = default)
     {
         // Check if already running
-        if (_servers.TryGetValue(pullRequestId, out var existing))
+        if (_servers.TryGetValue(entityId, out var existing))
         {
             if (existing.Status == OpenCodeServerStatus.Running)
             {
-                _logger.LogWarning("Server already running for PR {PullRequestId}", pullRequestId);
+                _logger.LogWarning("Server already running for entity {EntityId}", entityId);
                 return existing;
             }
             // Remove stale entry
-            _servers.TryRemove(pullRequestId, out _);
+            _servers.TryRemove(entityId, out _);
         }
 
         var port = _portAllocationService.AllocatePort();
         var server = new OpenCodeServer
         {
-            PullRequestId = pullRequestId,
+            EntityId = entityId,
             WorktreePath = worktreePath,
             Port = port,
             Status = OpenCodeServerStatus.Starting,
@@ -215,22 +215,22 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             var process = StartServerProcess(port, worktreePath, continueSession);
             server.Process = process;
 
-            if (!_servers.TryAdd(pullRequestId, server))
+            if (!_servers.TryAdd(entityId, server))
             {
-                throw new InvalidOperationException($"Failed to register server for PR {pullRequestId}");
+                throw new InvalidOperationException($"Failed to register server for entity {entityId}");
             }
 
             // Wait for health check to pass
             await WaitForHealthyAsync(server, ct);
             server.Status = OpenCodeServerStatus.Running;
             
-            _logger.LogInformation("OpenCode server started on port {Port} for PR {PullRequestId}", port, pullRequestId);
+            _logger.LogInformation("OpenCode server started on port {Port} for entity {EntityId}", port, entityId);
             return server;
         }
         catch (Exception ex)
         {
             server.Status = OpenCodeServerStatus.Failed;
-            _servers.TryRemove(pullRequestId, out _);
+            _servers.TryRemove(entityId, out _);
             _portAllocationService.ReleasePort(port);
             
             if (server.Process is { HasExited: false })
@@ -238,22 +238,22 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
                 try { server.Process.Kill(entireProcessTree: true); } catch { /* ignore */ }
             }
             
-            _logger.LogError(ex, "Failed to start OpenCode server for PR {PullRequestId}", pullRequestId);
+            _logger.LogError(ex, "Failed to start OpenCode server for entity {EntityId}", entityId);
             throw;
         }
     }
 
-    public async Task StopServerAsync(string pullRequestId, CancellationToken ct = default)
+    public async Task StopServerAsync(string entityId, CancellationToken ct = default)
     {
-        if (!_servers.TryRemove(pullRequestId, out var server))
+        if (!_servers.TryRemove(entityId, out var server))
         {
-            _logger.LogWarning("No server found for PR {PullRequestId}", pullRequestId);
+            _logger.LogWarning("No server found for entity {EntityId}", entityId);
             return;
         }
 
         _logger.LogInformation(
-            "Stopping OpenCode server for PR {PullRequestId}, port {Port}, PID {ProcessId}",
-            pullRequestId, server.Port, server.Process?.Id);
+            "Stopping OpenCode server for entity {EntityId}, port {Port}, PID {ProcessId}",
+            entityId, server.Port, server.Process?.Id);
 
         if (server.Process is { HasExited: false })
         {
@@ -269,22 +269,22 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error killing server process for PR {PullRequestId}", pullRequestId);
+                _logger.LogWarning(ex, "Error killing server process for entity {EntityId}", entityId);
             }
         }
         else
         {
-            _logger.LogDebug("Process already exited for PR {PullRequestId}", pullRequestId);
+            _logger.LogDebug("Process already exited for entity {EntityId}", entityId);
         }
 
         _portAllocationService.ReleasePort(server.Port);
         server.Status = OpenCodeServerStatus.Stopped;
-        _logger.LogInformation("OpenCode server stopped for PR {PullRequestId}", pullRequestId);
+        _logger.LogInformation("OpenCode server stopped for entity {EntityId}", entityId);
     }
 
-    public OpenCodeServer? GetServerForPullRequest(string pullRequestId)
+    public OpenCodeServer? GetServerForEntity(string entityId)
     {
-        return _servers.TryGetValue(pullRequestId, out var server) ? server : null;
+        return _servers.TryGetValue(entityId, out var server) ? server : null;
     }
 
     public IReadOnlyList<OpenCodeServer> GetRunningServers()

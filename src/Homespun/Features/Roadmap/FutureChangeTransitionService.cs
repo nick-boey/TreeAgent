@@ -7,25 +7,15 @@ namespace Homespun.Features.Roadmap;
 /// Service for managing status transitions for future changes in the roadmap.
 /// Coordinates between roadmap updates, agent workflow, and SignalR notifications.
 /// </summary>
-public class FutureChangeTransitionService : IFutureChangeTransitionService
+public class FutureChangeTransitionService(
+    IRoadmapService roadmapService,
+    IHubContext<AgentHub> hubContext,
+    ILogger<FutureChangeTransitionService> logger)
+    : IFutureChangeTransitionService
 {
-    private readonly IRoadmapService _roadmapService;
-    private readonly IHubContext<AgentHub> _hubContext;
-    private readonly ILogger<FutureChangeTransitionService> _logger;
-
-    public FutureChangeTransitionService(
-        IRoadmapService roadmapService,
-        IHubContext<AgentHub> hubContext,
-        ILogger<FutureChangeTransitionService> logger)
-    {
-        _roadmapService = roadmapService;
-        _hubContext = hubContext;
-        _logger = logger;
-    }
-
     public async Task<TransitionResult> TransitionToInProgressAsync(string projectId, string changeId)
     {
-        var change = await _roadmapService.FindChangeByIdAsync(projectId, changeId);
+        var change = await roadmapService.FindChangeByIdAsync(projectId, changeId);
         if (change == null)
         {
             return TransitionResult.Fail($"Change '{changeId}' not found in project '{projectId}'");
@@ -48,14 +38,14 @@ public class FutureChangeTransitionService : IFutureChangeTransitionService
         }
 
         var previousStatus = change.Status;
-        var success = await _roadmapService.UpdateChangeStatusAsync(projectId, changeId, FutureChangeStatus.InProgress);
+        var success = await roadmapService.UpdateChangeStatusAsync(projectId, changeId, FutureChangeStatus.InProgress);
         
         if (!success)
         {
             return TransitionResult.Fail("Failed to update change status", previousStatus);
         }
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "Change '{ChangeId}' transitioned from {PreviousStatus} to InProgress",
             changeId, previousStatus);
 
@@ -64,9 +54,9 @@ public class FutureChangeTransitionService : IFutureChangeTransitionService
         return TransitionResult.Ok(previousStatus, FutureChangeStatus.InProgress);
     }
 
-    public async Task<TransitionResult> TransitionToAwaitingPRAsync(string projectId, string changeId, int prNumber)
+    public async Task<TransitionResult> TransitionToAwaitingPRAsync(string projectId, string changeId)
     {
-        var change = await _roadmapService.FindChangeByIdAsync(projectId, changeId);
+        var change = await roadmapService.FindChangeByIdAsync(projectId, changeId);
         if (change == null)
         {
             return TransitionResult.Fail($"Change '{changeId}' not found in project '{projectId}'");
@@ -84,25 +74,25 @@ public class FutureChangeTransitionService : IFutureChangeTransitionService
         }
 
         var previousStatus = change.Status;
-        var success = await _roadmapService.UpdateChangeStatusAsync(projectId, changeId, FutureChangeStatus.AwaitingPR);
+        var success = await roadmapService.UpdateChangeStatusAsync(projectId, changeId, FutureChangeStatus.AwaitingPR);
         
         if (!success)
         {
             return TransitionResult.Fail("Failed to update change status", previousStatus);
         }
 
-        _logger.LogInformation(
-            "Change '{ChangeId}' transitioned from {PreviousStatus} to AwaitingPR (PR #{PrNumber})",
-            changeId, previousStatus, prNumber);
+        logger.LogInformation(
+            "Change '{ChangeId}' transitioned from {PreviousStatus} to AwaitingPR (awaiting PR creation)",
+            changeId, previousStatus);
 
         await BroadcastStatusChangeAsync(projectId, changeId, FutureChangeStatus.AwaitingPR);
 
-        return TransitionResult.Ok(previousStatus, FutureChangeStatus.AwaitingPR, prNumber);
+        return TransitionResult.Ok(previousStatus, FutureChangeStatus.AwaitingPR);
     }
 
     public async Task<TransitionResult> TransitionToCompleteAsync(string projectId, string changeId)
     {
-        var change = await _roadmapService.FindChangeByIdAsync(projectId, changeId);
+        var change = await roadmapService.FindChangeByIdAsync(projectId, changeId);
         if (change == null)
         {
             return TransitionResult.Fail($"Change '{changeId}' not found in project '{projectId}'");
@@ -120,7 +110,7 @@ public class FutureChangeTransitionService : IFutureChangeTransitionService
         }
 
         var previousStatus = change.Status;
-        var success = await _roadmapService.UpdateChangeStatusAsync(projectId, changeId, FutureChangeStatus.Complete);
+        var success = await roadmapService.UpdateChangeStatusAsync(projectId, changeId, FutureChangeStatus.Complete);
         
         if (!success)
         {
@@ -128,9 +118,9 @@ public class FutureChangeTransitionService : IFutureChangeTransitionService
         }
 
         // Remove this change from other changes' parent lists
-        await _roadmapService.RemoveParentReferenceAsync(projectId, changeId);
+        await roadmapService.RemoveParentReferenceAsync(projectId, changeId);
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "Change '{ChangeId}' transitioned from {PreviousStatus} to Complete",
             changeId, previousStatus);
 
@@ -141,7 +131,7 @@ public class FutureChangeTransitionService : IFutureChangeTransitionService
 
     public async Task<TransitionResult> HandleAgentFailureAsync(string projectId, string changeId, string error)
     {
-        var change = await _roadmapService.FindChangeByIdAsync(projectId, changeId);
+        var change = await roadmapService.FindChangeByIdAsync(projectId, changeId);
         if (change == null)
         {
             return TransitionResult.Fail($"Change '{changeId}' not found in project '{projectId}'");
@@ -158,20 +148,20 @@ public class FutureChangeTransitionService : IFutureChangeTransitionService
         // If already pending, nothing to do
         if (change.Status == FutureChangeStatus.Pending)
         {
-            _logger.LogWarning(
+            logger.LogWarning(
                 "Agent failure handled for change '{ChangeId}' but it was already Pending. Error: {Error}",
                 changeId, error);
             return TransitionResult.Ok(previousStatus, FutureChangeStatus.Pending);
         }
 
-        var success = await _roadmapService.UpdateChangeStatusAsync(projectId, changeId, FutureChangeStatus.Pending);
+        var success = await roadmapService.UpdateChangeStatusAsync(projectId, changeId, FutureChangeStatus.Pending);
         
         if (!success)
         {
             return TransitionResult.Fail("Failed to revert change status", previousStatus);
         }
 
-        _logger.LogWarning(
+        logger.LogWarning(
             "Change '{ChangeId}' reverted from {PreviousStatus} to Pending due to agent failure: {Error}",
             changeId, previousStatus, error);
 
@@ -182,7 +172,7 @@ public class FutureChangeTransitionService : IFutureChangeTransitionService
 
     public async Task<FutureChangeStatus?> GetStatusAsync(string projectId, string changeId)
     {
-        var change = await _roadmapService.FindChangeByIdAsync(projectId, changeId);
+        var change = await roadmapService.FindChangeByIdAsync(projectId, changeId);
         return change?.Status;
     }
 
@@ -190,7 +180,7 @@ public class FutureChangeTransitionService : IFutureChangeTransitionService
     {
         try
         {
-            await _hubContext.Clients.All.SendAsync(
+            await hubContext.Clients.All.SendAsync(
                 "FutureChangeStatusChanged",
                 projectId,
                 changeId,
@@ -198,7 +188,7 @@ public class FutureChangeTransitionService : IFutureChangeTransitionService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to broadcast status change for '{ChangeId}'", changeId);
+            logger.LogWarning(ex, "Failed to broadcast status change for '{ChangeId}'", changeId);
         }
     }
 }

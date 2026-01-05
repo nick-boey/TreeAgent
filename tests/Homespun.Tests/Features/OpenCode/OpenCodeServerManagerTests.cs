@@ -48,9 +48,9 @@ public class OpenCodeServerManagerTests
     }
 
     [Test]
-    public void GetServerForPullRequest_ReturnsNull_WhenNoServerRunning()
+    public void GetServerForEntity_ReturnsNull_WhenNoServerRunning()
     {
-        var server = _manager.GetServerForPullRequest("pr-123");
+        var server = _manager.GetServerForEntity("pr-123");
         Assert.That(server, Is.Null);
     }
 
@@ -66,7 +66,7 @@ public class OpenCodeServerManagerTests
     {
         var server = new OpenCodeServer
         {
-            PullRequestId = "pr-123",
+            EntityId = "pr-123",
             WorktreePath = "/path/to/worktree",
             Port = 5000
         };
@@ -84,7 +84,7 @@ public class OpenCodeServerManagerTests
     {
         var server = new OpenCodeServer
         {
-            PullRequestId = "pr-123",
+            EntityId = "pr-123",
             WorktreePath = "/path/to/worktree",
             Port = 5000
         };
@@ -102,7 +102,7 @@ public class OpenCodeServerManagerTests
     {
         var server = new OpenCodeServer
         {
-            PullRequestId = "pr-123",
+            EntityId = "pr-123",
             WorktreePath = "/path/to/worktree",
             Port = 5000
         };
@@ -122,7 +122,7 @@ public class OpenCodeServerManagerTests
     {
         var server = new OpenCodeServer
         {
-            PullRequestId = "pr-123",
+            EntityId = "pr-123",
             WorktreePath = "/path/to/worktree",
             Port = 5000
         };
@@ -135,7 +135,7 @@ public class OpenCodeServerManagerTests
     {
         var server = new OpenCodeServer
         {
-            PullRequestId = "pr-123",
+            EntityId = "pr-123",
             WorktreePath = "/path/to/worktree",
             Port = 5000,
             ContinueSession = true

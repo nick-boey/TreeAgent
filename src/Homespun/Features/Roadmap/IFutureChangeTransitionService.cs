@@ -15,13 +15,13 @@ public interface IFutureChangeTransitionService
     Task<TransitionResult> TransitionToInProgressAsync(string projectId, string changeId);
 
     /// <summary>
-    /// Transitions a change to AwaitingPR status when the PR is created.
+    /// Transitions a change to AwaitingPR status when the agent finishes without creating a PR.
+    /// This indicates the change is waiting for a PR to be created manually or by resuming the agent.
     /// </summary>
     /// <param name="projectId">The project ID</param>
     /// <param name="changeId">The roadmap change ID</param>
-    /// <param name="prNumber">The GitHub PR number</param>
     /// <returns>True if the transition was successful</returns>
-    Task<TransitionResult> TransitionToAwaitingPRAsync(string projectId, string changeId, int prNumber);
+    Task<TransitionResult> TransitionToAwaitingPRAsync(string projectId, string changeId);
 
     /// <summary>
     /// Transitions a change to Complete status when the PR is merged.

@@ -155,16 +155,13 @@
     private bool _isLoading;
     private string? _errorMessage;
     private AgentStatus? _agentStatus;
-    private string? _createdPullRequestId;
 
     protected override async Task OnParametersSetAsync()
     {
-        _createdPullRequestId = null;
         _agentStatus = null;
         _errorMessage = null;
         
         // If the change is in progress, there might be an agent running
-        // We need to find the associated PR to check agent status
         if (Change.Status == FutureChangeStatus.InProgress || Change.Status == FutureChangeStatus.AwaitingPR)
         {
             await TryRefreshAgentStatus();
@@ -173,14 +170,10 @@
 
     private async Task TryRefreshAgentStatus()
     {
-        // The PR ID would be based on the change ID, but we need to look it up
-        // For now, we'll try to get status using a known pattern
-        // The AgentWorkflowService creates PRs with the change ID as the branch name
         try
         {
-            // Try to find if there's an agent running for this change
-            // This is a simplification - in practice we'd need to look up the PR ID
-            _agentStatus = null;
+            // Use the change ID directly to get agent status
+            _agentStatus = await AgentWorkflowService.GetAgentStatusForChangeAsync(Change.Id);
         }
         catch
         {
@@ -194,7 +187,8 @@
         _errorMessage = null;
         try
         {
-            // This promotes the change to a PR, creates branch/worktree, starts agent, and sends initial prompt
+            // Creates branch/worktree, starts agent, and sends initial prompt
+            // The FutureChange stays in the roadmap with InProgress status until a GitHub PR is created
             _agentStatus = await AgentWorkflowService.StartAgentForFutureChangeAsync(ProjectId, Change.Id);
             await OnActionCompleted.InvokeAsync();
         }
@@ -214,9 +208,10 @@
         _errorMessage = null;
         try
         {
-            // For resuming, we'd need to find the PR that was created for this change
-            // and start the agent for that PR
-            _errorMessage = "Resume functionality requires looking up the associated PR. Please use the Current PRs section.";
+            // Resume development on an InProgress change
+            // Uses the existing worktree and starts a new agent session
+            _agentStatus = await AgentWorkflowService.StartAgentForFutureChangeAsync(ProjectId, Change.Id);
+            await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
         {
@@ -230,7 +225,7 @@
 
     private async Task StopAgent()
     {
-        if (_agentStatus == null || string.IsNullOrEmpty(_createdPullRequestId))
+        if (_agentStatus == null)
         {
             return;
         }
@@ -239,8 +234,11 @@
         _errorMessage = null;
         try
         {
-            await AgentWorkflowService.StopAgentAsync(_createdPullRequestId);
+            // Stop the agent using the change ID
+            // This will also check for a GitHub PR and transition the change appropriately
+            await AgentWorkflowService.StopAgentAsync(Change.Id);
             _agentStatus = null;
+            await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
         {

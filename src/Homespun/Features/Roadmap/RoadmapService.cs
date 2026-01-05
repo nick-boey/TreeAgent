@@ -378,4 +378,131 @@ public class RoadmapService : IRoadmapService
 
         return modified;
     }
+
+    /// <summary>
+    /// Creates a git worktree for a FutureChange without promoting it to a PR.
+    /// Updates the change's WorktreePath property in the roadmap.
+    /// </summary>
+    public async Task<string?> CreateWorktreeForChangeAsync(string projectId, string changeId)
+    {
+        var project = _dataStore.GetProject(projectId);
+        if (project == null) return null;
+
+        var roadmapPath = await GetRoadmapPathAsync(projectId);
+        if (roadmapPath == null || !File.Exists(roadmapPath)) return null;
+
+        var roadmap = await RoadmapParser.LoadAsync(roadmapPath);
+        var change = roadmap.Changes.FirstOrDefault(c => c.Id == changeId);
+        if (change == null) return null;
+
+        // The Id IS the branch name
+        var branchName = change.Id;
+
+        // Create worktree
+        var worktreePath = await _worktreeService.CreateWorktreeAsync(
+            project.LocalPath,
+            branchName,
+            createBranch: true,
+            baseBranch: project.DefaultBranch);
+
+        if (worktreePath == null)
+        {
+            // Try without creating branch if it already exists
+            worktreePath = await _worktreeService.CreateWorktreeAsync(
+                project.LocalPath,
+                branchName);
+        }
+
+        if (worktreePath == null) return null;
+
+        // Update the change's WorktreePath in the roadmap
+        change.WorktreePath = worktreePath;
+        await RoadmapParser.SaveAsync(roadmap, roadmapPath);
+
+        // Sync the updated roadmap to all worktrees
+        if (_syncService != null)
+        {
+            await _syncService.SyncToAllWorktreesAsync(projectId);
+        }
+
+        _logger.LogInformation(
+            "Created worktree for change {ChangeId} at {WorktreePath}",
+            changeId, worktreePath);
+
+        return worktreePath;
+    }
+
+    /// <summary>
+    /// Updates the active agent server ID for a change.
+    /// </summary>
+    public async Task<bool> UpdateChangeAgentAsync(string projectId, string changeId, string? agentServerId)
+    {
+        var roadmapPath = await GetRoadmapPathAsync(projectId);
+        if (roadmapPath == null || !File.Exists(roadmapPath)) return false;
+
+        var roadmap = await RoadmapParser.LoadAsync(roadmapPath);
+        var change = roadmap.Changes.FirstOrDefault(c => c.Id == changeId);
+        if (change == null) return false;
+
+        change.ActiveAgentServerId = agentServerId;
+        await RoadmapParser.SaveAsync(roadmap, roadmapPath);
+
+        // Sync the updated roadmap to all worktrees
+        if (_syncService != null)
+        {
+            await _syncService.SyncToAllWorktreesAsync(projectId);
+        }
+
+        _logger.LogInformation(
+            "Updated agent server ID for change {ChangeId} to {AgentServerId}",
+            changeId, agentServerId ?? "(cleared)");
+
+        return true;
+    }
+
+    /// <summary>
+    /// Promotes a completed FutureChange to a PullRequest after confirming the GitHub PR exists.
+    /// Removes the change from the roadmap and creates a PR record in homespun-data.json.
+    /// </summary>
+    public async Task<PullRequest?> PromoteCompletedChangeAsync(string projectId, string changeId, int prNumber)
+    {
+        var project = _dataStore.GetProject(projectId);
+        if (project == null) return null;
+
+        var roadmapPath = await GetRoadmapPathAsync(projectId);
+        if (roadmapPath == null || !File.Exists(roadmapPath)) return null;
+
+        var roadmap = await RoadmapParser.LoadAsync(roadmapPath);
+        var change = roadmap.Changes.FirstOrDefault(c => c.Id == changeId);
+        if (change == null) return null;
+
+        // Create pull request entry with the confirmed GitHub PR number
+        var pullRequest = new PullRequest
+        {
+            ProjectId = projectId,
+            Title = change.Title,
+            Description = change.Description,
+            BranchName = change.Id,
+            GitHubPRNumber = prNumber,
+            Status = OpenPullRequestStatus.ReadyForReview,
+            WorktreePath = change.WorktreePath
+        };
+
+        await _dataStore.AddPullRequestAsync(pullRequest);
+
+        // Remove the change from the roadmap and update parent references
+        await RemoveChangeAndUpdateParentsAsync(roadmap, changeId, roadmapPath);
+
+        // Sync the updated roadmap to all worktrees
+        if (_syncService != null)
+        {
+            await _syncService.SyncToAllWorktreesAsync(projectId);
+        }
+
+        _logger.LogInformation(
+            "Promoted change {ChangeId} to PR #{PrNumber}",
+            changeId, prNumber);
+
+        return pullRequest;
+    }
 }

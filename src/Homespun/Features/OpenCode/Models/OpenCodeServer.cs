@@ -3,12 +3,16 @@ using System.Diagnostics;
 namespace Homespun.Features.OpenCode.Models;
 
 /// <summary>
-/// Represents a running OpenCode server instance associated with a PullRequest.
+/// Represents a running OpenCode server instance associated with a PullRequest or FutureChange.
 /// </summary>
 public class OpenCodeServer
 {
     public string Id { get; init; } = Guid.NewGuid().ToString();
-    public required string PullRequestId { get; init; }
+    
+    /// <summary>
+    /// The entity ID this server is associated with. Can be a PullRequest ID or a FutureChange ID (branch name).
+    /// </summary>
+    public required string EntityId { get; init; }
     public required string WorktreePath { get; init; }
     public required int Port { get; init; }
     public string BaseUrl => $"http://127.0.0.1:{Port}";

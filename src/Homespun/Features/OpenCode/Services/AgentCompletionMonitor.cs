@@ -78,6 +78,7 @@ public partial class AgentCompletionMonitor : IAgentCompletionMonitor
 
     /// <summary>
     /// Monitors SSE events and waits for PR creation completion.
+    /// Runs until the SSE stream ends (server stops) or cancellation is requested.
     /// </summary>
     public async Task<AgentCompletionResult> MonitorForPrCreationAsync(
         string baseUrl,
@@ -85,12 +86,10 @@ public partial class AgentCompletionMonitor : IAgentCompletionMonitor
         string branchName,
         CancellationToken ct = default)
     {
-        using var timeoutCts = new CancellationTokenSource(_options.PrDetectionTimeoutMs);
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, timeoutCts.Token);
-
         try
         {
-            await foreach (var evt in _client.SubscribeToEventsAsync(baseUrl, linkedCts.Token))
+            // Monitor SSE events until server stops (no timeout)
+            await foreach (var evt in _client.SubscribeToEventsAsync(baseUrl, ct))
             {
                 if (!IsPrCreationEvent(evt))
                     continue;
@@ -112,23 +111,24 @@ public partial class AgentCompletionMonitor : IAgentCompletionMonitor
                 }
 
                 // PR URL not in output, try to find it via GitHub API
-                return await TryFindPrByBranchAsync(projectId, branchName, linkedCts.Token);
+                return await TryFindPrByBranchAsync(projectId, branchName, ct);
             }
 
-            // Stream ended without PR creation
+            // Stream ended without PR creation (server stopped)
             return new AgentCompletionResult
             {
                 Success = false,
-                Error = "Agent completed without creating a PR",
+                Error = "Agent server stopped without creating a PR",
                 BranchName = branchName
             };
         }
-        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Monitoring was cancelled - this is expected when StopAgentAsync is called
             return new AgentCompletionResult
             {
                 Success = false,
-                Error = "PR detection timed out",
+                Error = "Monitoring cancelled",
                 BranchName = branchName
             };
         }
