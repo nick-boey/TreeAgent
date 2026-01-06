@@ -33,8 +33,9 @@ public class GitWorktreeServiceTests
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        // Slashes are now preserved for folder structure
-        Assert.That(result, Does.Contain("feature/test"));
+        // Path is normalized to platform-native separators, so check for the folder structure
+        // On Windows: feature\test, on Unix: feature/test
+        Assert.That(result, Does.Contain("feature").And.Contain("test"));
     }
 
     [Test]

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Homespun.Features.OpenCode.Models;
@@ -25,8 +26,25 @@ public class OpenCodeEventProperties
     [JsonPropertyName("partID")]
     public string? PartId { get; set; }
 
+    /// <summary>
+    /// Status can be either a string or an object like {"type":"busy"}.
+    /// Use StatusValue to get the status as a string regardless of format.
+    /// </summary>
     [JsonPropertyName("status")]
-    public string? Status { get; set; }
+    public JsonElement? Status { get; set; }
+
+    /// <summary>
+    /// Gets the status as a string. Handles both string values and {"type":"..."} objects.
+    /// </summary>
+    [JsonIgnore]
+    public string? StatusValue => Status?.ValueKind switch
+    {
+        JsonValueKind.String => Status?.GetString(),
+        JsonValueKind.Object => Status?.TryGetProperty("type", out var typeProp) == true 
+            ? typeProp.GetString() 
+            : null,
+        _ => null
+    };
 
     [JsonPropertyName("content")]
     public string? Content { get; set; }
@@ -47,6 +65,7 @@ public static class OpenCodeEventTypes
     public const string SessionCreated = "session.created";
     public const string SessionUpdated = "session.updated";
     public const string SessionDeleted = "session.deleted";
+    public const string SessionStatus = "session.status";
     public const string MessageCreated = "message.created";
     public const string MessageUpdated = "message.updated";
     public const string PartUpdated = "part.updated";

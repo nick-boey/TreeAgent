@@ -4,7 +4,7 @@ namespace Homespun.Features.Beads;
 
 /// <summary>
 /// Helper methods for working with beads branch names.
-/// Branch format: {group}/{type}/{sanitized-title}+{beads-id}
+/// Branch format: {group}/{type}/{branch-id}+{beads-id}
 /// Example: core/feature/add-oauth-support+bd-a3f8
 /// </summary>
 public static partial class BeadsBranchHelper
@@ -14,13 +14,28 @@ public static partial class BeadsBranchHelper
     /// </summary>
     /// <param name="group">The group (e.g., "core", "frontend", "api").</param>
     /// <param name="type">The issue type (e.g., "feature", "bug", "task").</param>
-    /// <param name="title">The human-readable title to sanitize.</param>
+    /// <param name="branchId">The branch identifier (e.g., "update-page", "fix-login").</param>
     /// <param name="beadsId">The beads issue ID (e.g., "bd-a3f8").</param>
-    /// <returns>A branch name in the format {group}/{type}/{sanitized-title}+{beads-id}.</returns>
-    public static string GenerateBranchName(string group, string type, string title, string beadsId)
+    /// <returns>A branch name in the format {group}/{type}/{branch-id}+{beads-id}.</returns>
+    public static string GenerateBranchName(string group, string type, string branchId, string beadsId)
     {
-        var sanitizedTitle = SanitizeForBranch(title);
-        return $"{group.ToLowerInvariant()}/{type.ToLowerInvariant()}/{sanitizedTitle}+{beadsId}";
+        return $"{group.ToLowerInvariant()}/{type.ToLowerInvariant()}/{branchId.ToLowerInvariant()}+{beadsId}";
+    }
+    
+    /// <summary>
+    /// Generates a branch name by parsing the hsp: label from the issue.
+    /// </summary>
+    /// <param name="labels">The issue labels to search for hsp: label.</param>
+    /// <param name="type">The issue type (e.g., "feature", "bug", "task").</param>
+    /// <param name="beadsId">The beads issue ID (e.g., "bd-a3f8").</param>
+    /// <returns>The generated branch name, or null if no hsp: label found.</returns>
+    public static string? GenerateBranchNameFromLabels(IEnumerable<string> labels, string type, string beadsId)
+    {
+        var parsed = BeadsBranchLabel.Parse(labels);
+        if (parsed == null)
+            return null;
+        
+        return GenerateBranchName(parsed.Value.Group, type, parsed.Value.BranchId, beadsId);
     }
     
     /// <summary>

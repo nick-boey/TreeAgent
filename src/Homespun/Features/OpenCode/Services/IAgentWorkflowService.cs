@@ -20,16 +20,17 @@ public interface IAgentWorkflowService
     /// <summary>
     /// Starts an agent for a beads issue.
     /// Creates the branch and worktree, then starts the agent.
+    /// The issue must have an hsp: label (e.g., hsp:frontend/-/update-page) for branch naming.
     /// The issue transitions to InProgress status until the agent creates a GitHub PR,
     /// at which point the issue is closed and a tracked PR is created.
     /// </summary>
     /// <param name="projectId">The project ID</param>
     /// <param name="issueId">The beads issue ID (e.g., "bd-a3f8")</param>
-    /// <param name="group">The group for branch naming (e.g., "core", "frontend")</param>
     /// <param name="model">Optional model override</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The agent status including server and session info</returns>
-    Task<AgentStatus> StartAgentForBeadsIssueAsync(string projectId, string issueId, string group, string? model = null, CancellationToken ct = default);
+    /// <exception cref="InvalidOperationException">Thrown if the issue does not have an hsp: label</exception>
+    Task<AgentStatus> StartAgentForBeadsIssueAsync(string projectId, string issueId, string? model = null, CancellationToken ct = default);
 
     /// <summary>
     /// Stops the agent for an entity (PR, FutureChange, or Beads Issue).

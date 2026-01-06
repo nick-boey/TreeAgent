@@ -27,16 +27,18 @@ public class BeadsIssue
     
     /// <summary>
     /// Current status of the issue.
+    /// Note: The JsonStringEnumConverter with SnakeCaseLower is configured in BeadsService.JsonOptions
+    /// to handle snake_case values like "in_progress" from the bd CLI.
     /// </summary>
     [JsonPropertyName("status")]
-    [JsonConverter(typeof(JsonStringEnumConverter))]
     public BeadsIssueStatus Status { get; set; } = BeadsIssueStatus.Open;
     
     /// <summary>
     /// Type of the issue.
+    /// Note: The JsonStringEnumConverter with SnakeCaseLower is configured in BeadsService.JsonOptions
+    /// to handle snake_case values like "feature" from the bd CLI.
     /// </summary>
-    [JsonPropertyName("type")]
-    [JsonConverter(typeof(JsonStringEnumConverter))]
+    [JsonPropertyName("issue_type")]
     public BeadsIssueType Type { get; set; } = BeadsIssueType.Task;
     
     /// <summary>

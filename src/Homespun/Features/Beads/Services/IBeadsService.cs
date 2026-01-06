@@ -136,5 +136,12 @@ public interface IBeadsService
     /// <returns>True if beads is initialized.</returns>
     Task<bool> IsInitializedAsync(string workingDirectory);
     
+    /// <summary>
+    /// Gets unique groups from all hsp: labels in the project's issues.
+    /// </summary>
+    /// <param name="workingDirectory">The directory to run the command in.</param>
+    /// <returns>Sorted list of unique group names.</returns>
+    Task<List<string>> GetUniqueGroupsAsync(string workingDirectory);
+    
     #endregion
 }

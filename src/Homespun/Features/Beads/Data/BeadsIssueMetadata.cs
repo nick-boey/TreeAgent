@@ -4,6 +4,8 @@ namespace Homespun.Features.Beads.Data;
 /// Local metadata for a beads issue that is not stored in beads itself.
 /// This includes Homespun-specific data like worktree paths and agent state.
 /// Stored in homespun-data.json.
+/// Note: Group and branch ID are stored in the issue's hsp: label (e.g., hsp:frontend/-/update-page),
+/// not in this metadata, so they sync across machines via beads.
 /// </summary>
 public class BeadsIssueMetadata
 {
@@ -18,18 +20,13 @@ public class BeadsIssueMetadata
     public required string ProjectId { get; set; }
     
     /// <summary>
-    /// The group for branch naming (e.g., "core", "frontend", "api").
-    /// </summary>
-    public required string Group { get; set; }
-    
-    /// <summary>
     /// Path to the git worktree for this issue when in development.
     /// </summary>
     public string? WorktreePath { get; set; }
     
     /// <summary>
     /// The branch name created for this issue.
-    /// Format: {group}/{type}/{sanitized-title}+{beads-id}
+    /// Format: {group}/{type}/{branch-id}+{beads-id}
     /// </summary>
     public string? BranchName { get; set; }
     

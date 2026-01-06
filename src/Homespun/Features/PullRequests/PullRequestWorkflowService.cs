@@ -15,7 +15,8 @@ public class PullRequestWorkflowService(
     IDataStore dataStore,
     ICommandRunner commandRunner,
     IConfiguration configuration,
-    IGitHubClientWrapper githubClient)
+    IGitHubClientWrapper githubClient,
+    ILogger<PullRequestWorkflowService> logger)
 {
     private string? GetGitHubToken()
     {
@@ -45,6 +46,7 @@ public class PullRequestWorkflowService(
         var project = dataStore.GetProject(projectId);
         if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
         {
+            logger.LogDebug("Cannot get merged PRs: project {ProjectId} not found or missing GitHub config", projectId);
             return [];
         }
 
@@ -52,6 +54,7 @@ public class PullRequestWorkflowService(
 
         try
         {
+            logger.LogInformation("Fetching merged PRs from {Owner}/{Repo}", project.GitHubOwner, project.GitHubRepo);
             var request = new PullRequestRequest { State = ItemStateFilter.Closed };
             var prs = await githubClient.GetPullRequestsAsync(project.GitHubOwner, project.GitHubRepo, request);
 
@@ -60,6 +63,8 @@ public class PullRequestWorkflowService(
                 .Where(pr => pr.Merged)
                 .Select(MapToPullRequestInfo)
                 .ToList();
+
+            logger.LogInformation("Found {Count} merged PRs from {Owner}/{Repo}", mergedPRs.Count, project.GitHubOwner, project.GitHubRepo);
 
             // Calculate time values
             var times = PullRequestTimeCalculator.CalculateTimesForMergedPRs(mergedPRs);
@@ -70,8 +75,9 @@ public class PullRequestWorkflowService(
                 .Select(pr => new PullRequestWithTime(pr, times.GetValueOrDefault(pr.Number, int.MinValue)))
                 .ToList();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            logger.LogError(ex, "Failed to fetch merged PRs from {Owner}/{Repo}", project.GitHubOwner, project.GitHubRepo);
             return [];
         }
     }
@@ -84,6 +90,7 @@ public class PullRequestWorkflowService(
         var project = dataStore.GetProject(projectId);
         if (project == null || string.IsNullOrEmpty(project.GitHubOwner) || string.IsNullOrEmpty(project.GitHubRepo))
         {
+            logger.LogDebug("Cannot get closed PRs: project {ProjectId} not found or missing GitHub config", projectId);
             return [];
         }
 
@@ -91,6 +98,7 @@ public class PullRequestWorkflowService(
 
         try
         {
+            logger.LogInformation("Fetching closed PRs from {Owner}/{Repo}", project.GitHubOwner, project.GitHubRepo);
             var request = new PullRequestRequest { State = ItemStateFilter.Closed };
             var prs = await githubClient.GetPullRequestsAsync(project.GitHubOwner, project.GitHubRepo, request);
 
@@ -98,6 +106,8 @@ public class PullRequestWorkflowService(
             var allPRs = prs.Select(MapToPullRequestInfo).ToList();
             var mergedPRs = allPRs.Where(pr => pr.Status == PullRequestStatus.Merged).ToList();
             var closedPRs = allPRs.Where(pr => pr.Status == PullRequestStatus.Closed).ToList();
+
+            logger.LogInformation("Found {Count} closed (not merged) PRs from {Owner}/{Repo}", closedPRs.Count, project.GitHubOwner, project.GitHubRepo);
 
             // Calculate time for closed PRs relative to merged PRs
             var result = new List<PullRequestWithTime>();
@@ -109,8 +119,9 @@ public class PullRequestWorkflowService(
 
             return result;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            logger.LogError(ex, "Failed to fetch closed PRs from {Owner}/{Repo}", project.GitHubOwner, project.GitHubRepo);
             return [];
         }
     }

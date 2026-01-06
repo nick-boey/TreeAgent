@@ -1,4 +1,5 @@
 @page "/projects/{Id}"
+@using Homespun.Features.Beads
 @using Homespun.Features.Beads.Data
 @using Homespun.Features.Beads.Services
 @using Homespun.Features.GitHub
@@ -507,14 +508,19 @@ else
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender && _project != null)
+        
+        // Start sync and load past PRs after project is loaded
+        // Using Task.Run to not block the initial render
+        if (_project != null)
         {
-            await SyncPullRequestsAsync();
-            await LoadPastPRsAsync();
+            _ = Task.Run(async () =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await SyncPullRequestsAsync();
+                    await LoadPastPRsAsync();
+                });
+            });
         }
     }
 
@@ -579,10 +585,16 @@ else
 
     private async Task LoadPastPRsAsync()
     {
+        Logger.LogInformation("LoadPastPRsAsync started for project {ProjectId}", Id);
+        
         if (_project == null)
+        {
+            Logger.LogWarning("LoadPastPRsAsync: _project is null, returning early");
             return;
+        }
 
         var isConfigured = await GitHubService.IsConfiguredAsync(_project.Id);
+        Logger.LogInformation("LoadPastPRsAsync: GitHub configured = {IsConfigured}", isConfigured);
         if (!isConfigured)
             return;
 
@@ -591,9 +603,16 @@ else
 
         try
         {
+            Logger.LogInformation("LoadPastPRsAsync: Fetching merged PRs...");
             var mergedPRs = await PullRequestWorkflowService.GetMergedPullRequestsWithTimeAsync(Id);
+            Logger.LogInformation("LoadPastPRsAsync: Got {Count} merged PRs", mergedPRs.Count);
+            
+            Logger.LogInformation("LoadPastPRsAsync: Fetching closed PRs...");
             var closedPRs = await PullRequestWorkflowService.GetClosedPullRequestsWithTimeAsync(Id);
+            Logger.LogInformation("LoadPastPRsAsync: Got {Count} closed PRs", closedPRs.Count);
+            
             _pastPRs = mergedPRs.Concat(closedPRs).ToList();
+            Logger.LogInformation("LoadPastPRsAsync: Total past PRs = {Count}", _pastPRs.Count);
         }
         catch (Exception ex)
         {
@@ -791,8 +810,10 @@ else
     {
         var parts = new List<string>();
 
-        if (issueWithMeta.Metadata != null && !string.IsNullOrEmpty(issueWithMeta.Metadata.Group))
-            parts.Add(issueWithMeta.Metadata.Group);
+        // Parse group from hsp: label
+        var branchInfo = BeadsBranchLabel.Parse(issueWithMeta.Issue.Labels);
+        if (branchInfo != null)
+            parts.Add(branchInfo.Value.Group);
 
         if (!string.IsNullOrEmpty(issueWithMeta.Issue.Description))
         {

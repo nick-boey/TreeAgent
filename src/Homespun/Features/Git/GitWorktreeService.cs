@@ -25,7 +25,9 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             throw new InvalidOperationException($"Cannot determine parent directory of {repoPath}");
         }
         
-        var worktreePath = Path.Combine(parentDir, sanitizedName);
+        // Normalize the path to use platform-native separators
+        // This fixes issues on Windows where mixed forward/back slashes cause problems
+        var worktreePath = Path.GetFullPath(Path.Combine(parentDir, sanitizedName));
 
         // Ensure parent directories exist for nested branch names (e.g., app/feature/id)
         var worktreeParentDir = Path.GetDirectoryName(worktreePath);

@@ -42,7 +42,9 @@ public class BeadsService : IBeadsService
         
         try
         {
-            return JsonSerializer.Deserialize<BeadsIssue>(result.Output, JsonOptions);
+            // bd show returns an array, so we need to deserialize as a list and take the first item
+            var issues = JsonSerializer.Deserialize<List<BeadsIssue>>(result.Output, JsonOptions);
+            return issues?.FirstOrDefault();
         }
         catch (JsonException ex)
         {
@@ -274,6 +276,13 @@ public class BeadsService : IBeadsService
     {
         var info = await GetInfoAsync(workingDirectory);
         return !string.IsNullOrEmpty(info.DatabasePath);
+    }
+    
+    public async Task<List<string>> GetUniqueGroupsAsync(string workingDirectory)
+    {
+        var issues = await ListIssuesAsync(workingDirectory);
+        var allLabels = issues.Select(i => i.Labels);
+        return BeadsBranchLabel.ExtractUniqueGroups(allLabels);
     }
     
     #endregion

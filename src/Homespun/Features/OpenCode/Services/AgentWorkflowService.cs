@@ -299,7 +299,6 @@ public class AgentWorkflowService : IAgentWorkflowService
     public async Task<AgentStatus> StartAgentForBeadsIssueAsync(
         string projectId, 
         string issueId, 
-        string group,
         string? model = null, 
         CancellationToken ct = default)
     {
@@ -309,6 +308,17 @@ public class AgentWorkflowService : IAgentWorkflowService
         // Get the beads issue
         var issue = await _beadsService.GetIssueAsync(project.LocalPath, issueId)
             ?? throw new InvalidOperationException($"Beads issue {issueId} not found in project {projectId}");
+        
+        // Parse group and branch ID from hsp: label
+        var branchInfo = BeadsBranchLabel.Parse(issue.Labels);
+        if (branchInfo == null)
+        {
+            throw new InvalidOperationException(
+                $"Issue {issueId} does not have an hsp: label. " +
+                "Please add a label like 'hsp:frontend/-/update-page' to specify the group and branch ID.");
+        }
+        
+        var (group, branchId) = branchInfo.Value;
         
         // Transition to InProgress status
         var transitionResult = await _beadsTransitionService.TransitionToInProgressAsync(projectId, issueId);
@@ -329,13 +339,13 @@ public class AgentWorkflowService : IAgentWorkflowService
             {
                 worktreePath = metadata.WorktreePath;
                 branchName = metadata.BranchName ?? BeadsBranchHelper.GenerateBranchName(
-                    group, issue.Type.ToString().ToLowerInvariant(), issue.Title, issueId);
+                    group, issue.Type.ToString().ToLowerInvariant(), branchId, issueId);
             }
             else
             {
-                // Generate branch name: {group}/{type}/{sanitized-title}+{beads-id}
+                // Generate branch name: {group}/{type}/{branch-id}+{beads-id}
                 branchName = BeadsBranchHelper.GenerateBranchName(
-                    group, issue.Type.ToString().ToLowerInvariant(), issue.Title, issueId);
+                    group, issue.Type.ToString().ToLowerInvariant(), branchId, issueId);
                 
                 // Create worktree
                 _logger.LogInformation("Creating worktree for beads issue {IssueId} on branch {BranchName}", 
@@ -350,12 +360,11 @@ public class AgentWorkflowService : IAgentWorkflowService
                 worktreePath = createdWorktreePath 
                     ?? throw new InvalidOperationException($"Failed to create worktree for issue {issueId}");
                 
-                // Store metadata
+                // Store metadata (group is now in hsp: label, not stored here)
                 metadata = new BeadsIssueMetadata
                 {
                     IssueId = issueId,
                     ProjectId = projectId,
-                    Group = group,
                     BranchName = branchName,
                     WorktreePath = worktreePath
                 };

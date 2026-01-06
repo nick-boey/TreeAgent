@@ -1,3 +1,4 @@
+@using Homespun.Features.Beads
 @using Homespun.Features.Beads.Data
 @using Homespun.Features.OpenCode.Services
 
@@ -39,20 +40,32 @@
                 <dt class="col-4">Branch</dt>
                 <dd class="col-8"><code>@Metadata.BranchName</code></dd>
             }
+            else if (_branchInfo != null)
+            {
+                <dt class="col-4">Branch Preview</dt>
+                <dd class="col-8"><code>@GetBranchPreview()</code></dd>
+            }
             
-            @if (Metadata != null)
+            @if (_branchInfo != null)
             {
                 <dt class="col-4">Group</dt>
-                <dd class="col-8">@Metadata.Group</dd>
+                <dd class="col-8">@_branchInfo.Value.Group</dd>
+                
+                <dt class="col-4">Branch ID</dt>
+                <dd class="col-8">@_branchInfo.Value.BranchId</dd>
             }
             
             @if (Issue.Labels.Count > 0)
             {
                 <dt class="col-4">Labels</dt>
                 <dd class="col-8">
-                    @foreach (var label in Issue.Labels)
+                    @foreach (var label in Issue.Labels.Where(l => !BeadsBranchLabel.IsHomespunLabel(l)))
                     {
                         <span class="badge bg-light text-dark me-1">@label</span>
+                    }
+                    @if (_branchInfo != null)
+                    {
+                        <span class="badge bg-info text-dark me-1" title="Homespun branch label">@GetHspLabel()</span>
                     }
                 </dd>
             }
@@ -69,6 +82,16 @@
                 <dd class="col-8">@Issue.Assignee</dd>
             }
         </dl>
+
+        @* Warning if no hsp: label *@
+        @if (_branchInfo == null)
+        {
+            <div class="alert alert-warning py-2 small">
+                <strong>Missing branch label:</strong> This issue needs an <code>hsp:</code> label to start development.
+                <br />
+                Example: <code>hsp:frontend/-/update-page</code>
+            </div>
+        }
 
         @* Agent Status Display *@
         @if (_agentStatus != null)
@@ -101,7 +124,7 @@
                     Stop Agent
                 </button>
             }
-            else if (Issue.Status == BeadsIssueStatus.Open)
+            else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo != null)
             {
                 <button class="btn btn-sm btn-success" @onclick="StartDevelopment" disabled="@_isLoading">
                     @if (_isLoading)
@@ -111,7 +134,13 @@
                     Start Development
                 </button>
             }
-            else if (Issue.Status == BeadsIssueStatus.InProgress && _agentStatus == null)
+            else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo == null)
+            {
+                <button class="btn btn-sm btn-secondary" disabled title="Add an hsp: label to enable development">
+                    Start Development
+                </button>
+            }
+            else if (Issue.Status == BeadsIssueStatus.InProgress && _agentStatus == null && _branchInfo != null)
             {
                 <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
                     @if (_isLoading)
@@ -121,7 +150,7 @@
                     Resume Agent
                 </button>
             }
-            else if (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr"))
+            else if (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr") && _branchInfo != null)
             {
                 <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
                     @if (_isLoading)
@@ -159,12 +188,6 @@
     [Parameter] public required BeadsIssue Issue { get; set; }
     
     [Parameter] public BeadsIssueMetadata? Metadata { get; set; }
-    
-    /// <summary>
-    /// The group to use when starting development (for branch naming).
-    /// Defaults to "core" if not specified.
-    /// </summary>
-    [Parameter] public string Group { get; set; } = "core";
 
     [Parameter] public EventCallback OnActionCompleted { get; set; }
 
@@ -173,23 +196,33 @@
     private bool _isLoading;
     private string? _errorMessage;
     private AgentStatus? _agentStatus;
+    private (string Group, string BranchId)? _branchInfo;
 
     protected override async Task OnParametersSetAsync()
     {
         _agentStatus = null;
         _errorMessage = null;
         
-        // Use group from metadata if available
-        if (Metadata != null && !string.IsNullOrEmpty(Metadata.Group))
-        {
-            Group = Metadata.Group;
-        }
+        // Parse group and branch ID from hsp: label
+        _branchInfo = BeadsBranchLabel.Parse(Issue.Labels);
         
         // If the issue is in progress, there might be an agent running
         if (Issue.Status == BeadsIssueStatus.InProgress || Issue.Status == BeadsIssueStatus.Blocked)
         {
             await TryRefreshAgentStatus();
         }
+    }
+
+    private string GetBranchPreview()
+    {
+        if (_branchInfo == null) return "";
+        return $"{_branchInfo.Value.Group}/{Issue.Type.ToString().ToLowerInvariant()}/{_branchInfo.Value.BranchId}+{Issue.Id}";
+    }
+
+    private string GetHspLabel()
+    {
+        if (_branchInfo == null) return "";
+        return BeadsBranchLabel.Create(_branchInfo.Value.Group, _branchInfo.Value.BranchId);
     }
 
     private async Task TryRefreshAgentStatus()
@@ -211,7 +244,8 @@
         try
         {
             // Creates branch/worktree, starts agent, and sends initial prompt
-            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, Group);
+            // Group and branch ID are parsed from the hsp: label in AgentWorkflowService
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id);
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
@@ -231,7 +265,7 @@
         try
         {
             // Resume development on an InProgress issue
-            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, Group);
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id);
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
