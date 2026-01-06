@@ -1,14 +1,16 @@
 @page "/projects/{Id}"
+@using Homespun.Features.Beads.Data
+@using Homespun.Features.Beads.Services
 @using Homespun.Features.GitHub
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data
 @using Homespun.Features.PullRequests.Data.Entities
-@using Homespun.Features.Roadmap
 @inject ProjectService ProjectService
 @inject PullRequestDataService PullRequestDataService
 @inject PullRequestWorkflowService PullRequestWorkflowService
-@inject IRoadmapService RoadmapService
+@inject IBeadsService BeadsService
+@inject IDataStore DataStore
 @inject IGitHubService GitHubService
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
@@ -89,7 +91,7 @@ else
                         }
                     </div>
                 }
-                @if ((_rootPullRequests == null || _rootPullRequests.Count == 0) && (_inProgressChanges == null || _inProgressChanges.Count == 0))
+                @if ((_rootPullRequests == null || _rootPullRequests.Count == 0) && (_inProgressIssues == null || _inProgressIssues.Count == 0))
                 {
                     <div class="timeline-section-label">
                         <div class="label-graph">
@@ -116,75 +118,75 @@ else
                                   OnClick="@(() => SelectPullRequest(pr.PullRequest.Id))"/>
                     }
 
-                    @* In-progress FutureChanges (shown in Current section) *@
-                    @if (_inProgressChanges != null)
+                    @* In-progress Beads Issues (shown in Current section) *@
+                    @if (_inProgressIssues != null)
                     {
-                        @for (var i = 0; i < _inProgressChanges.Count; i++)
+                        @for (var i = 0; i < _inProgressIssues.Count; i++)
                         {
-                            var change = _inProgressChanges[i];
-                            <WorkItem Title="@change.Change.Title"
-                                      StatusColor="@GetFutureChangeStatusColor(change.Change)"
-                                      StatusTooltip="@GetFutureChangeStatusTooltip(change.Change)"
-                                      Subtitle="@GetFutureChangeSubtitle(change.Change)"
-                                      IndentLevel="@change.Depth"
-                                      IsSelected="@(_selectedFutureChangeId == change.Change.Id)"
+                            var issueWithMeta = _inProgressIssues[i];
+                            <WorkItem Title="@issueWithMeta.Issue.Title"
+                                      StatusColor="@GetBeadsIssueStatusColor(issueWithMeta.Issue)"
+                                      StatusTooltip="@GetBeadsIssueStatusTooltip(issueWithMeta.Issue)"
+                                      Subtitle="@GetBeadsIssueSubtitle(issueWithMeta)"
+                                      IndentLevel="@issueWithMeta.Depth"
+                                      IsSelected="@(_selectedBeadsIssueId == issueWithMeta.Issue.Id)"
                                       IsClickable="true"
                                       IsFirst="false"
                                       IsLast="false"
-                                      OnClick="@(() => SelectFutureChange(change.Change.Id))"/>
+                                      OnClick="@(() => SelectBeadsIssue(issueWithMeta.Issue.Id))"/>
                         }
                     }
                 }
 
-                @* Future Changes - from ROADMAP.json *@
+                @* Future Issues - from beads *@
                 <div class="timeline-section-label">
                     <div class="label-graph">
                         <div class="graph-line"></div>
                     </div>
                     <div class="label-text">Future</div>
-                    @if (_futureChanges != null && _futureChanges.Count > 0)
+                    @if (_openIssues != null && _openIssues.Count > 0)
                     {
-                        <span class="section-count">@_futureChanges.Count</span>
+                        <span class="section-count">@_openIssues.Count</span>
                     }
                 </div>
-                @if (_futureChanges == null || _futureChanges.Count == 0)
+                @if (_openIssues == null || _openIssues.Count == 0)
                 {
-                    <a href="projects/@Id/features/create" class="add-item">
+                    <a href="projects/@Id/issues/create" class="add-item">
                         <div class="item-graph">
                             <div class="graph-line graph-line-top"></div>
                             <div class="graph-node status-add">+</div>
                             <div class="graph-line graph-line-bottom hidden"></div>
                         </div>
                         <div class="item-body">
-                            <span class="item-title add-title">Add a future change...</span>
+                            <span class="item-title add-title">Add an issue...</span>
                         </div>
                     </a>
                 }
                 else
                 {
-                    @for (var i = 0; i < _futureChanges.Count; i++)
+                    @for (var i = 0; i < _openIssues.Count; i++)
                     {
-                        var change = _futureChanges[i];
-                        <WorkItem Title="@change.Change.Title"
-                                  StatusColor="@GetFutureChangeStatusColor(change.Change)"
-                                  StatusTooltip="@GetFutureChangeStatusTooltip(change.Change)"
-                                  Subtitle="@GetFutureChangeSubtitle(change.Change)"
-                                  IndentLevel="@change.Depth"
-                                  IsSelected="@(_selectedFutureChangeId == change.Change.Id)"
+                        var issueWithMeta = _openIssues[i];
+                        <WorkItem Title="@issueWithMeta.Issue.Title"
+                                  StatusColor="@GetBeadsIssueStatusColor(issueWithMeta.Issue)"
+                                  StatusTooltip="@GetBeadsIssueStatusTooltip(issueWithMeta.Issue)"
+                                  Subtitle="@GetBeadsIssueSubtitle(issueWithMeta)"
+                                  IndentLevel="@issueWithMeta.Depth"
+                                  IsSelected="@(_selectedBeadsIssueId == issueWithMeta.Issue.Id)"
                                   IsClickable="true"
                                   IsFirst="false"
                                   IsLast="false"
-                                  OnClick="@(() => SelectFutureChange(change.Change.Id))"/>
+                                  OnClick="@(() => SelectBeadsIssue(issueWithMeta.Issue.Id))"/>
                     }
 
-                    <a href="projects/@Id/features/create" class="add-item">
+                    <a href="projects/@Id/issues/create" class="add-item">
                         <div class="item-graph">
                             <div class="graph-line graph-line-top"></div>
                             <div class="graph-node status-add">+</div>
                             <div class="graph-line graph-line-bottom hidden"></div>
                         </div>
                         <div class="item-body">
-                            <span class="item-title add-title">Add a future change...</span>
+                            <span class="item-title add-title">Add an issue...</span>
                         </div>
                     </a>
                 }
@@ -198,12 +200,13 @@ else
                                                OnActionCompleted="RefreshData"
                                                OnClose="ClearSelection"/>
             }
-            else if (_selectedFutureChange != null)
+            else if (_selectedBeadsIssue != null)
             {
-                <FutureChangeDetailPanel ProjectId="@Id"
-                                         Change="_selectedFutureChange"
-                                         OnActionCompleted="RefreshData"
-                                         OnClose="ClearSelection"/>
+                <BeadsIssueDetailPanel ProjectId="@Id"
+                                       Issue="_selectedBeadsIssue.Issue"
+                                       Metadata="_selectedBeadsIssue.Metadata"
+                                       OnActionCompleted="RefreshData"
+                                       OnClose="ClearSelection"/>
             }
             else
             {
@@ -487,16 +490,16 @@ else
     private List<FlattenedPR> _flattenedCurrentPRs = [];
     private PullRequest? _selectedPullRequest;
     private string? _selectedPullRequestId;
-    private FutureChange? _selectedFutureChange;
-    private string? _selectedFutureChangeId;
+    private BeadsIssueWithMetadata? _selectedBeadsIssue;
+    private string? _selectedBeadsIssueId;
     private bool _isSyncingPRs;
     private bool _isLoadingPastPRs;
     private bool _tokenMissing;
     private string? _syncError;
     private SyncResult? _lastSyncResult;
     private List<PullRequestWithTime>? _pastPRs;
-    private List<FutureChangeWithTime>? _futureChanges;
-    private List<FutureChangeWithTime>? _inProgressChanges;
+    private List<BeadsIssueWithMetadata>? _openIssues;
+    private List<BeadsIssueWithMetadata>? _inProgressIssues;
     private int _pastPRsDisplayCount = 10;
 
     private record FlattenedPR(PullRequest PullRequest, int Level);
@@ -525,20 +528,36 @@ else
 
             try
             {
-                var allChanges = await RoadmapService.GetFutureChangesAsync(Id);
-                // Separate in-progress changes (InProgress, AwaitingPR) from future changes (Pending)
-                _inProgressChanges = allChanges
-                    .Where(c => c.Change.Status is FutureChangeStatus.InProgress or FutureChangeStatus.AwaitingPR)
+                // Load beads issues from the CLI
+                var allIssues = await BeadsService.ListIssuesAsync(_project.LocalPath);
+                
+                // Load local metadata for matching
+                var metadataList = DataStore.GetBeadsIssueMetadataByProject(Id);
+                var metadataLookup = metadataList.ToDictionary(m => m.IssueId);
+                
+                // Convert to BeadsIssueWithMetadata
+                var issuesWithMeta = allIssues.Select((issue, index) => new BeadsIssueWithMetadata
+                {
+                    Issue = issue,
+                    Metadata = metadataLookup.GetValueOrDefault(issue.Id),
+                    Time = index,
+                    Depth = 0 // Flat for now; could calculate from dependencies
+                }).ToList();
+                
+                // Separate in-progress issues (InProgress, Blocked with awaiting-pr label) from open issues
+                _inProgressIssues = issuesWithMeta
+                    .Where(i => i.Issue.Status == BeadsIssueStatus.InProgress ||
+                               (i.Issue.Status == BeadsIssueStatus.Blocked && i.Issue.Labels.Contains("awaiting-pr")))
                     .ToList();
-                _futureChanges = allChanges
-                    .Where(c => c.Change.Status == FutureChangeStatus.Pending)
+                _openIssues = issuesWithMeta
+                    .Where(i => i.Issue.Status == BeadsIssueStatus.Open)
                     .ToList();
             }
             catch (Exception ex)
             {
-                Logger.LogWarning(ex, "Failed to load future changes for project {ProjectId}", Id);
-                _futureChanges = [];
-                _inProgressChanges = [];
+                Logger.LogWarning(ex, "Failed to load beads issues for project {ProjectId}", Id);
+                _openIssues = [];
+                _inProgressIssues = [];
             }
         }
     }
@@ -661,30 +680,31 @@ else
 
     private async Task SelectPullRequest(string pullRequestId)
     {
-        // Clear any future change selection
-        _selectedFutureChangeId = null;
-        _selectedFutureChange = null;
+        // Clear any beads issue selection
+        _selectedBeadsIssueId = null;
+        _selectedBeadsIssue = null;
         
         _selectedPullRequestId = pullRequestId;
         _selectedPullRequest = await PullRequestDataService.GetByIdAsync(pullRequestId);
     }
 
-    private void SelectFutureChange(string changeId)
+    private void SelectBeadsIssue(string issueId)
     {
         // Clear any pull request selection
         _selectedPullRequestId = null;
         _selectedPullRequest = null;
         
-        _selectedFutureChangeId = changeId;
-        _selectedFutureChange = _futureChanges?.FirstOrDefault(c => c.Change.Id == changeId)?.Change;
+        _selectedBeadsIssueId = issueId;
+        _selectedBeadsIssue = _openIssues?.FirstOrDefault(i => i.Issue.Id == issueId)
+                           ?? _inProgressIssues?.FirstOrDefault(i => i.Issue.Id == issueId);
     }
 
     private void ClearSelection()
     {
         _selectedPullRequestId = null;
         _selectedPullRequest = null;
-        _selectedFutureChangeId = null;
-        _selectedFutureChange = null;
+        _selectedBeadsIssueId = null;
+        _selectedBeadsIssue = null;
     }
 
     private int GetTotalCurrentPRCount()
@@ -694,7 +714,7 @@ else
 
     private int GetTotalCurrentCount()
     {
-        return _flattenedCurrentPRs.Count + (_inProgressChanges?.Count ?? 0);
+        return _flattenedCurrentPRs.Count + (_inProgressIssues?.Count ?? 0);
     }
 
     private static string GetPastPRStatusColor(PullRequestStatus status) => status switch
@@ -713,39 +733,33 @@ else
         _ => "status-default"
     };
 
-    private static string GetChangeTypeStatusColor(ChangeType type) => type switch
+    private static string GetBeadsIssueTypeStatusColor(BeadsIssueType type) => type switch
     {
-        ChangeType.Feature => "status-feature",
-        ChangeType.Bug => "status-bug",
-        ChangeType.Chore => "status-chore",
-        ChangeType.Docs => "status-docs",
-        ChangeType.Refactor => "status-refactor",
-        ChangeType.Test => "status-test",
+        BeadsIssueType.Feature => "status-feature",
+        BeadsIssueType.Bug => "status-bug",
+        BeadsIssueType.Chore => "status-chore",
+        BeadsIssueType.Task => "status-task",
+        BeadsIssueType.Epic => "status-epic",
         _ => "status-default"
     };
 
-    private static string GetFutureChangeStatusColor(FutureChange change)
+    private static string GetBeadsIssueStatusColor(BeadsIssue issue)
     {
         // If in progress or awaiting PR, show working status; otherwise show type-based color
-        return change.Status switch
-        {
-            FutureChangeStatus.InProgress => "status-in-development",
-            FutureChangeStatus.AwaitingPR => "status-ready-for-review",
-            FutureChangeStatus.Complete => "status-approved",
-            _ => GetChangeTypeStatusColor(change.Type)
-        };
+        if (issue.Status == BeadsIssueStatus.InProgress)
+            return "status-in-development";
+        if (issue.Status == BeadsIssueStatus.Blocked && issue.Labels.Contains("awaiting-pr"))
+            return "status-ready-for-review";
+        if (issue.Status == BeadsIssueStatus.Closed)
+            return "status-approved";
+        return GetBeadsIssueTypeStatusColor(issue.Type);
     }
 
-    private static string GetFutureChangeStatusTooltip(FutureChange change)
+    private static string GetBeadsIssueStatusTooltip(BeadsIssue issue)
     {
-        return change.Status switch
-        {
-            FutureChangeStatus.Pending => $"{change.Type} (Pending)",
-            FutureChangeStatus.InProgress => $"{change.Type} (In Progress)",
-            FutureChangeStatus.AwaitingPR => $"{change.Type} (Awaiting PR)",
-            FutureChangeStatus.Complete => $"{change.Type} (Complete)",
-            _ => change.Type.ToString()
-        };
+        if (issue.Status == BeadsIssueStatus.Blocked && issue.Labels.Contains("awaiting-pr"))
+            return $"{issue.Type} (Awaiting PR)";
+        return $"{issue.Type} ({issue.Status})";
     }
 
     private static string? GetPastPRSubtitle(PullRequestInfo pr)
@@ -773,15 +787,21 @@ else
         return parts.Count > 0 ? string.Join(" - ", parts) : null;
     }
 
-    private static string? GetFutureChangeSubtitle(FutureChange change)
+    private static string? GetBeadsIssueSubtitle(BeadsIssueWithMetadata issueWithMeta)
     {
         var parts = new List<string>();
 
-        if (!string.IsNullOrEmpty(change.Group))
-            parts.Add(change.Group);
+        if (issueWithMeta.Metadata != null && !string.IsNullOrEmpty(issueWithMeta.Metadata.Group))
+            parts.Add(issueWithMeta.Metadata.Group);
 
-        if (!string.IsNullOrEmpty(change.Description))
-            parts.Add(change.Description);
+        if (!string.IsNullOrEmpty(issueWithMeta.Issue.Description))
+        {
+            // Truncate description for subtitle display
+            var desc = issueWithMeta.Issue.Description;
+            if (desc.Length > 60)
+                desc = desc[..57] + "...";
+            parts.Add(desc);
+        }
 
         return parts.Count > 0 ? string.Join(" - ", parts) : null;
     }

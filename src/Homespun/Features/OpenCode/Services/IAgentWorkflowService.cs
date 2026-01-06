@@ -1,3 +1,4 @@
+using Homespun.Features.Beads.Data;
 using Homespun.Features.OpenCode.Models;
 
 namespace Homespun.Features.OpenCode.Services;
@@ -17,23 +18,24 @@ public interface IAgentWorkflowService
     Task<AgentStatus> StartAgentForPullRequestAsync(string pullRequestId, string? model = null, CancellationToken ct = default);
 
     /// <summary>
-    /// Starts an agent for a future roadmap change.
-    /// Creates the branch and worktree (but NOT a PR record), then starts the agent.
-    /// The FutureChange remains in the roadmap with InProgress status until the agent
-    /// creates a GitHub PR, at which point it's promoted to a tracked PR.
+    /// Starts an agent for a beads issue.
+    /// Creates the branch and worktree, then starts the agent.
+    /// The issue transitions to InProgress status until the agent creates a GitHub PR,
+    /// at which point the issue is closed and a tracked PR is created.
     /// </summary>
     /// <param name="projectId">The project ID</param>
-    /// <param name="changeId">The roadmap change ID (branch name)</param>
+    /// <param name="issueId">The beads issue ID (e.g., "bd-a3f8")</param>
+    /// <param name="group">The group for branch naming (e.g., "core", "frontend")</param>
     /// <param name="model">Optional model override</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The agent status including server and session info</returns>
-    Task<AgentStatus> StartAgentForFutureChangeAsync(string projectId, string changeId, string? model = null, CancellationToken ct = default);
+    Task<AgentStatus> StartAgentForBeadsIssueAsync(string projectId, string issueId, string group, string? model = null, CancellationToken ct = default);
 
     /// <summary>
-    /// Stops the agent for an entity (PR or FutureChange).
+    /// Stops the agent for an entity (PR, FutureChange, or Beads Issue).
     /// Also handles agent completion by checking for GitHub PR and transitioning appropriately.
     /// </summary>
-    /// <param name="entityId">The entity ID (PR ID or change ID)</param>
+    /// <param name="entityId">The entity ID (PR ID, change ID, or beads issue ID)</param>
     /// <param name="ct">Cancellation token</param>
     Task StopAgentAsync(string entityId, CancellationToken ct = default);
 
@@ -46,30 +48,31 @@ public interface IAgentWorkflowService
     Task<AgentStatus?> GetAgentStatusAsync(string pullRequestId, CancellationToken ct = default);
 
     /// <summary>
-    /// Gets the current agent status for a FutureChange by its change ID.
+    /// Gets the current agent status for a beads issue.
     /// </summary>
-    /// <param name="changeId">The change ID (branch name)</param>
+    /// <param name="issueId">The beads issue ID</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>Agent status or null if no agent is running</returns>
-    Task<AgentStatus?> GetAgentStatusForChangeAsync(string changeId, CancellationToken ct = default);
+    Task<AgentStatus?> GetAgentStatusForBeadsIssueAsync(string issueId, CancellationToken ct = default);
 
     /// <summary>
     /// Sends a prompt to the agent's active session.
     /// </summary>
-    /// <param name="entityId">The entity ID (PR ID or change ID)</param>
+    /// <param name="entityId">The entity ID (PR ID, change ID, or beads issue ID)</param>
     /// <param name="prompt">The prompt text</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The response message</returns>
     Task<OpenCodeMessage> SendPromptAsync(string entityId, string prompt, CancellationToken ct = default);
 
     /// <summary>
-    /// Handles agent completion for a FutureChange.
-    /// Checks GitHub for a PR on the branch and either promotes to tracked PR or transitions to AwaitingPR.
+    /// Handles agent completion for a beads issue.
+    /// Checks GitHub for a PR on the branch and either creates a tracked PR (closing the issue)
+    /// or transitions to AwaitingPR status.
     /// </summary>
     /// <param name="projectId">The project ID</param>
-    /// <param name="changeId">The change ID (branch name)</param>
+    /// <param name="issueId">The beads issue ID</param>
     /// <param name="ct">Cancellation token</param>
-    Task HandleAgentCompletionAsync(string projectId, string changeId, CancellationToken ct = default);
+    Task HandleAgentCompletionForBeadsIssueAsync(string projectId, string issueId, CancellationToken ct = default);
 }
 
 /// <summary>

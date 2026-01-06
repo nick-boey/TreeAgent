@@ -1,23 +1,24 @@
+@using Homespun.Features.Beads.Data
 @using Homespun.Features.OpenCode.Services
-@using Homespun.Features.Roadmap
 
 @inject IAgentWorkflowService AgentWorkflowService
 @inject NavigationManager NavigationManager
 
-<div class="card future-change-detail-panel">
+<div class="card beads-issue-detail-panel">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Future Change Details</span>
+        <span>Issue Details</span>
         <button type="button" class="btn-close" @onclick="OnClose"></button>
     </div>
     <div class="card-body">
-        <h5 class="card-title">@Change.Title</h5>
+        <h5 class="card-title">@Issue.Title</h5>
 
         <div class="mb-3">
-            <span class="badge @GetTypeBadgeClass()">@Change.Type</span>
-            <span class="badge @GetStatusBadgeClass() ms-1">@Change.Status</span>
-            @if (Change.Priority.HasValue)
+            <span class="badge bg-secondary">@Issue.Id</span>
+            <span class="badge @GetTypeBadgeClass() ms-1">@Issue.Type</span>
+            <span class="badge @GetStatusBadgeClass() ms-1">@GetStatusDisplay()</span>
+            @if (Issue.Priority.HasValue)
             {
-                <span class="badge @GetPriorityBadgeClass() ms-1">@Change.Priority</span>
+                <span class="badge @GetPriorityBadgeClass() ms-1">P@Issue.Priority</span>
             }
             @if (_agentStatus != null)
             {
@@ -25,45 +26,49 @@
             }
         </div>
 
-        @if (!string.IsNullOrEmpty(Change.Description))
+        @if (!string.IsNullOrEmpty(Issue.Description))
         {
-            <p class="card-text">@Change.Description</p>
+            <div class="description-content mb-3">
+                <pre class="mb-0">@Issue.Description</pre>
+            </div>
         }
 
         <dl class="row small">
-            <dt class="col-4">Branch</dt>
-            <dd class="col-8"><code>@Change.Id</code></dd>
-            
-            <dt class="col-4">Group</dt>
-            <dd class="col-8">@Change.Group</dd>
-            
-            @if (Change.EstimatedComplexity.HasValue)
+            @if (Metadata != null && !string.IsNullOrEmpty(Metadata.BranchName))
             {
-                <dt class="col-4">Complexity</dt>
-                <dd class="col-8">@Change.EstimatedComplexity</dd>
+                <dt class="col-4">Branch</dt>
+                <dd class="col-8"><code>@Metadata.BranchName</code></dd>
             }
             
-            @if (Change.Parents.Count > 0)
+            @if (Metadata != null)
             {
-                <dt class="col-4">Dependencies</dt>
+                <dt class="col-4">Group</dt>
+                <dd class="col-8">@Metadata.Group</dd>
+            }
+            
+            @if (Issue.Labels.Count > 0)
+            {
+                <dt class="col-4">Labels</dt>
                 <dd class="col-8">
-                    @foreach (var parent in Change.Parents)
+                    @foreach (var label in Issue.Labels)
                     {
-                        <code class="me-1">@parent</code>
+                        <span class="badge bg-light text-dark me-1">@label</span>
                     }
                 </dd>
             }
+            
+            @if (!string.IsNullOrEmpty(Issue.ParentId))
+            {
+                <dt class="col-4">Parent</dt>
+                <dd class="col-8"><code>@Issue.ParentId</code></dd>
+            }
+            
+            @if (!string.IsNullOrEmpty(Issue.Assignee))
+            {
+                <dt class="col-4">Assignee</dt>
+                <dd class="col-8">@Issue.Assignee</dd>
+            }
         </dl>
-
-        @if (!string.IsNullOrEmpty(Change.Instructions))
-        {
-            <div class="border-top pt-3 mt-3">
-                <h6>Instructions</h6>
-                <div class="instructions-content small">
-                    <pre class="mb-0">@Change.Instructions</pre>
-                </div>
-            </div>
-        }
 
         @* Agent Status Display *@
         @if (_agentStatus != null)
@@ -96,7 +101,7 @@
                     Stop Agent
                 </button>
             }
-            else if (Change.Status == FutureChangeStatus.Pending)
+            else if (Issue.Status == BeadsIssueStatus.Open)
             {
                 <button class="btn btn-sm btn-success" @onclick="StartDevelopment" disabled="@_isLoading">
                     @if (_isLoading)
@@ -106,7 +111,7 @@
                     Start Development
                 </button>
             }
-            else if (Change.Status == FutureChangeStatus.InProgress && _agentStatus == null)
+            else if (Issue.Status == BeadsIssueStatus.InProgress && _agentStatus == null)
             {
                 <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
                     @if (_isLoading)
@@ -116,11 +121,16 @@
                     Resume Agent
                 </button>
             }
-
-            <a href="projects/@ProjectId/features/@System.Uri.EscapeDataString(Change.Id)/edit" 
-               class="btn btn-sm btn-outline-secondary">
-                Edit
-            </a>
+            else if (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr"))
+            {
+                <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
+                    @if (_isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    Resume Agent
+                </button>
+            }
         </div>
 
         @if (!string.IsNullOrEmpty(_errorMessage))
@@ -131,13 +141,13 @@
 </div>
 
 <style>
-    .instructions-content pre {
+    .description-content pre {
         background-color: var(--bg-secondary);
         padding: var(--spacing-sm);
         border-radius: var(--radius-sm);
         white-space: pre-wrap;
         word-wrap: break-word;
-        font-size: 0.75rem;
+        font-size: 0.85rem;
         max-height: 200px;
         overflow-y: auto;
     }
@@ -146,7 +156,15 @@
 @code {
     [Parameter] public required string ProjectId { get; set; }
     
-    [Parameter] public required FutureChange Change { get; set; }
+    [Parameter] public required BeadsIssue Issue { get; set; }
+    
+    [Parameter] public BeadsIssueMetadata? Metadata { get; set; }
+    
+    /// <summary>
+    /// The group to use when starting development (for branch naming).
+    /// Defaults to "core" if not specified.
+    /// </summary>
+    [Parameter] public string Group { get; set; } = "core";
 
     [Parameter] public EventCallback OnActionCompleted { get; set; }
 
@@ -161,8 +179,14 @@
         _agentStatus = null;
         _errorMessage = null;
         
-        // If the change is in progress, there might be an agent running
-        if (Change.Status == FutureChangeStatus.InProgress || Change.Status == FutureChangeStatus.AwaitingPR)
+        // Use group from metadata if available
+        if (Metadata != null && !string.IsNullOrEmpty(Metadata.Group))
+        {
+            Group = Metadata.Group;
+        }
+        
+        // If the issue is in progress, there might be an agent running
+        if (Issue.Status == BeadsIssueStatus.InProgress || Issue.Status == BeadsIssueStatus.Blocked)
         {
             await TryRefreshAgentStatus();
         }
@@ -172,8 +196,7 @@
     {
         try
         {
-            // Use the change ID directly to get agent status
-            _agentStatus = await AgentWorkflowService.GetAgentStatusForChangeAsync(Change.Id);
+            _agentStatus = await AgentWorkflowService.GetAgentStatusForBeadsIssueAsync(Issue.Id);
         }
         catch
         {
@@ -188,8 +211,7 @@
         try
         {
             // Creates branch/worktree, starts agent, and sends initial prompt
-            // The FutureChange stays in the roadmap with InProgress status until a GitHub PR is created
-            _agentStatus = await AgentWorkflowService.StartAgentForFutureChangeAsync(ProjectId, Change.Id);
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, Group);
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
@@ -208,9 +230,8 @@
         _errorMessage = null;
         try
         {
-            // Resume development on an InProgress change
-            // Uses the existing worktree and starts a new agent session
-            _agentStatus = await AgentWorkflowService.StartAgentForFutureChangeAsync(ProjectId, Change.Id);
+            // Resume development on an InProgress issue
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, Group);
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
@@ -234,9 +255,7 @@
         _errorMessage = null;
         try
         {
-            // Stop the agent using the change ID
-            // This will also check for a GitHub PR and transition the change appropriately
-            await AgentWorkflowService.StopAgentAsync(Change.Id);
+            await AgentWorkflowService.StopAgentAsync(Issue.Id);
             _agentStatus = null;
             await OnActionCompleted.InvokeAsync();
         }
@@ -249,32 +268,43 @@
             _isLoading = false;
         }
     }
-
-    private string GetTypeBadgeClass() => Change.Type switch
+    
+    private string GetStatusDisplay()
     {
-        ChangeType.Feature => "bg-primary",
-        ChangeType.Bug => "bg-danger",
-        ChangeType.Refactor => "bg-info",
-        ChangeType.Docs => "bg-secondary",
-        ChangeType.Test => "bg-warning text-dark",
-        ChangeType.Chore => "bg-dark",
+        if (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr"))
+        {
+            return "Awaiting PR";
+        }
+        return Issue.Status.ToString();
+    }
+
+    private string GetTypeBadgeClass() => Issue.Type switch
+    {
+        BeadsIssueType.Feature => "bg-primary",
+        BeadsIssueType.Bug => "bg-danger",
+        BeadsIssueType.Task => "bg-info",
+        BeadsIssueType.Epic => "bg-purple",
+        BeadsIssueType.Chore => "bg-dark",
         _ => "bg-secondary"
     };
 
-    private string GetStatusBadgeClass() => Change.Status switch
+    private string GetStatusBadgeClass() => Issue.Status switch
     {
-        FutureChangeStatus.Pending => "bg-secondary",
-        FutureChangeStatus.InProgress => "bg-primary",
-        FutureChangeStatus.AwaitingPR => "bg-info",
-        FutureChangeStatus.Complete => "bg-success",
+        BeadsIssueStatus.Open => "bg-secondary",
+        BeadsIssueStatus.InProgress => "bg-primary",
+        BeadsIssueStatus.Blocked => Issue.Labels.Contains("awaiting-pr") ? "bg-info" : "bg-warning text-dark",
+        BeadsIssueStatus.Closed => "bg-success",
+        BeadsIssueStatus.Deferred => "bg-light text-dark",
         _ => "bg-secondary"
     };
 
-    private string GetPriorityBadgeClass() => Change.Priority switch
+    private string GetPriorityBadgeClass() => Issue.Priority switch
     {
-        Priority.High => "bg-danger",
-        Priority.Medium => "bg-warning text-dark",
-        Priority.Low => "bg-info",
+        0 => "bg-danger",     // P0 - Critical
+        1 => "bg-warning text-dark", // P1 - High
+        2 => "bg-info",       // P2 - Medium
+        3 => "bg-secondary",  // P3 - Low
+        4 => "bg-light text-dark", // P4 - Backlog
         _ => "bg-secondary"
     };
 }

@@ -1,8 +1,8 @@
+using Homespun.Features.Beads.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
-using Homespun.Features.Roadmap.Sync;
 
 namespace Homespun.Features.Projects;
 
@@ -23,7 +23,8 @@ public class ProjectService(
     IDataStore dataStore,
     IGitHubService gitHubService,
     ICommandRunner commandRunner,
-    IRoadmapSyncService? roadmapSyncService = null)
+    IBeadsInitializer beadsInitializer,
+    ILogger<ProjectService> logger)
 {
     /// <summary>
     /// Base path for all project worktrees.
@@ -43,10 +44,10 @@ public class ProjectService(
     {
         var project = dataStore.GetProject(id);
         
-        // Initialize local roadmap when project is loaded
-        if (project != null && roadmapSyncService != null)
+        if (project != null)
         {
-            await roadmapSyncService.InitializeLocalRoadmapAsync(project.Id);
+            // Initialize beads if not already initialized
+            await InitializeBeadsIfNeededAsync(project);
         }
         
         return project;
@@ -111,13 +112,41 @@ public class ProjectService(
 
         await dataStore.AddProjectAsync(project);
 
-        // Initialize local roadmap for new project
-        if (roadmapSyncService != null)
-        {
-            await roadmapSyncService.InitializeLocalRoadmapAsync(project.Id);
-        }
+        // Initialize beads for new project
+        await InitializeBeadsIfNeededAsync(project);
 
         return CreateProjectResult.Ok(project);
+    }
+    
+    /// <summary>
+    /// Initializes beads for a project if not already initialized.
+    /// Sets up the beads-sync branch for synchronization.
+    /// </summary>
+    private async Task InitializeBeadsIfNeededAsync(Project project)
+    {
+        try
+        {
+            if (!await beadsInitializer.IsInitializedAsync(project.LocalPath))
+            {
+                logger.LogInformation("Initializing beads for project {ProjectName} at {LocalPath}", 
+                    project.Name, project.LocalPath);
+                
+                var success = await beadsInitializer.InitializeAsync(project.LocalPath, syncBranch: "beads-sync");
+                
+                if (success)
+                {
+                    logger.LogInformation("Successfully initialized beads for project {ProjectName}", project.Name);
+                }
+                else
+                {
+                    logger.LogWarning("Failed to initialize beads for project {ProjectName}", project.Name);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error initializing beads for project {ProjectName}", project.Name);
+        }
     }
 
     public async Task<Project?> UpdateAsync(

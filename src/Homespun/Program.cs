@@ -1,3 +1,4 @@
+using Homespun.Features.Beads.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
@@ -8,8 +9,6 @@ using Homespun.Features.OpenCode.Services;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
-using Homespun.Features.Roadmap;
-using Homespun.Features.Roadmap.Sync;
 using Homespun.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -45,17 +44,14 @@ builder.Services.AddScoped<PullRequestDataService>();
 builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<PullRequestWorkflowService>();
-builder.Services.AddScoped<IRoadmapService, RoadmapService>();
-builder.Services.AddScoped<IFutureChangeTransitionService, FutureChangeTransitionService>();
+
+// Beads services
+builder.Services.AddScoped<IBeadsService, BeadsService>();
+builder.Services.AddScoped<IBeadsInitializer, BeadsInitializer>();
+builder.Services.AddScoped<IBeadsIssueTransitionService, BeadsIssueTransitionService>();
 
 // Notification services
 builder.Services.AddSingleton<INotificationService, NotificationService>();
-
-// Roadmap sync services
-builder.Services.AddScoped<IRoadmapSyncService, RoadmapSyncService>();
-builder.Services.Configure<RoadmapPollingOptions>(
-    builder.Configuration.GetSection(RoadmapPollingOptions.SectionName));
-builder.Services.AddHostedService<RoadmapPollingService>();
 
 // OpenCode services
 builder.Services.Configure<OpenCodeOptions>(
