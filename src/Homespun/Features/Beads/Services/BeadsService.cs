@@ -282,17 +282,7 @@ public class BeadsService : IBeadsService
     
     private async Task<CommandResult> RunBdCommandAsync(string workingDirectory, string arguments)
     {
-        _logger.LogDebug("Running: bd {Arguments} in {WorkingDirectory}", arguments, workingDirectory);
-        
-        var result = await _commandRunner.RunAsync("bd", arguments, workingDirectory);
-        
-        if (!result.Success)
-        {
-            _logger.LogDebug("bd command failed with exit code {ExitCode}: {Error}", 
-                result.ExitCode, result.Error);
-        }
-        
-        return result;
+        return await _commandRunner.RunAsync("bd", arguments, workingDirectory);
     }
     
     private static string BuildListArguments(BeadsListOptions? options)
