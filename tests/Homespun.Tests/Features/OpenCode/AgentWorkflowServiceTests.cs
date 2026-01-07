@@ -1,6 +1,9 @@
 using Homespun.Features.Beads.Data;
 using Homespun.Features.OpenCode.Models;
 using Homespun.Features.OpenCode.Services;
+using Homespun.Features.PullRequests.Data;
+using Microsoft.Extensions.Logging;
+using Moq;
 using NUnit.Framework;
 
 namespace Homespun.Tests.Features.OpenCode;

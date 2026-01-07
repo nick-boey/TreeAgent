@@ -80,7 +80,7 @@ else
                 </div>
 
                 <div class="mb-3 mt-3 p-3 bg-light rounded">
-                    <label class="form-label small text-muted">Branch Name</label>
+                    <label class="form-label small text-muted">Branch name preview</label>
                     <div class="font-monospace fs-5 @(IsPreviewValid() ? "fw-semibold" : "text-muted")">
                         @GetBranchNamePreview()
                     </div>
@@ -110,20 +110,20 @@ else
                     </div>
 
                     <div class="col-md-6 mb-3 mt-3">
-                        <label for="parentId" class="form-label small">Parent Issue (for subtasks)</label>
+                        <label for="parentId" class="form-label small">Parent issue (for subtasks)</label>
                         <InputText id="parentId" class="form-control" @bind-Value="_model.ParentId" placeholder="bd-XXXX" />
                         <div class="form-text">Optional: Parent issue ID for hierarchical organization</div>
                     </div>
                 </div>
 
                 <div class="mb-3 mt-3">
-                    <label for="labels" class="form-label small">Additional Labels</label>
+                    <label for="labels" class="form-label small">Additional labels</label>
                     <InputText id="labels" class="form-control" @bind-Value="_model.Labels" placeholder="label1, label2" />
                     <div class="form-text">Comma-separated list of additional labels (the hsp: label is added automatically)</div>
                 </div>
 
                 <div class="mb-3 mt-3">
-                    <label for="blockedBy" class="form-label small">Blocked By</label>
+                    <label for="blockedBy" class="form-label small">Blocked by</label>
                     <InputText id="blockedBy" class="form-control" @bind-Value="_model.BlockedBy" placeholder="bd-XXXX, bd-YYYY" />
                     <div class="form-text">Comma-separated list of issue IDs that block this issue</div>
                 </div>

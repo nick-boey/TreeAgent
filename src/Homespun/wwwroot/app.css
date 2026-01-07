@@ -481,7 +481,8 @@ a:hover {
     color: var(--input-placeholder);
 }
 
-.form-control:focus {
+.form-control:focus,
+.form-select:focus {
     outline: none;
     border-color: var(--border-color-light);
     box-shadow: none;
@@ -528,7 +529,8 @@ a:hover {
 .form-label {
     display: block;
     margin-bottom: var(--spacing-xs);
-    font-weight: var(--font-weight-medium);
+    font-size: 0.8125rem;
+    font-weight: var(--font-weight-bold);
     color: var(--text-primary);
 }
 
