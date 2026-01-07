@@ -299,6 +299,7 @@ public class AgentWorkflowService : IAgentWorkflowService
     public async Task<AgentStatus> StartAgentForBeadsIssueAsync(
         string projectId, 
         string issueId, 
+        AgentMode agentMode = AgentMode.Building,
         string? model = null, 
         CancellationToken ct = default)
     {
@@ -405,7 +406,7 @@ public class AgentWorkflowService : IAgentWorkflowService
             await _dataStore.UpdateBeadsIssueMetadataAsync(metadata);
             
             // Send initial prompt with issue instructions
-            var initialPrompt = BuildInitialPromptForBeadsIssue(issue, branchName, project.DefaultBranch);
+            var initialPrompt = BuildInitialPromptForBeadsIssue(issue, branchName, project.DefaultBranch, agentMode);
             await _client.SendPromptAsyncNoWait(
                 server.BaseUrl, 
                 session.Id, 
@@ -573,7 +574,7 @@ public class AgentWorkflowService : IAgentWorkflowService
         }
     }
     
-    internal static string BuildInitialPromptForBeadsIssue(BeadsIssue issue, string branchName, string baseBranch)
+    internal static string BuildInitialPromptForBeadsIssue(BeadsIssue issue, string branchName, string baseBranch, AgentMode agentMode)
     {
         var prompt = $"""
             Please implement the following change:
@@ -593,7 +594,24 @@ public class AgentWorkflowService : IAgentWorkflowService
             prompt += $"\n\n**Description:**\n{issue.Description}";
         }
         
-        prompt += $"""
+        if (agentMode == AgentMode.Planning)
+        {
+            prompt += $"""
+
+
+            ## Workflow Instructions
+
+            1. Review the change described above carefully
+            2. Ask any clarifying questions you may have. For each clarifying question, provide options in order of most recommended (top) to least recommended (bottom).
+            3. Once you have sufficient information, create an implementation plan
+            4. Wait for approval before implementing
+
+            **Important:** Focus on understanding the requirements thoroughly before suggesting an implementation approach.
+            """;
+        }
+        else // AgentMode.Building
+        {
+            prompt += $"""
 
 
             ## Workflow Instructions
@@ -608,6 +626,7 @@ public class AgentWorkflowService : IAgentWorkflowService
 
             **Important:** After creating the PR, signal completion so the system can verify and track the PR.
             """;
+        }
         
         return prompt;
     }

@@ -472,7 +472,7 @@ a:hover {
     line-height: 1.5;
     color: var(--text-primary);
     background-color: var(--input-bg);
-    border: 1px solid var(--input-border);
+    border: 1px solid transparent;
     border-radius: var(--radius-md);
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
 }
@@ -483,8 +483,40 @@ a:hover {
 
 .form-control:focus {
     outline: none;
-    border-color: var(--input-focus-border);
-    box-shadow: 0 0 0 3px rgba(81, 165, 193, 0.2);
+    border-color: var(--border-color-light);
+    box-shadow: none;
+}
+
+.form-select {
+    display: block;
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    padding-right: calc(var(--spacing-md) + 1rem);
+    font-family: var(--font-family-base);
+    font-size: 0.875rem;
+    font-weight: var(--font-weight-normal);
+    line-height: 1.5;
+    color: var(--text-primary);
+    background-color: var(--input-bg);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23767676' d='M4.5 5.5L8 9l3.5-3.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right var(--spacing-sm) center;
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    appearance: none;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: var(--border-color-light);
+    box-shadow: none;
+}
+
+.form-select:disabled {
+    background-color: var(--bg-tertiary);
+    cursor: not-allowed;
+    opacity: 0.6;
 }
 
 .form-control:disabled {

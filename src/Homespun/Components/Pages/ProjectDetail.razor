@@ -649,9 +649,11 @@ else
                 }).ToList();
                 
                 // Separate in-progress issues (InProgress, Blocked with awaiting-pr label) from open issues
+                // Filter out issues that have a hsp:pr-* label (they are linked to a PR and shown there instead)
                 _inProgressIssues = issuesWithMeta
                     .Where(i => i.Issue.Status == BeadsIssueStatus.InProgress ||
                                (i.Issue.Status == BeadsIssueStatus.Blocked && i.Issue.Labels.Contains("awaiting-pr")))
+                    .Where(i => !BranchNameParser.HasPrLabel(i.Issue.Labels))
                     .ToList();
                 _openIssues = issuesWithMeta
                     .Where(i => i.Issue.Status == BeadsIssueStatus.Open)

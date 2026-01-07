@@ -1,0 +1,467 @@
+@using Homespun.Features.OpenCode.Models
+@using Homespun.Features.OpenCode.Services
+@using Homespun.Features.Projects
+@using Homespun.Features.PullRequests.Data
+@using Homespun.Features.PullRequests.Data.Entities
+@using Homespun.Features.Beads
+@using Homespun.Features.Beads.Services
+@using Homespun.Features.Beads.Data
+@inject IAgentWorkflowService AgentWorkflowService
+@inject ProjectService ProjectService
+@inject PullRequestDataService PullRequestDataService
+@inject IBeadsService BeadsService
+
+<div class="agent-management-panel">
+    @if (RunningServers.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-icon">🤖</div>
+            <h5>No Running Agents</h5>
+            <p class="text-muted">Start an agent from a project, issue, or pull request to see it here.</p>
+        </div>
+    }
+    else
+    {
+        @foreach (var group in _groupedServers)
+        {
+            <div class="project-group mb-4">
+                <div class="project-header">
+                    <h5>@group.ProjectName</h5>
+                    <span class="badge bg-secondary">@group.Servers.Count agent@(group.Servers.Count != 1 ? "s" : "")</span>
+                </div>
+                
+                <div class="agents-list">
+                    @foreach (var serverInfo in group.Servers)
+                    {
+                        var entityInfo = _entityInfoCache.GetValueOrDefault(serverInfo.EntityId);
+                        var uptime = DateTime.UtcNow - serverInfo.StartedAt;
+                        
+                        <div class="agent-card">
+                            <div class="agent-card-header">
+                                <div class="agent-title">
+                                    @if (entityInfo != null)
+                                    {
+                                        <span class="entity-type-badge @GetEntityTypeBadgeClass(entityInfo.EntityType)">
+                                            @entityInfo.EntityType
+                                        </span>
+                                        <span class="entity-title">@entityInfo.Title</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">@serverInfo.EntityId</span>
+                                    }
+                                </div>
+                                <span class="status-indicator running" title="Running"></span>
+                            </div>
+                            
+                            <div class="agent-card-body">
+                                <div class="agent-details">
+                                    @if (entityInfo?.BranchName != null)
+                                    {
+                                        <div class="detail-row">
+                                            <span class="detail-label">Branch:</span>
+                                            <code class="detail-value">@entityInfo.BranchName</code>
+                                        </div>
+                                    }
+                                    
+                                    <div class="detail-row">
+                                        <span class="detail-label">Server:</span>
+                                        <code class="detail-value">@serverInfo.BaseUrl</code>
+                                    </div>
+                                    
+                                    @if (serverInfo.ActiveSessionId != null)
+                                    {
+                                        <div class="detail-row">
+                                            <span class="detail-label">Session:</span>
+                                            <code class="detail-value">@serverInfo.ActiveSessionId[..8]...</code>
+                                        </div>
+                                    }
+                                    
+                                    <div class="detail-row">
+                                        <span class="detail-label">Uptime:</span>
+                                        <span class="detail-value">@FormatUptime(uptime)</span>
+                                    </div>
+                                    
+                                    <div class="detail-row">
+                                        <span class="detail-label">Sessions:</span>
+                                        <span class="detail-value">@serverInfo.Sessions.Count</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="agent-card-footer">
+                                @if (serverInfo.WebViewUrl != null)
+                                {
+                                    <a href="@serverInfo.WebViewUrl" target="_blank" class="btn btn-sm btn-outline-primary">
+                                        Open Web View
+                                    </a>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-secondary" disabled>
+                                        Initializing...
+                                    </button>
+                                }
+                                
+                                <button class="btn btn-sm btn-outline-danger" 
+                                        @onclick="() => StopAgent(serverInfo.EntityId)"
+                                        disabled="@(_stoppingAgents.Contains(serverInfo.EntityId))">
+                                    @if (_stoppingAgents.Contains(serverInfo.EntityId))
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                    }
+                                    Stop Agent
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+    
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger">@_errorMessage</div>
+    }
+</div>
+
+<style>
+    .agent-management-panel {
+        max-width: 1200px;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: var(--spacing-xl) var(--spacing-lg);
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+    }
+    
+    .empty-icon {
+        font-size: 4rem;
+        margin-bottom: var(--spacing-md);
+    }
+    
+    .empty-state h5 {
+        margin-bottom: var(--spacing-sm);
+        color: var(--text-primary);
+    }
+    
+    .project-group {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+    }
+    
+    .project-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--spacing-md) var(--spacing-lg);
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .project-header h5 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+    
+    .agents-list {
+        padding: var(--spacing-md);
+    }
+    
+    .agent-card {
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        margin-bottom: var(--spacing-md);
+        overflow: hidden;
+    }
+    
+    .agent-card:last-child {
+        margin-bottom: 0;
+    }
+    
+    .agent-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .agent-title {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        flex: 1;
+        min-width: 0;
+    }
+    
+    .entity-type-badge {
+        padding: 0.125rem 0.5rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+    
+    .entity-type-badge.pr {
+        background: var(--status-info);
+        color: white;
+    }
+    
+    .entity-type-badge.issue {
+        background: var(--status-warning);
+        color: white;
+    }
+    
+    .entity-type-badge.change {
+        background: var(--status-success);
+        color: white;
+    }
+    
+    .entity-title {
+        font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    
+    .status-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    
+    .status-indicator.running {
+        background: var(--status-success);
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    .agent-card-body {
+        padding: var(--spacing-md);
+    }
+    
+    .agent-details {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-xs);
+    }
+    
+    .detail-row {
+        display: flex;
+        align-items: baseline;
+        gap: var(--spacing-sm);
+        font-size: 0.875rem;
+    }
+    
+    .detail-label {
+        color: var(--text-muted);
+        font-weight: 500;
+        min-width: 80px;
+        flex-shrink: 0;
+    }
+    
+    .detail-value {
+        color: var(--text-secondary);
+    }
+    
+    .detail-value code {
+        font-size: 0.8125rem;
+        color: var(--text-primary);
+    }
+    
+    .agent-card-footer {
+        display: flex;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-sm) var(--spacing-md);
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border-color);
+    }
+    
+    @@keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+</style>
+
+@code {
+    [Parameter] public List<RunningServerInfo> RunningServers { get; set; } = new();
+    [Parameter] public EventCallback OnAgentStopped { get; set; }
+    [Parameter] public EventCallback OnRefreshRequested { get; set; }
+    
+    private List<ProjectGroupInfo> _groupedServers = new();
+    private Dictionary<string, EntityInfo> _entityInfoCache = new();
+    private HashSet<string> _stoppingAgents = new();
+    private string? _errorMessage;
+    
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadEntityInformation();
+        GroupServersByProject();
+    }
+    
+    private async Task LoadEntityInformation()
+    {
+        _entityInfoCache.Clear();
+        var projects = await ProjectService.GetAllAsync();
+        
+        foreach (var serverInfo in RunningServers)
+        {
+            try
+            {
+                // Try to identify the entity type and load its information
+                // First, try as a PR
+                var pr = await PullRequestDataService.GetByIdAsync(serverInfo.EntityId);
+                if (pr != null)
+                {
+                    _entityInfoCache[serverInfo.EntityId] = new EntityInfo
+                    {
+                        EntityType = "PR",
+                        Title = pr.Title,
+                        BranchName = pr.BranchName,
+                        ProjectId = pr.ProjectId,
+                        ProjectName = projects.FirstOrDefault(p => p.Id == pr.ProjectId)?.Name ?? "Unknown Project"
+                    };
+                    continue;
+                }
+                
+                // Try as a beads issue - check all projects
+                foreach (var project in projects)
+                {
+                    try
+                    {
+                        var issue = await BeadsService.GetIssueAsync(project.LocalPath, serverInfo.EntityId);
+                        if (issue != null)
+                        {
+                            // Try to get branch name from metadata or labels
+                            var branchInfo = BeadsBranchLabel.Parse(issue.Labels);
+                            string? branchName = null;
+                            if (branchInfo != null)
+                            {
+                                branchName = $"{branchInfo.Value.Group}/{issue.Type.ToString().ToLowerInvariant()}/{branchInfo.Value.BranchId}+{issue.Id}";
+                            }
+                            
+                            _entityInfoCache[serverInfo.EntityId] = new EntityInfo
+                            {
+                                EntityType = "Issue",
+                                Title = issue.Title,
+                                BranchName = branchName,
+                                ProjectId = project.Id,
+                                ProjectName = project.Name
+                            };
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+                
+                // If not found, use entity ID as fallback
+                if (!_entityInfoCache.ContainsKey(serverInfo.EntityId))
+                {
+                    // Try to infer project from worktree path
+                    var project = projects.FirstOrDefault(p => serverInfo.WorktreePath.Contains(p.Name));
+                    _entityInfoCache[serverInfo.EntityId] = new EntityInfo
+                    {
+                        EntityType = "Unknown",
+                        Title = serverInfo.EntityId,
+                        BranchName = null,
+                        ProjectId = project?.Id ?? "unknown",
+                        ProjectName = project?.Name ?? "Unknown Project"
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                // Fallback for any errors
+                _entityInfoCache[serverInfo.EntityId] = new EntityInfo
+                {
+                    EntityType = "Unknown",
+                    Title = serverInfo.EntityId,
+                    BranchName = null,
+                    ProjectId = "unknown",
+                    ProjectName = "Unknown Project"
+                };
+            }
+        }
+    }
+    
+    private void GroupServersByProject()
+    {
+        _groupedServers = RunningServers
+            .Select(server => new
+            {
+                Server = server,
+                EntityInfo = _entityInfoCache.GetValueOrDefault(server.EntityId)
+            })
+            .GroupBy(x => x.EntityInfo?.ProjectName ?? "Unknown Project")
+            .Select(group => new ProjectGroupInfo
+            {
+                ProjectName = group.Key,
+                Servers = group.Select(x => x.Server).OrderBy(s => _entityInfoCache.GetValueOrDefault(s.EntityId)?.Title ?? s.EntityId).ToList()
+            })
+            .OrderBy(g => g.ProjectName)
+            .ToList();
+    }
+    
+    private async Task StopAgent(string entityId)
+    {
+        _stoppingAgents.Add(entityId);
+        _errorMessage = null;
+        
+        try
+        {
+            await AgentWorkflowService.StopAgentAsync(entityId);
+            await OnAgentStopped.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to stop agent: {ex.Message}";
+        }
+        finally
+        {
+            _stoppingAgents.Remove(entityId);
+        }
+    }
+    
+    private string FormatUptime(TimeSpan uptime)
+    {
+        if (uptime.TotalHours >= 1)
+            return $"{(int)uptime.TotalHours}h {uptime.Minutes}m";
+        if (uptime.TotalMinutes >= 1)
+            return $"{(int)uptime.TotalMinutes}m {uptime.Seconds}s";
+        return $"{uptime.Seconds}s";
+    }
+    
+    private string GetEntityTypeBadgeClass(string entityType) => entityType.ToLowerInvariant() switch
+    {
+        "pr" => "pr",
+        "issue" => "issue",
+        "change" => "change",
+        _ => "pr"
+    };
+    
+    private class ProjectGroupInfo
+    {
+        public required string ProjectName { get; set; }
+        public required List<RunningServerInfo> Servers { get; set; }
+    }
+    
+    private class EntityInfo
+    {
+        public required string EntityType { get; set; }
+        public required string Title { get; set; }
+        public string? BranchName { get; set; }
+        public required string ProjectId { get; set; }
+        public required string ProjectName { get; set; }
+    }
+}

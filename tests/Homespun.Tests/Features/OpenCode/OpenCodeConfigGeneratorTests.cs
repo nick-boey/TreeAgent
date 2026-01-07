@@ -42,7 +42,6 @@ public class OpenCodeConfigGeneratorTests
     public void CreateDefaultConfig_UsesDefaultModel_WhenNoModelProvided()
     {
         var config = _generator.CreateDefaultConfig();
-
         Assert.That(config.Model, Is.EqualTo("anthropic/claude-opus-4-5"));
     }
 
