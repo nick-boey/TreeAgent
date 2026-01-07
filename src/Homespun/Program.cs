@@ -50,6 +50,9 @@ builder.Services.AddScoped<IBeadsService, BeadsService>();
 builder.Services.AddScoped<IBeadsInitializer, BeadsInitializer>();
 builder.Services.AddScoped<IBeadsIssueTransitionService, BeadsIssueTransitionService>();
 
+// Issue-PR linking service (must be registered before GitHubService as it depends on it)
+builder.Services.AddScoped<IIssuePrLinkingService, IssuePrLinkingService>();
+
 // Notification services
 builder.Services.AddSingleton<INotificationService, NotificationService>();
 
@@ -68,10 +71,10 @@ builder.Services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
 builder.Services.AddSingleton<ITestAgentService, TestAgentService>();
 #endif
 
-// Review polling service
-builder.Services.Configure<ReviewPollingOptions>(
-    builder.Configuration.GetSection(ReviewPollingOptions.SectionName));
-builder.Services.AddHostedService<ReviewPollingService>();
+// GitHub sync polling service (PR sync, review polling, issue linking)
+builder.Services.Configure<GitHubSyncPollingOptions>(
+    builder.Configuration.GetSection(GitHubSyncPollingOptions.SectionName));
+builder.Services.AddHostedService<GitHubSyncPollingService>();
 
 builder.Services.AddSignalR();
 builder.Services.AddRazorComponents()

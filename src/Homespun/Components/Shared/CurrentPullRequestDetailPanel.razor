@@ -36,6 +36,13 @@
         }
 
         <dl class="row small">
+            @if (!string.IsNullOrEmpty(PullRequest.BeadsIssueId))
+            {
+                <dt class="col-4">Linked Issue</dt>
+                <dd class="col-8">
+                    <span class="badge bg-info text-dark">@PullRequest.BeadsIssueId</span>
+                </dd>
+            }
             @if (!string.IsNullOrEmpty(PullRequest.BranchName))
             {
                 <dt class="col-4">Branch</dt>

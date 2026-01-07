@@ -12,6 +12,7 @@ public class GitHubService(
     ICommandRunner commandRunner,
     IConfiguration configuration,
     IGitHubClientWrapper githubClient,
+    IIssuePrLinkingService issuePrLinkingService,
     ILogger<GitHubService> logger)
     : IGitHubService
 {
@@ -205,6 +206,13 @@ public class GitHubService(
             pullRequest.UpdatedAt = DateTime.UtcNow;
             await dataStore.UpdatePullRequestAsync(pullRequest);
 
+            // Try to link to beads issue by branch name
+            var linkedIssueId = await issuePrLinkingService.TryLinkByBranchNameAsync(projectId, pullRequestId);
+            if (!string.IsNullOrEmpty(linkedIssueId))
+            {
+                logger.LogInformation("Linked PR #{PrNumber} to beads issue {IssueId}", pr.Number, linkedIssueId);
+            }
+
             return MapToPullRequestInfo(pr);
         }
         catch (Exception ex)
@@ -273,6 +281,15 @@ public class GitHubService(
             if (pr.GitHubPRNumber.HasValue && !openPrNumbers.Contains(pr.GitHubPRNumber.Value))
             {
                 logger.LogInformation("Removing closed/merged PR #{PrNumber} from local tracking", pr.GitHubPRNumber);
+                
+                // Track removed PR info for closing linked issues
+                result.RemovedPrs.Add(new RemovedPrInfo
+                {
+                    PullRequestId = pr.Id,
+                    BeadsIssueId = pr.BeadsIssueId,
+                    GitHubPrNumber = pr.GitHubPRNumber
+                });
+                
                 await dataStore.RemovePullRequestAsync(pr.Id);
                 result.Removed++;
             }
@@ -295,6 +312,13 @@ public class GitHubService(
                     pullRequest.Description = pr.Body;
                     pullRequest.UpdatedAt = DateTime.UtcNow;
                     await dataStore.UpdatePullRequestAsync(pullRequest);
+                    
+                    // Try to link to beads issue if not already linked (backfill)
+                    if (string.IsNullOrEmpty(pullRequest.BeadsIssueId))
+                    {
+                        await issuePrLinkingService.TryLinkByBranchNameAsync(projectId, pullRequest.Id);
+                    }
+                    
                     result.Updated++;
                 }
                 else
@@ -312,6 +336,10 @@ public class GitHubService(
                     };
 
                     await dataStore.AddPullRequestAsync(pullRequest);
+                    
+                    // Try to link to beads issue by branch name
+                    await issuePrLinkingService.TryLinkByBranchNameAsync(projectId, pullRequest.Id);
+                    
                     result.Imported++;
                 }
             }

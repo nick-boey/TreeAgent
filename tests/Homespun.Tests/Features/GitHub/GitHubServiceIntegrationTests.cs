@@ -3,6 +3,7 @@ using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests.Data.Entities;
 using Homespun.Tests.Helpers;
 using Microsoft.Extensions.Configuration;
+using Moq;
 
 namespace Homespun.Tests.Features.GitHub;
 
@@ -64,8 +65,9 @@ public class GitHubServiceIntegrationTests
 
         var runner = new CommandRunner(new Microsoft.Extensions.Logging.Abstractions.NullLogger<CommandRunner>());
         var client = new GitHubClientWrapper();
+        var mockLinkingService = new Mock<IIssuePrLinkingService>();
         var logger = new Microsoft.Extensions.Logging.Abstractions.NullLogger<GitHubService>();
-        var service = new GitHubService(_dataStore, runner, config, client, logger);
+        var service = new GitHubService(_dataStore, runner, config, client, mockLinkingService.Object, logger);
 
         // Act
         var result = await service.GetOpenPullRequestsAsync(project.Id);
