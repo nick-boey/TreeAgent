@@ -117,14 +117,21 @@
             }
             else
             {
-                <button class="btn btn-sm btn-success" @onclick="StartAgent"
-                        disabled="@StartAgentDisabled">
-                    @if (_isAgentLoading)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    }
-                    Start Agent
-                </button>
+                <div class="d-flex gap-2 align-items-center">
+                    <select class="form-select form-select-sm" style="width: auto;" @bind="_selectedModel">
+                        <option value="anthropic/claude-opus-4">Opus 4</option>
+                        <option value="anthropic/claude-sonnet-4-5">Sonnet 4.5</option>
+                        <option value="anthropic/claude-haiku-4-5">Haiku 4.5</option>
+                    </select>
+                    <button class="btn btn-sm btn-success" @onclick="StartAgent"
+                            disabled="@StartAgentDisabled">
+                        @if (_isAgentLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Start Agent
+                    </button>
+                </div>
             }
 
             @* Merge - only when Approved *@
@@ -163,6 +170,7 @@
     private bool _isAgentLoading;
     private string? _agentErrorMessage;
     private AgentStatus? _agentStatus;
+    private string _selectedModel = "anthropic/claude-opus-4";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -187,7 +195,7 @@
         _agentErrorMessage = null;
         try
         {
-            _agentStatus = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequest.Id);
+            _agentStatus = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequest.Id, _selectedModel);
             
             // Update status to InDevelopment (working) when agent starts
             await PullRequestDataService.UpdateStatusAsync(PullRequest.Id, OpenPullRequestStatus.InDevelopment);

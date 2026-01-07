@@ -142,20 +142,27 @@
             }
             else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo != null)
             {
-                <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" disabled="@_isLoading">
-                    @if (_isLoading)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    }
-                    Start Planning
-                </button>
-                <button class="btn btn-sm btn-success" @onclick="StartBuilding" disabled="@_isLoading">
-                    @if (_isLoading)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    }
-                    Start Building
-                </button>
+                <div class="d-flex gap-2 align-items-center">
+                    <select class="form-select form-select-sm" style="width: auto;" @bind="_selectedModel">
+                        <option value="anthropic/claude-opus-4">Opus 4</option>
+                        <option value="anthropic/claude-sonnet-4-5">Sonnet 4.5</option>
+                        <option value="anthropic/claude-haiku-4-5">Haiku 4.5</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Start Planning
+                    </button>
+                    <button class="btn btn-sm btn-success" @onclick="StartBuilding" disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Start Building
+                    </button>
+                </div>
             }
             else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo == null)
             {
@@ -168,23 +175,37 @@
             }
             else if (Issue.Status == BeadsIssueStatus.InProgress && _agentStatus == null && _branchInfo != null)
             {
-                <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
-                    @if (_isLoading)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    }
-                    Resume Agent
-                </button>
+                <div class="d-flex gap-2 align-items-center">
+                    <select class="form-select form-select-sm" style="width: auto;" @bind="_selectedModel">
+                        <option value="anthropic/claude-opus-4">Opus 4</option>
+                        <option value="anthropic/claude-sonnet-4-5">Sonnet 4.5</option>
+                        <option value="anthropic/claude-haiku-4-5">Haiku 4.5</option>
+                    </select>
+                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Resume Agent
+                    </button>
+                </div>
             }
             else if (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr") && _branchInfo != null)
             {
-                <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
-                    @if (_isLoading)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    }
-                    Resume Agent
-                </button>
+                <div class="d-flex gap-2 align-items-center">
+                    <select class="form-select form-select-sm" style="width: auto;" @bind="_selectedModel">
+                        <option value="anthropic/claude-opus-4">Opus 4</option>
+                        <option value="anthropic/claude-sonnet-4-5">Sonnet 4.5</option>
+                        <option value="anthropic/claude-haiku-4-5">Haiku 4.5</option>
+                    </select>
+                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Resume Agent
+                    </button>
+                </div>
             }
         </div>
 
@@ -223,6 +244,7 @@
     private string? _errorMessage;
     private AgentStatus? _agentStatus;
     private (string Group, string BranchId)? _branchInfo;
+    private string _selectedModel = "anthropic/claude-opus-4";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -271,7 +293,7 @@
         {
             // Creates branch/worktree, starts agent in planning mode, and sends initial prompt
             // Group and branch ID are parsed from the hsp: label in AgentWorkflowService
-            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Planning);
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Planning, _selectedModel);
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
@@ -292,7 +314,7 @@
         {
             // Creates branch/worktree, starts agent in building mode, and sends initial prompt
             // Group and branch ID are parsed from the hsp: label in AgentWorkflowService
-            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Building);
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Building, _selectedModel);
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
@@ -312,7 +334,7 @@
         try
         {
             // Resume development on an InProgress issue (defaults to Building mode)
-            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Building);
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Building, _selectedModel);
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
