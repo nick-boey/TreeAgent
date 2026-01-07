@@ -10,10 +10,22 @@ namespace Homespun.Features.OpenCode.Hubs;
 public class AgentHub : Hub
 {
     private readonly IAgentWorkflowService _workflowService;
+    private readonly IOpenCodeServerManager _serverManager;
+    private readonly IOpenCodeClient _openCodeClient;
+    
+    /// <summary>
+    /// The name of the global group for server list updates.
+    /// </summary>
+    public const string GlobalGroupName = "global-servers";
 
-    public AgentHub(IAgentWorkflowService workflowService)
+    public AgentHub(
+        IAgentWorkflowService workflowService,
+        IOpenCodeServerManager serverManager,
+        IOpenCodeClient openCodeClient)
     {
         _workflowService = workflowService;
+        _serverManager = serverManager;
+        _openCodeClient = openCodeClient;
     }
 
     /// <summary>
@@ -68,6 +80,57 @@ public class AgentHub : Hub
         await Clients.Group(pullRequestId).SendAsync("MessageReceived", pullRequestId, response);
         return response;
     }
+
+    /// <summary>
+    /// Join the global group to receive updates about all running servers.
+    /// </summary>
+    public async Task JoinGlobalGroup()
+    {
+        await Groups.AddToGroupAsync(Context.ConnectionId, GlobalGroupName);
+    }
+
+    /// <summary>
+    /// Leave the global group.
+    /// </summary>
+    public async Task LeaveGlobalGroup()
+    {
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, GlobalGroupName);
+    }
+
+    /// <summary>
+    /// Gets all currently running servers with their session information.
+    /// </summary>
+    public IReadOnlyList<RunningServerInfo> GetAllRunningServers()
+    {
+        return _serverManager.GetRunningServers()
+            .Select(s => new RunningServerInfo
+            {
+                EntityId = s.EntityId,
+                Port = s.Port,
+                BaseUrl = s.BaseUrl,
+                WorktreePath = s.WorktreePath,
+                StartedAt = s.StartedAt,
+                ActiveSessionId = s.ActiveSessionId,
+                WebViewUrl = s.WebViewUrl
+            }).ToList();
+    }
+
+    /// <summary>
+    /// Gets all sessions for a specific running server.
+    /// </summary>
+    /// <param name="entityId">The entity ID of the server</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>List of sessions, or empty list if server not found</returns>
+    public async Task<List<OpenCodeSession>> GetSessionsForServer(string entityId, CancellationToken ct = default)
+    {
+        var server = _serverManager.GetServerForEntity(entityId);
+        if (server == null)
+        {
+            return [];
+        }
+        
+        return await _openCodeClient.ListSessionsAsync(server.BaseUrl, ct);
+    }
 }
 
 /// <summary>
@@ -104,5 +167,17 @@ public static class AgentHubExtensions
         OpenCodeEvent evt)
     {
         await hubContext.Clients.Group(pullRequestId).SendAsync("AgentEvent", pullRequestId, evt);
+    }
+
+    /// <summary>
+    /// Broadcasts the updated list of running servers to all clients in the global group.
+    /// </summary>
+    /// <param name="hubContext">The hub context</param>
+    /// <param name="servers">The list of running servers</param>
+    public static async Task BroadcastServerListChanged(
+        this IHubContext<AgentHub> hubContext,
+        IReadOnlyList<RunningServerInfo> servers)
+    {
+        await hubContext.Clients.Group(AgentHub.GlobalGroupName).SendAsync("ServerListChanged", servers);
     }
 }

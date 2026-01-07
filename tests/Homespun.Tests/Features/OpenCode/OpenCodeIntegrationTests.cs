@@ -1,6 +1,8 @@
 using Homespun.Features.OpenCode;
+using Homespun.Features.OpenCode.Hubs;
 using Homespun.Features.OpenCode.Models;
 using Homespun.Features.OpenCode.Services;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -45,6 +47,7 @@ public class OpenCodeIntegrationTests
             _options,
             _client,
             portAllocationService,
+            Mock.Of<IHubContext<AgentHub>>(),
             Mock.Of<ILogger<OpenCodeServerManager>>());
 
         _configGenerator = new OpenCodeConfigGenerator(
@@ -351,6 +354,7 @@ public class OpenCodeIntegrationTests
             testOptions,
             testClient,
             testPortAllocationService,
+            Mock.Of<IHubContext<AgentHub>>(),
             Mock.Of<ILogger<OpenCodeServerManager>>());
         var testConfigGenerator = new OpenCodeConfigGenerator(
             testOptions,

@@ -59,14 +59,29 @@
                 <h6>OpenCode Agent</h6>
                 <div class="mb-2">
                     <span class="badge bg-success">Running</span>
-                    <a href="@_agentStatus.Server.BaseUrl" target="_blank" class="btn btn-sm btn-outline-primary ms-2">
-                        Open Web View
-                    </a>
+                    @if (_agentStatus.Server.WebViewUrl != null)
+                    {
+                        <a href="@_agentStatus.Server.WebViewUrl" target="_blank" 
+                           class="btn btn-sm btn-outline-primary ms-2">
+                            Open Web View
+                        </a>
+                    }
+                    else
+                    {
+                        <span class="text-muted ms-2">Session initializing...</span>
+                    }
                 </div>
                 <div class="mb-2">
                     <small class="text-muted">
                         Server: <code>@_agentStatus.Server.BaseUrl</code>
                     </small>
+                    @if (_agentStatus.ActiveSession != null)
+                    {
+                        <br/>
+                        <small class="text-muted">
+                            Session: <code>@_agentStatus.ActiveSession.Id</code>
+                        </small>
+                    }
                 </div>
                 @if (!string.IsNullOrEmpty(_agentErrorMessage))
                 {

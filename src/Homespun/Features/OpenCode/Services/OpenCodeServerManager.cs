@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Homespun.Features.OpenCode.Hubs;
 using Homespun.Features.OpenCode.Models;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.OpenCode.Services;
@@ -14,6 +16,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
     private readonly OpenCodeOptions _options;
     private readonly IOpenCodeClient _client;
     private readonly IPortAllocationService _portAllocationService;
+    private readonly IHubContext<AgentHub> _hubContext;
     private readonly ILogger<OpenCodeServerManager> _logger;
     private readonly ConcurrentDictionary<string, OpenCodeServer> _servers = new();
     private readonly string _resolvedExecutablePath;
@@ -23,11 +26,13 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         IOptions<OpenCodeOptions> options,
         IOpenCodeClient client,
         IPortAllocationService portAllocationService,
+        IHubContext<AgentHub> hubContext,
         ILogger<OpenCodeServerManager> logger)
     {
         _options = options.Value;
         _client = client;
         _portAllocationService = portAllocationService;
+        _hubContext = hubContext;
         _logger = logger;
         _resolvedExecutablePath = ResolveExecutablePath(_options.ExecutablePath);
         _logger.LogDebug("Resolved OpenCode executable path: {Path}", _resolvedExecutablePath);
@@ -266,6 +271,10 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             server.Status = OpenCodeServerStatus.Running;
             
             _logger.LogInformation("OpenCode server started on port {Port} for entity {EntityId}", port, entityId);
+            
+            // Broadcast server list change to all connected clients
+            await BroadcastServerListAsync();
+            
             return server;
         }
         catch (Exception ex)
@@ -321,6 +330,9 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         _portAllocationService.ReleasePort(server.Port);
         server.Status = OpenCodeServerStatus.Stopped;
         _logger.LogInformation("OpenCode server stopped for entity {EntityId}", entityId);
+        
+        // Broadcast server list change to all connected clients
+        await BroadcastServerListAsync();
     }
 
     public OpenCodeServer? GetServerForEntity(string entityId)
@@ -333,6 +345,26 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         return _servers.Values
             .Where(s => s.Status == OpenCodeServerStatus.Running)
             .ToList();
+    }
+
+    /// <summary>
+    /// Broadcasts the current list of running servers to all connected SignalR clients.
+    /// </summary>
+    private async Task BroadcastServerListAsync()
+    {
+        var servers = GetRunningServers()
+            .Select(s => new RunningServerInfo
+            {
+                EntityId = s.EntityId,
+                Port = s.Port,
+                BaseUrl = s.BaseUrl,
+                WorktreePath = s.WorktreePath,
+                StartedAt = s.StartedAt,
+                ActiveSessionId = s.ActiveSessionId,
+                WebViewUrl = s.WebViewUrl
+            }).ToList();
+        
+        await _hubContext.BroadcastServerListChanged(servers);
     }
 
     public async Task<bool> IsHealthyAsync(OpenCodeServer server, CancellationToken ct = default)

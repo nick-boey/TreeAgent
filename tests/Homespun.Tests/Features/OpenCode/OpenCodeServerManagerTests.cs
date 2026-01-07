@@ -1,6 +1,8 @@
 using Homespun.Features.OpenCode;
+using Homespun.Features.OpenCode.Hubs;
 using Homespun.Features.OpenCode.Models;
 using Homespun.Features.OpenCode.Services;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -37,7 +39,8 @@ public class OpenCodeServerManagerTests
         _manager = new OpenCodeServerManager(
             _options, 
             _mockClient.Object, 
-            _mockPortAllocationService.Object, 
+            _mockPortAllocationService.Object,
+            Mock.Of<IHubContext<AgentHub>>(),
             _mockLogger.Object);
     }
 
