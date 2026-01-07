@@ -33,7 +33,7 @@ public class OpenCodeIntegrationTests
             BasePort = 14096, // Use a different port range for tests
             MaxConcurrentServers = 3,
             ServerStartTimeoutMs = 30000, // 30 seconds for server startup
-            DefaultModel = "anthropic/claude-sonnet-4-5"
+            DefaultModel = "anthropic/claude-opus-4-5"
         });
 
         var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
@@ -342,7 +342,7 @@ public class OpenCodeIntegrationTests
             BasePort = testPort,
             MaxConcurrentServers = 1,
             ServerStartTimeoutMs = 15000, // 15 seconds for server startup
-            DefaultModel = "anthropic/claude-sonnet-4-5"
+            DefaultModel = "anthropic/claude-opus-4-5"
         });
         
         using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };

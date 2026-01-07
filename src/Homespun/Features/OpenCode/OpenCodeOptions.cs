@@ -37,7 +37,7 @@ public class OpenCodeOptions
 
     /// <summary>
     /// Default model to use when not specified by project or session.
-    /// Format: "provider/model" (e.g., "anthropic/claude-opus-4")
+    /// Format: "provider/model" (e.g., "anthropic/claude-opus-4-5")
     /// </summary>
-    public string DefaultModel { get; set; } = "anthropic/claude-opus-4";
+    public string DefaultModel { get; set; } = "anthropic/claude-opus-4-5";
 }

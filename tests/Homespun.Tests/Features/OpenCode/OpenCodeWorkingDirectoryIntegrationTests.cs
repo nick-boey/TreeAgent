@@ -441,7 +441,7 @@ public class OpenCodeWorkingDirectoryIntegrationTests
             BasePort = port,
             MaxConcurrentServers = 1,
             ServerStartTimeoutMs = 15000, // 15 seconds for server startup
-            DefaultModel = "anthropic/claude-sonnet-4-5" // Use default model (haiku not available via this format)
+            DefaultModel = "anthropic/claude-opus-4-5" // Use default model (haiku not available via this format)
         });
     }
 

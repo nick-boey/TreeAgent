@@ -22,7 +22,7 @@ public class OpenCodeConfigGeneratorTests
         _mockLogger = new Mock<ILogger<OpenCodeConfigGenerator>>();
         _options = Options.Create(new OpenCodeOptions
         {
-            DefaultModel = "anthropic/claude-opus-4"
+            DefaultModel = "anthropic/claude-opus-4-5"
         });
         _generator = new OpenCodeConfigGenerator(_options, _mockLogger.Object);
         _tempDir = Path.Combine(Path.GetTempPath(), $"opencode-test-{Guid.NewGuid()}");
@@ -42,8 +42,7 @@ public class OpenCodeConfigGeneratorTests
     public void CreateDefaultConfig_UsesDefaultModel_WhenNoModelProvided()
     {
         var config = _generator.CreateDefaultConfig();
-
-        Assert.That(config.Model, Is.EqualTo("anthropic/claude-opus-4"));
+        Assert.That(config.Model, Is.EqualTo("anthropic/claude-opus-4-5"));
     }
 
     [Test]
