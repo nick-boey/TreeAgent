@@ -121,6 +121,24 @@
     background-color: var(--status-success);
 }
 
+.graph-node.status-starting {
+    background-color: var(--status-warning);
+    animation: spin 1s linear infinite;
+}
+
+.graph-node.status-failed {
+    background-color: var(--status-error);
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
 @keyframes pulse {
     0%, 100% {
         opacity: 1;

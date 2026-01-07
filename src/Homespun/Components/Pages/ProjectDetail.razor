@@ -1,4 +1,5 @@
 @page "/projects/{Id}"
+@implements IDisposable
 @using Homespun.Features.Beads
 @using Homespun.Features.Beads.Data
 @using Homespun.Features.Beads.Services
@@ -14,6 +15,7 @@
 @inject IBeadsService BeadsService
 @inject IDataStore DataStore
 @inject IGitHubService GitHubService
+@inject IAgentStartupTracker StartupTracker
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
 @inject ITestAgentService? TestAgentService
@@ -118,6 +120,8 @@ else
                                   IsClickable="true"
                                   IsFirst="false"
                                   IsLast="false"
+                                  StartupState="@GetStartupState(pr.PullRequest.Id)"
+                                  StartupErrorMessage="@GetStartupErrorMessage(pr.PullRequest.Id)"
                                   OnClick="@(() => SelectPullRequest(pr.PullRequest.Id))"/>
                     }
 
@@ -136,6 +140,8 @@ else
                                       IsClickable="true"
                                       IsFirst="false"
                                       IsLast="false"
+                                      StartupState="@GetStartupState(issueWithMeta.Issue.Id)"
+                                      StartupErrorMessage="@GetStartupErrorMessage(issueWithMeta.Issue.Id)"
                                       OnClick="@(() => SelectBeadsIssue(issueWithMeta.Issue.Id))"/>
                         }
                     }
@@ -167,7 +173,7 @@ else
                 }
                 else
                 {
-                    @for (var i = 0; i < _openIssues.Count; i++)
+                @for (var i = 0; i < _openIssues.Count; i++)
                     {
                         var issueWithMeta = _openIssues[i];
                         <WorkItem Title="@issueWithMeta.Issue.Title"
@@ -179,6 +185,8 @@ else
                                   IsClickable="true"
                                   IsFirst="false"
                                   IsLast="false"
+                                  StartupState="@GetStartupState(issueWithMeta.Issue.Id)"
+                                  StartupErrorMessage="@GetStartupErrorMessage(issueWithMeta.Issue.Id)"
                                   OnClick="@(() => SelectBeadsIssue(issueWithMeta.Issue.Id))"/>
                     }
 
@@ -599,6 +607,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Subscribe to agent startup state changes to update UI
+        StartupTracker.StateChanged += OnStartupStateChanged;
+        
         await LoadData();
         
         // Check for existing test agent (DEBUG builds only)
@@ -620,6 +631,17 @@ else
                 });
             });
         }
+    }
+
+    public void Dispose()
+    {
+        StartupTracker.StateChanged -= OnStartupStateChanged;
+    }
+
+    private async void OnStartupStateChanged(AgentStartupInfo info)
+    {
+        // Re-render when any startup state changes
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task LoadData()
@@ -925,6 +947,18 @@ else
         }
 
         return parts.Count > 0 ? string.Join(" - ", parts) : null;
+    }
+
+    private AgentStartupState? GetStartupState(string entityId)
+    {
+        var info = StartupTracker.GetState(entityId);
+        return info.State == AgentStartupState.NotStarted ? null : info.State;
+    }
+
+    private string? GetStartupErrorMessage(string entityId)
+    {
+        var info = StartupTracker.GetState(entityId);
+        return info.ErrorMessage;
     }
 
     private async Task StartTestAgent()

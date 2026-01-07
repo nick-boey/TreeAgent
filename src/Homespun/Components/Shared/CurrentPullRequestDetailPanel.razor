@@ -5,6 +5,7 @@
 @inject PullRequestDataService PullRequestDataService
 @inject IGitHubService GitHubService
 @inject IAgentWorkflowService AgentWorkflowService
+@inject IAgentStartupTracker StartupTracker
 
 <div class="card pull-request-detail-panel">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -24,7 +25,14 @@
                     PR #@PullRequest.GitHubPRNumber
                 </a>
             }
-            @if (_agentStatus != null)
+            @if (StartupTracker.IsStarting(PullRequest.Id))
+            {
+                <span class="badge bg-warning text-dark ms-1">
+                    <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                    Starting...
+                </span>
+            }
+            else if (_agentStatus != null)
             {
                 <span class="badge bg-success ms-1">Agent Running</span>
             }
@@ -112,7 +120,14 @@
             }
 
             @* Start/Stop Agent - available for all statuses *@
-            @if (_agentStatus != null)
+            @if (StartupTracker.IsStarting(PullRequest.Id))
+            {
+                <button class="btn btn-sm btn-secondary" disabled>
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    Starting Agent...
+                </button>
+            }
+            else if (_agentStatus != null)
             {
                 <button class="btn btn-sm btn-outline-danger" @onclick="StopAgent" disabled="@_isAgentLoading">
                     @if (_isAgentLoading)
@@ -132,10 +147,6 @@
                     </select>
                     <button class="btn btn-sm btn-success" @onclick="StartAgent"
                             disabled="@StartAgentDisabled">
-                        @if (_isAgentLoading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
                         Start Agent
                     </button>
                 </div>
@@ -154,11 +165,18 @@
             }
         </div>
 
-        @if (!string.IsNullOrEmpty(_errorMessage))
+        @if (StartupTracker.HasFailed(PullRequest.Id))
+        {
+            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">
+                @(StartupTracker.GetState(PullRequest.Id).ErrorMessage ?? "Failed to start agent")
+                <button class="btn btn-link btn-sm p-0 ms-2" @onclick="ClearStartupError">Dismiss</button>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(_errorMessage))
         {
             <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
         }
-        @if (!string.IsNullOrEmpty(_agentErrorMessage))
+        else if (!string.IsNullOrEmpty(_agentErrorMessage))
         {
             <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_agentErrorMessage</div>
         }
@@ -198,23 +216,38 @@
 
     private async Task StartAgent()
     {
-        _isAgentLoading = true;
         _agentErrorMessage = null;
+        
+        // Mark as starting immediately (fire-and-forget pattern)
+        StartupTracker.MarkAsStarting(PullRequest.Id);
+        
+        // Notify parent that action started (allows UI to update)
+        await OnActionCompleted.InvokeAsync();
+        
+        // Start agent in background - don't await, allowing user to navigate away
+        _ = StartAgentInBackgroundAsync();
+    }
+
+    private async Task StartAgentInBackgroundAsync()
+    {
         try
         {
-            _agentStatus = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequest.Id, _selectedModel);
+            var status = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequest.Id, _selectedModel);
             
             // Update status to InDevelopment (working) when agent starts
             await PullRequestDataService.UpdateStatusAsync(PullRequest.Id, OpenPullRequestStatus.InDevelopment);
-            await OnActionCompleted.InvokeAsync();
+            
+            // Mark as started - this will broadcast via SignalR
+            StartupTracker.MarkAsStarted(PullRequest.Id);
+            
+            // Update local state if still viewing this PR
+            _agentStatus = status;
         }
         catch (Exception ex)
         {
+            // Mark as failed - this will broadcast via SignalR
+            StartupTracker.MarkAsFailed(PullRequest.Id, ex.Message);
             _agentErrorMessage = ex.Message;
-        }
-        finally
-        {
-            _isAgentLoading = false;
         }
     }
 
@@ -226,6 +259,7 @@
         {
             await AgentWorkflowService.StopAgentAsync(PullRequest.Id);
             _agentStatus = null;
+            StartupTracker.ClearState(PullRequest.Id);
         }
         catch (Exception ex)
         {
@@ -237,8 +271,13 @@
         }
     }
 
-    // Agent can be started if there's a branch name (worktree will be created automatically if needed)
-    private bool StartAgentDisabled => string.IsNullOrEmpty(PullRequest.BranchName) || _isAgentLoading;
+    private void ClearStartupError()
+    {
+        StartupTracker.ClearState(PullRequest.Id);
+    }
+
+    // Agent can be started if there's a branch name and not already starting
+    private bool StartAgentDisabled => string.IsNullOrEmpty(PullRequest.BranchName) || StartupTracker.IsStarting(PullRequest.Id);
 
 
     private async Task SkipReview()

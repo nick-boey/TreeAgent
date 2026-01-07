@@ -4,6 +4,7 @@
 @using Homespun.Features.OpenCode.Models
 
 @inject IAgentWorkflowService AgentWorkflowService
+@inject IAgentStartupTracker StartupTracker
 @inject NavigationManager NavigationManager
 
 <div class="card beads-issue-detail-panel">
@@ -22,7 +23,14 @@
             {
                 <span class="badge @GetPriorityBadgeClass() ms-1">P@Issue.Priority</span>
             }
-            @if (_agentStatus != null)
+            @if (StartupTracker.IsStarting(Issue.Id))
+            {
+                <span class="badge bg-warning text-dark ms-1">
+                    <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                    Starting...
+                </span>
+            }
+            else if (_agentStatus != null)
             {
                 <span class="badge bg-success ms-1">Agent Running</span>
             }
@@ -130,7 +138,14 @@
     </div>
     <div class="card-footer">
         <div class="d-flex flex-wrap gap-2">
-            @if (_agentStatus != null)
+            @if (StartupTracker.IsStarting(Issue.Id))
+            {
+                <button class="btn btn-sm btn-secondary" disabled>
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    Starting Agent...
+                </button>
+            }
+            else if (_agentStatus != null)
             {
                 <button class="btn btn-sm btn-outline-danger" @onclick="StopAgent" disabled="@_isLoading">
                     @if (_isLoading)
@@ -148,15 +163,15 @@
                         <option value="anthropic/claude-sonnet-4-5">Sonnet 4.5</option>
                         <option value="anthropic/claude-haiku-4-5">Haiku 4.5</option>
                     </select>
-                    <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" disabled="@_isLoading">
-                        @if (_isLoading)
+                    <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" disabled="@(StartupTracker.IsStarting(Issue.Id))">
+                        @if (StartupTracker.IsStarting(Issue.Id))
                         {
                             <span class="spinner-border spinner-border-sm me-1" role="status"></span>
                         }
                         Start Planning
                     </button>
-                    <button class="btn btn-sm btn-success" @onclick="StartBuilding" disabled="@_isLoading">
-                        @if (_isLoading)
+                    <button class="btn btn-sm btn-success" @onclick="StartBuilding" disabled="@(StartupTracker.IsStarting(Issue.Id))">
+                        @if (StartupTracker.IsStarting(Issue.Id))
                         {
                             <span class="spinner-border spinner-border-sm me-1" role="status"></span>
                         }
@@ -181,8 +196,8 @@
                         <option value="anthropic/claude-sonnet-4-5">Sonnet 4.5</option>
                         <option value="anthropic/claude-haiku-4-5">Haiku 4.5</option>
                     </select>
-                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
-                        @if (_isLoading)
+                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@(StartupTracker.IsStarting(Issue.Id))">
+                        @if (StartupTracker.IsStarting(Issue.Id))
                         {
                             <span class="spinner-border spinner-border-sm me-1" role="status"></span>
                         }
@@ -198,8 +213,8 @@
                         <option value="anthropic/claude-sonnet-4-5">Sonnet 4.5</option>
                         <option value="anthropic/claude-haiku-4-5">Haiku 4.5</option>
                     </select>
-                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
-                        @if (_isLoading)
+                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@(StartupTracker.IsStarting(Issue.Id))">
+                        @if (StartupTracker.IsStarting(Issue.Id))
                         {
                             <span class="spinner-border spinner-border-sm me-1" role="status"></span>
                         }
@@ -209,7 +224,14 @@
             }
         </div>
 
-        @if (!string.IsNullOrEmpty(_errorMessage))
+        @if (StartupTracker.HasFailed(Issue.Id))
+        {
+            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">
+                @(StartupTracker.GetState(Issue.Id).ErrorMessage ?? "Failed to start agent")
+                <button class="btn btn-link btn-sm p-0 ms-2" @onclick="ClearStartupError">Dismiss</button>
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(_errorMessage))
         {
             <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
         }
@@ -287,63 +309,108 @@
 
     private async Task StartPlanning()
     {
-        _isLoading = true;
         _errorMessage = null;
-        try
-        {
-            // Creates branch/worktree, starts agent in planning mode, and sends initial prompt
-            // Group and branch ID are parsed from the hsp: label in AgentWorkflowService
-            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Planning, _selectedModel);
-            await OnActionCompleted.InvokeAsync();
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
-        finally
-        {
-            _isLoading = false;
-        }
+        
+        // Mark as starting immediately (fire-and-forget pattern)
+        StartupTracker.MarkAsStarting(Issue.Id);
+        
+        // Notify parent that action started (allows UI to update)
+        await OnActionCompleted.InvokeAsync();
+        
+        // Start agent in background - don't await, allowing user to navigate away
+        _ = StartPlanningInBackgroundAsync();
     }
 
     private async Task StartBuilding()
     {
-        _isLoading = true;
         _errorMessage = null;
-        try
-        {
-            // Creates branch/worktree, starts agent in building mode, and sends initial prompt
-            // Group and branch ID are parsed from the hsp: label in AgentWorkflowService
-            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Building, _selectedModel);
-            await OnActionCompleted.InvokeAsync();
-        }
-        catch (Exception ex)
-        {
-            _errorMessage = ex.Message;
-        }
-        finally
-        {
-            _isLoading = false;
-        }
+        
+        // Mark as starting immediately (fire-and-forget pattern)
+        StartupTracker.MarkAsStarting(Issue.Id);
+        
+        // Notify parent that action started (allows UI to update)
+        await OnActionCompleted.InvokeAsync();
+        
+        // Start agent in background - don't await, allowing user to navigate away
+        _ = StartBuildingInBackgroundAsync();
     }
 
     private async Task ResumeAgent()
     {
-        _isLoading = true;
         _errorMessage = null;
+        
+        // Mark as starting immediately (fire-and-forget pattern)
+        StartupTracker.MarkAsStarting(Issue.Id);
+        
+        // Notify parent that action started (allows UI to update)
+        await OnActionCompleted.InvokeAsync();
+        
+        // Start agent in background - don't await, allowing user to navigate away
+        _ = StartAgentInBackgroundAsync();
+    }
+
+    private async Task StartPlanningInBackgroundAsync()
+    {
         try
         {
-            // Resume development on an InProgress issue (defaults to Building mode)
-            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Building, _selectedModel);
-            await OnActionCompleted.InvokeAsync();
+            // Creates branch/worktree, starts agent in planning mode, and sends initial prompt
+            // Group and branch ID are parsed from the hsp: label in AgentWorkflowService
+            var status = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Planning, _selectedModel);
+            
+            // Mark as started - this will broadcast via SignalR
+            StartupTracker.MarkAsStarted(Issue.Id);
+            
+            // Update local state if still viewing this issue
+            _agentStatus = status;
         }
         catch (Exception ex)
         {
+            // Mark as failed - this will broadcast via SignalR
+            StartupTracker.MarkAsFailed(Issue.Id, ex.Message);
             _errorMessage = ex.Message;
         }
-        finally
+    }
+
+    private async Task StartBuildingInBackgroundAsync()
+    {
+        try
         {
-            _isLoading = false;
+            // Creates branch/worktree, starts agent in building mode, and sends initial prompt
+            // Group and branch ID are parsed from the hsp: label in AgentWorkflowService
+            var status = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Building, _selectedModel);
+            
+            // Mark as started - this will broadcast via SignalR
+            StartupTracker.MarkAsStarted(Issue.Id);
+            
+            // Update local state if still viewing this issue
+            _agentStatus = status;
+        }
+        catch (Exception ex)
+        {
+            // Mark as failed - this will broadcast via SignalR
+            StartupTracker.MarkAsFailed(Issue.Id, ex.Message);
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task StartAgentInBackgroundAsync()
+    {
+        try
+        {
+            // Resume development on an InProgress issue (defaults to Building mode)
+            var status = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Building, _selectedModel);
+            
+            // Mark as started - this will broadcast via SignalR
+            StartupTracker.MarkAsStarted(Issue.Id);
+            
+            // Update local state if still viewing this issue
+            _agentStatus = status;
+        }
+        catch (Exception ex)
+        {
+            // Mark as failed - this will broadcast via SignalR
+            StartupTracker.MarkAsFailed(Issue.Id, ex.Message);
+            _errorMessage = ex.Message;
         }
     }
 
@@ -360,6 +427,7 @@
         {
             await AgentWorkflowService.StopAgentAsync(Issue.Id);
             _agentStatus = null;
+            StartupTracker.ClearState(Issue.Id);
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
@@ -370,6 +438,11 @@
         {
             _isLoading = false;
         }
+    }
+
+    private void ClearStartupError()
+    {
+        StartupTracker.ClearState(Issue.Id);
     }
     
     private string GetStatusDisplay()

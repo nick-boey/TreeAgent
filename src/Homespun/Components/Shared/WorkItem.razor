@@ -1,3 +1,4 @@
+@using Homespun.Features.OpenCode.Services
 @using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data.Entities
 
@@ -6,7 +7,7 @@
      @onclick="HandleClick">
     <div class="item-graph">
         <div class="graph-line graph-line-top @(IsFirst ? "hidden" : "")"></div>
-        <div class="graph-node @StatusColor" title="@StatusTooltip"></div>
+        <div class="graph-node @GetEffectiveStatusColor()" title="@GetEffectiveStatusTooltip()"></div>
         <div class="graph-line graph-line-bottom @(IsLast ? "hidden" : "")"></div>
     </div>
     <div class="item-body">
@@ -30,12 +31,56 @@
                 @Title
             </span>
         }
-        @if (!string.IsNullOrEmpty(Subtitle))
-        {
-            <div class="item-subtitle">@Subtitle</div>
-        }
+        <div class="item-subtitle-row">
+            @if (StartupState == AgentStartupState.Starting)
+            {
+                <span class="startup-indicator starting">
+                    <span class="spinner-border spinner-border-sm" role="status" style="width: 0.5rem; height: 0.5rem;"></span>
+                    Starting...
+                </span>
+            }
+            else if (StartupState == AgentStartupState.Failed)
+            {
+                <span class="startup-indicator failed" title="@StartupErrorMessage">
+                    Failed
+                </span>
+            }
+            @if (!string.IsNullOrEmpty(Subtitle))
+            {
+                <span class="item-subtitle">@Subtitle</span>
+            }
+        </div>
     </div>
 </div>
+
+<style>
+    .item-subtitle-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .startup-indicator {
+        font-size: 0.6875rem;
+        padding: 0.125rem 0.375rem;
+        border-radius: var(--radius-sm);
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    
+    .startup-indicator.starting {
+        background-color: var(--color-warning-bg, #fff3cd);
+        color: var(--color-warning-text, #856404);
+    }
+    
+    .startup-indicator.failed {
+        background-color: var(--color-danger-bg, #f8d7da);
+        color: var(--color-danger-text, #721c24);
+        cursor: help;
+    }
+</style>
 
 @code {
     [Parameter] public string Title { get; set; } = "";
@@ -50,11 +95,48 @@
     [Parameter] public bool IsFirst { get; set; }
     [Parameter] public bool IsLast { get; set; }
     [Parameter] public EventCallback OnClick { get; set; }
+    
+    /// <summary>
+    /// Optional agent startup state for this work item.
+    /// </summary>
+    [Parameter] public AgentStartupState? StartupState { get; set; }
+    
+    /// <summary>
+    /// Error message when StartupState is Failed.
+    /// </summary>
+    [Parameter] public string? StartupErrorMessage { get; set; }
 
     private string GetIndentStyle()
     {
         if (IndentLevel <= 0) return "";
         return $"margin-left: {IndentLevel * 16}px;";
+    }
+
+    private string GetEffectiveStatusColor()
+    {
+        // Override status color when agent is starting
+        if (StartupState == AgentStartupState.Starting)
+        {
+            return "status-starting";
+        }
+        if (StartupState == AgentStartupState.Failed)
+        {
+            return "status-failed";
+        }
+        return StatusColor;
+    }
+
+    private string GetEffectiveStatusTooltip()
+    {
+        if (StartupState == AgentStartupState.Starting)
+        {
+            return "Agent starting...";
+        }
+        if (StartupState == AgentStartupState.Failed)
+        {
+            return $"Agent failed: {StartupErrorMessage}";
+        }
+        return StatusTooltip ?? "";
     }
 
     private async Task HandleClick()

@@ -180,4 +180,16 @@ public static class AgentHubExtensions
     {
         await hubContext.Clients.Group(AgentHub.GlobalGroupName).SendAsync("ServerListChanged", servers);
     }
+
+    /// <summary>
+    /// Broadcasts agent startup state changes to all clients in the global group.
+    /// </summary>
+    /// <param name="hubContext">The hub context</param>
+    /// <param name="info">The startup state info</param>
+    public static async Task BroadcastAgentStartupStateChanged(
+        this IHubContext<AgentHub> hubContext,
+        AgentStartupInfo info)
+    {
+        await hubContext.Clients.Group(AgentHub.GlobalGroupName).SendAsync("AgentStartupStateChanged", info);
+    }
 }
