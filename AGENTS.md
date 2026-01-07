@@ -25,6 +25,19 @@ Use Test Driven Development practices where possible:
 3. **Test naming** - Use descriptive test names that explain the scenario and expected outcome
 4. **Test coverage** - Aim for comprehensive coverage of business logic in services
 
+### UI Text Conventions
+
+Use **sentence case** for all UI labels, headings, and button text throughout the application. Do not use Title Case.
+
+**Examples:**
+- "Branch name preview" (correct) vs "Branch Name Preview" (incorrect)
+- "Additional labels" (correct) vs "Additional Labels" (incorrect)
+- "Parent issue" (correct) vs "Parent Issue" (incorrect)
+
+**Exceptions:**
+- Proper nouns (e.g., "GitHub", "Claude")
+- Acronyms (e.g., "ID", "API")
+
 ### Project Structure (Vertical Slice Architecture)
 
 The project follows Vertical Slice Architecture, organizing code by feature rather than technical layer. Each feature contains its own services, data models, and components.
