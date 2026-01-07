@@ -5,7 +5,6 @@ using Homespun.Features.OpenCode.Services;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
-using Homespun.Features.Roadmap;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -17,7 +16,6 @@ public class AgentCompletionMonitorTests
 {
     private Mock<IOpenCodeClient> _mockClient = null!;
     private Mock<IGitHubService> _mockGitHubService = null!;
-    private Mock<IRoadmapService> _mockRoadmapService = null!;
     private Mock<ILogger<AgentCompletionMonitor>> _mockLogger = null!;
     private IOptions<AgentCompletionOptions> _options = null!;
 
@@ -26,7 +24,6 @@ public class AgentCompletionMonitorTests
     {
         _mockClient = new Mock<IOpenCodeClient>();
         _mockGitHubService = new Mock<IGitHubService>();
-        _mockRoadmapService = new Mock<IRoadmapService>();
         _mockLogger = new Mock<ILogger<AgentCompletionMonitor>>();
         _options = Options.Create(new AgentCompletionOptions
         {

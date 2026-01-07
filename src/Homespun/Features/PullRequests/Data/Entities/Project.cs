@@ -19,13 +19,15 @@ public class Project
 
     /// <summary>
     /// GitHub repository owner (user or organization).
+    /// Null for local-only projects.
     /// </summary>
-    public required string GitHubOwner { get; set; }
+    public string? GitHubOwner { get; set; }
 
     /// <summary>
     /// GitHub repository name.
+    /// Null for local-only projects.
     /// </summary>
-    public required string GitHubRepo { get; set; }
+    public string? GitHubRepo { get; set; }
 
     /// <summary>
     /// Default branch name retrieved from GitHub.

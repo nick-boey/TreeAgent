@@ -155,10 +155,18 @@ public class OpenCodeClient : IOpenCodeClient
                         var jsonData = eventData["data:".Length..].Trim();
                         if (!string.IsNullOrEmpty(jsonData))
                         {
+                            _logger.LogDebug("SSE raw event data: {Data}", jsonData);
+                            
                             OpenCodeEvent? evt = null;
                             try
                             {
                                 evt = JsonSerializer.Deserialize<OpenCodeEvent>(jsonData, JsonOptions);
+                                
+                                if (evt != null)
+                                {
+                                    _logger.LogDebug("SSE parsed event: Type={Type}, SessionId={SessionId}, Status={Status}", 
+                                        evt.Type, evt.Properties?.SessionId, evt.Properties?.StatusValue);
+                                }
                             }
                             catch (JsonException ex)
                             {
@@ -177,6 +185,54 @@ public class OpenCodeClient : IOpenCodeClient
             {
                 eventBuilder.AppendLine(line);
             }
+        }
+    }
+
+    public async Task<string?> GetCurrentPathAsync(string baseUrl, CancellationToken ct = default)
+    {
+        try
+        {
+            var response = await _httpClient.GetAsync($"{baseUrl}/path", ct);
+            response.EnsureSuccessStatusCode();
+            
+            // The /path endpoint returns a Path object - log raw response for debugging
+            var json = await response.Content.ReadAsStringAsync(ct);
+            _logger.LogDebug("GetCurrentPathAsync: Raw response from /path: {Json}", json);
+            
+            using var doc = JsonDocument.Parse(json);
+            
+            // Try property names returned by OpenCode /path endpoint
+            // Response format: {"home":"...","state":"...","config":"...","worktree":"...","directory":"..."}
+            if (doc.RootElement.TryGetProperty("directory", out var directoryProp) && directoryProp.ValueKind == JsonValueKind.String)
+            {
+                return directoryProp.GetString();
+            }
+            if (doc.RootElement.TryGetProperty("worktree", out var worktreeProp) && worktreeProp.ValueKind == JsonValueKind.String)
+            {
+                return worktreeProp.GetString();
+            }
+            if (doc.RootElement.TryGetProperty("path", out var pathProp) && pathProp.ValueKind == JsonValueKind.String)
+            {
+                return pathProp.GetString();
+            }
+            if (doc.RootElement.TryGetProperty("cwd", out var cwdProp) && cwdProp.ValueKind == JsonValueKind.String)
+            {
+                return cwdProp.GetString();
+            }
+            
+            // If it's a simple string response
+            if (doc.RootElement.ValueKind == JsonValueKind.String)
+            {
+                return doc.RootElement.GetString();
+            }
+            
+            _logger.LogWarning("GetCurrentPathAsync: Unable to find path property in response. Raw JSON: {Json}", json);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "GetCurrentPathAsync: Failed to get current path from {BaseUrl}", baseUrl);
+            return null;
         }
     }
 }

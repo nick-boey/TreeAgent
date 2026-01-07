@@ -1,0 +1,359 @@
+@using Homespun.Features.Beads
+@using Homespun.Features.Beads.Data
+@using Homespun.Features.OpenCode.Services
+
+@inject IAgentWorkflowService AgentWorkflowService
+@inject NavigationManager NavigationManager
+
+<div class="card beads-issue-detail-panel">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Issue Details</span>
+        <button type="button" class="btn-close" @onclick="OnClose"></button>
+    </div>
+    <div class="card-body">
+        <h5 class="card-title">@Issue.Title</h5>
+
+        <div class="mb-3">
+            <span class="badge bg-secondary">@Issue.Id</span>
+            <span class="badge @GetTypeBadgeClass() ms-1">@Issue.Type</span>
+            <span class="badge @GetStatusBadgeClass() ms-1">@GetStatusDisplay()</span>
+            @if (Issue.Priority.HasValue)
+            {
+                <span class="badge @GetPriorityBadgeClass() ms-1">P@Issue.Priority</span>
+            }
+            @if (_agentStatus != null)
+            {
+                <span class="badge bg-success ms-1">Agent Running</span>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(Issue.Description))
+        {
+            <div class="description-content mb-3">
+                <pre class="mb-0">@Issue.Description</pre>
+            </div>
+        }
+
+        <dl class="row small">
+            @if (Metadata != null && !string.IsNullOrEmpty(Metadata.BranchName))
+            {
+                <dt class="col-4">Branch</dt>
+                <dd class="col-8"><code>@Metadata.BranchName</code></dd>
+            }
+            else if (_branchInfo != null)
+            {
+                <dt class="col-4">Branch Preview</dt>
+                <dd class="col-8"><code>@GetBranchPreview()</code></dd>
+            }
+            
+            @if (_branchInfo != null)
+            {
+                <dt class="col-4">Group</dt>
+                <dd class="col-8">@_branchInfo.Value.Group</dd>
+                
+                <dt class="col-4">Branch ID</dt>
+                <dd class="col-8">@_branchInfo.Value.BranchId</dd>
+            }
+            
+            @if (Issue.Labels.Count > 0)
+            {
+                <dt class="col-4">Labels</dt>
+                <dd class="col-8">
+                    @foreach (var label in Issue.Labels.Where(l => !BeadsBranchLabel.IsHomespunLabel(l)))
+                    {
+                        <span class="badge bg-light text-dark me-1">@label</span>
+                    }
+                    @if (_branchInfo != null)
+                    {
+                        <span class="badge bg-info text-dark me-1" title="Homespun branch label">@GetHspLabel()</span>
+                    }
+                </dd>
+            }
+            
+            @if (!string.IsNullOrEmpty(Issue.ParentId))
+            {
+                <dt class="col-4">Parent</dt>
+                <dd class="col-8"><code>@Issue.ParentId</code></dd>
+            }
+            
+            @if (!string.IsNullOrEmpty(Issue.Assignee))
+            {
+                <dt class="col-4">Assignee</dt>
+                <dd class="col-8">@Issue.Assignee</dd>
+            }
+        </dl>
+
+        @* Warning if no hsp: label *@
+        @if (_branchInfo == null)
+        {
+            <div class="alert alert-warning py-2 small">
+                <strong>Missing branch label:</strong> This issue needs an <code>hsp:</code> label to start development.
+                <br />
+                Example: <code>hsp:frontend/-/update-page</code>
+            </div>
+        }
+
+        @* Agent Status Display *@
+        @if (_agentStatus != null)
+        {
+            <div class="border-top pt-3 mt-3">
+                <h6>OpenCode Agent</h6>
+                <div class="mb-2">
+                    <span class="badge bg-success">Running</span>
+                    @if (_agentStatus.Server.WebViewUrl != null)
+                    {
+                        <a href="@_agentStatus.Server.WebViewUrl" target="_blank" 
+                           class="btn btn-sm btn-outline-primary ms-2">
+                            Open Web View
+                        </a>
+                    }
+                    else
+                    {
+                        <span class="text-muted ms-2">Session initializing...</span>
+                    }
+                </div>
+                <div class="mb-2">
+                    <small class="text-muted">
+                        Server: <code>@_agentStatus.Server.BaseUrl</code>
+                    </small>
+                    @if (_agentStatus.ActiveSession != null)
+                    {
+                        <br/>
+                        <small class="text-muted">
+                            Session: <code>@_agentStatus.ActiveSession.Id</code>
+                        </small>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+    <div class="card-footer">
+        <div class="d-flex flex-wrap gap-2">
+            @if (_agentStatus != null)
+            {
+                <button class="btn btn-sm btn-outline-danger" @onclick="StopAgent" disabled="@_isLoading">
+                    @if (_isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    Stop Agent
+                </button>
+            }
+            else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo != null)
+            {
+                <button class="btn btn-sm btn-success" @onclick="StartDevelopment" disabled="@_isLoading">
+                    @if (_isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    Start Development
+                </button>
+            }
+            else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo == null)
+            {
+                <button class="btn btn-sm btn-secondary" disabled title="Add an hsp: label to enable development">
+                    Start Development
+                </button>
+            }
+            else if (Issue.Status == BeadsIssueStatus.InProgress && _agentStatus == null && _branchInfo != null)
+            {
+                <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
+                    @if (_isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    Resume Agent
+                </button>
+            }
+            else if (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr") && _branchInfo != null)
+            {
+                <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
+                    @if (_isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    Resume Agent
+                </button>
+            }
+        </div>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
+        }
+    </div>
+</div>
+
+<style>
+    .description-content pre {
+        background-color: var(--bg-secondary);
+        padding: var(--spacing-sm);
+        border-radius: var(--radius-sm);
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-size: 0.85rem;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+</style>
+
+@code {
+    [Parameter] public required string ProjectId { get; set; }
+    
+    [Parameter] public required BeadsIssue Issue { get; set; }
+    
+    [Parameter] public BeadsIssueMetadata? Metadata { get; set; }
+
+    [Parameter] public EventCallback OnActionCompleted { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool _isLoading;
+    private string? _errorMessage;
+    private AgentStatus? _agentStatus;
+    private (string Group, string BranchId)? _branchInfo;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _agentStatus = null;
+        _errorMessage = null;
+        
+        // Parse group and branch ID from hsp: label
+        _branchInfo = BeadsBranchLabel.Parse(Issue.Labels);
+        
+        // If the issue is in progress, there might be an agent running
+        if (Issue.Status == BeadsIssueStatus.InProgress || Issue.Status == BeadsIssueStatus.Blocked)
+        {
+            await TryRefreshAgentStatus();
+        }
+    }
+
+    private string GetBranchPreview()
+    {
+        if (_branchInfo == null) return "";
+        return $"{_branchInfo.Value.Group}/{Issue.Type.ToString().ToLowerInvariant()}/{_branchInfo.Value.BranchId}+{Issue.Id}";
+    }
+
+    private string GetHspLabel()
+    {
+        if (_branchInfo == null) return "";
+        return BeadsBranchLabel.Create(_branchInfo.Value.Group, _branchInfo.Value.BranchId);
+    }
+
+    private async Task TryRefreshAgentStatus()
+    {
+        try
+        {
+            _agentStatus = await AgentWorkflowService.GetAgentStatusForBeadsIssueAsync(Issue.Id);
+        }
+        catch
+        {
+            _agentStatus = null;
+        }
+    }
+
+    private async Task StartDevelopment()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            // Creates branch/worktree, starts agent, and sends initial prompt
+            // Group and branch ID are parsed from the hsp: label in AgentWorkflowService
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id);
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ResumeAgent()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            // Resume development on an InProgress issue
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id);
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task StopAgent()
+    {
+        if (_agentStatus == null)
+        {
+            return;
+        }
+
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            await AgentWorkflowService.StopAgentAsync(Issue.Id);
+            _agentStatus = null;
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+    
+    private string GetStatusDisplay()
+    {
+        if (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr"))
+        {
+            return "Awaiting PR";
+        }
+        return Issue.Status.ToString();
+    }
+
+    private string GetTypeBadgeClass() => Issue.Type switch
+    {
+        BeadsIssueType.Feature => "bg-primary",
+        BeadsIssueType.Bug => "bg-danger",
+        BeadsIssueType.Task => "bg-info",
+        BeadsIssueType.Epic => "bg-purple",
+        BeadsIssueType.Chore => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    private string GetStatusBadgeClass() => Issue.Status switch
+    {
+        BeadsIssueStatus.Open => "bg-secondary",
+        BeadsIssueStatus.InProgress => "bg-primary",
+        BeadsIssueStatus.Blocked => Issue.Labels.Contains("awaiting-pr") ? "bg-info" : "bg-warning text-dark",
+        BeadsIssueStatus.Closed => "bg-success",
+        BeadsIssueStatus.Deferred => "bg-light text-dark",
+        _ => "bg-secondary"
+    };
+
+    private string GetPriorityBadgeClass() => Issue.Priority switch
+    {
+        0 => "bg-danger",     // P0 - Critical
+        1 => "bg-warning text-dark", // P1 - High
+        2 => "bg-info",       // P2 - Medium
+        3 => "bg-secondary",  // P3 - Low
+        4 => "bg-light text-dark", // P4 - Backlog
+        _ => "bg-secondary"
+    };
+}

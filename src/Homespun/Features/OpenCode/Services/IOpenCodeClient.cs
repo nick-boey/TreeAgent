@@ -56,4 +56,13 @@ public interface IOpenCodeClient
     /// Subscribes to server events via SSE.
     /// </summary>
     IAsyncEnumerable<OpenCodeEvent> SubscribeToEventsAsync(string baseUrl, CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the current working path from the OpenCode server.
+    /// Used to verify the server is running in the expected directory.
+    /// </summary>
+    /// <param name="baseUrl">The server base URL.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>The current path, or null if unable to retrieve.</returns>
+    Task<string?> GetCurrentPathAsync(string baseUrl, CancellationToken ct = default);
 }

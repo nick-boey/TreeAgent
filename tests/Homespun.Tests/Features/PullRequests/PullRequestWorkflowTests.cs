@@ -31,7 +31,7 @@ public class PullRequestWorkflowTests
 
         _mockConfig.Setup(c => c["GITHUB_TOKEN"]).Returns("test-token");
 
-        _service = new PullRequestWorkflowService(_dataStore, _mockRunner.Object, _mockConfig.Object, _mockGitHubClient.Object);
+        _service = new PullRequestWorkflowService(_dataStore, _mockRunner.Object, _mockConfig.Object, _mockGitHubClient.Object, new Microsoft.Extensions.Logging.Abstractions.NullLogger<PullRequestWorkflowService>());
     }
 
     [TearDown]

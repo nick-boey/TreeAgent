@@ -8,16 +8,56 @@
 
 <h1>New Project</h1>
 
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <button class="nav-link @(_mode == "github" ? "active" : "")" 
+                type="button"
+                @onclick="@(() => _mode = "github")">
+            GitHub Repository
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link @(_mode == "local" ? "active" : "")" 
+                type="button"
+                @onclick="@(() => _mode = "local")">
+            Local Repository
+        </button>
+    </li>
+</ul>
+
 <form @onsubmit="HandleSubmit">
-    <div class="mb-3">
-        <label for="ownerRepo" class="form-label">GitHub Repository</label>
-        <input type="text" class="form-control" id="ownerRepo" @bind="_ownerRepo" required
-               placeholder="owner/repository" />
-        <div class="form-text">
-            Enter the GitHub repository in owner/repository format (e.g., microsoft/vscode).
-            The repository will be cloned to ~/.homespun/src/&lt;repository&gt;/&lt;default-branch&gt;.
+    @if (_mode == "github")
+    {
+        <div class="mb-3">
+            <label for="ownerRepo" class="form-label">GitHub Repository</label>
+            <input type="text" class="form-control" id="ownerRepo" @bind="_ownerRepo" required
+                   placeholder="owner/repository" />
+            <div class="form-text">
+                Enter the GitHub repository in owner/repository format (e.g., microsoft/vscode).
+                The repository will be cloned to ~/.homespun/src/&lt;repository&gt;/&lt;default-branch&gt;.
+            </div>
         </div>
-    </div>
+    }
+    else
+    {
+        <div class="mb-3">
+            <label for="projectName" class="form-label">Project Name</label>
+            <input type="text" class="form-control" id="projectName" @bind="_projectName" required
+                   placeholder="my-project" />
+            <div class="form-text">
+                Use only letters, numbers, hyphens, and underscores.
+                A new git repository will be created at ~/.homespun/src/&lt;name&gt;/&lt;branch&gt;.
+            </div>
+        </div>
+        <div class="mb-3">
+            <label for="defaultBranch" class="form-label">Default Branch</label>
+            <input type="text" class="form-control" id="defaultBranch" @bind="_defaultBranch"
+                   placeholder="main" />
+            <div class="form-text">
+                Leave blank to use "main" as the default branch.
+            </div>
+        </div>
+    }
 
     @if (!string.IsNullOrEmpty(_errorMessage))
     {
@@ -41,7 +81,10 @@
 </form>
 
 @code {
+    private string _mode = "github";
     private string _ownerRepo = "";
+    private string _projectName = "";
+    private string _defaultBranch = "main";
     private string? _errorMessage;
     private bool _isSubmitting;
 
@@ -52,7 +95,17 @@
 
         try
         {
-            var result = await ProjectService.CreateAsync(_ownerRepo);
+            CreateProjectResult result;
+            
+            if (_mode == "github")
+            {
+                result = await ProjectService.CreateAsync(_ownerRepo);
+            }
+            else
+            {
+                var branch = string.IsNullOrWhiteSpace(_defaultBranch) ? "main" : _defaultBranch.Trim();
+                result = await ProjectService.CreateLocalAsync(_projectName.Trim(), branch);
+            }
 
             if (result.Success)
             {

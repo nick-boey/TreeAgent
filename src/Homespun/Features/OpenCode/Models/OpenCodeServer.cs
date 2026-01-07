@@ -16,6 +16,27 @@ public class OpenCodeServer
     public required string WorktreePath { get; init; }
     public required int Port { get; init; }
     public string BaseUrl => $"http://127.0.0.1:{Port}";
+    
+    /// <summary>
+    /// Gets the full web view URL including encoded path and session.
+    /// Returns null if no active session.
+    /// </summary>
+    public string? WebViewUrl => ActiveSessionId != null 
+        ? $"{BaseUrl}/{Base64UrlEncode(WorktreePath)}/session/{ActiveSessionId}"
+        : null;
+
+    /// <summary>
+    /// Encodes a string as URL-safe Base64 (matching OpenCode's encoding).
+    /// Uses - instead of +, _ instead of /, and removes padding =.
+    /// </summary>
+    public static string Base64UrlEncode(string value)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(value);
+        return Convert.ToBase64String(bytes)
+            .Replace('+', '-')
+            .Replace('/', '_')
+            .TrimEnd('=');
+    }
     public Process? Process { get; set; }
     public DateTime StartedAt { get; init; } = DateTime.UtcNow;
     public OpenCodeServerStatus Status { get; set; } = OpenCodeServerStatus.Starting;

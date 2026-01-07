@@ -7,16 +7,14 @@ namespace Homespun.Features.Git;
 
 public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktreeService> logger) : IGitWorktreeService
 {
-    public GitWorktreeService() : this(new CommandRunner(), NullLogger<GitWorktreeService>.Instance)
+    public GitWorktreeService() : this(
+        new CommandRunner(NullLogger<CommandRunner>.Instance), 
+        NullLogger<GitWorktreeService>.Instance)
     {
     }
 
     public async Task<string?> CreateWorktreeAsync(string repoPath, string branchName, bool createBranch = false, string? baseBranch = null)
     {
-        logger.LogDebug(
-            "Creating worktree for branch {BranchName} in repo {RepoPath} (createBranch={CreateBranch}, baseBranch={BaseBranch})",
-            branchName, repoPath, createBranch, baseBranch);
-        
         var sanitizedName = SanitizeBranchName(branchName);
         // Create worktree as sibling of the main repo, not inside it
         // e.g., ~/.homespun/src/repo/main -> ~/.homespun/src/repo/<branch-name>
@@ -27,68 +25,46 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
             throw new InvalidOperationException($"Cannot determine parent directory of {repoPath}");
         }
         
-        var worktreePath = Path.Combine(parentDir, sanitizedName);
-        logger.LogDebug("Worktree path will be {WorktreePath}", worktreePath);
+        // Normalize the path to use platform-native separators
+        // This fixes issues on Windows where mixed forward/back slashes cause problems
+        var worktreePath = Path.GetFullPath(Path.Combine(parentDir, sanitizedName));
 
         // Ensure parent directories exist for nested branch names (e.g., app/feature/id)
         var worktreeParentDir = Path.GetDirectoryName(worktreePath);
         if (!string.IsNullOrEmpty(worktreeParentDir) && !Directory.Exists(worktreeParentDir))
         {
-            logger.LogDebug("Creating parent directory {ParentDir}", worktreeParentDir);
             Directory.CreateDirectory(worktreeParentDir);
         }
 
         if (createBranch)
         {
             var baseRef = baseBranch ?? "HEAD";
-            logger.LogDebug("Creating branch {BranchName} from {BaseRef}", branchName, baseRef);
             
             var branchResult = await commandRunner.RunAsync("git", $"branch \"{branchName}\" \"{baseRef}\"", repoPath);
             if (!branchResult.Success && !branchResult.Error.Contains("already exists"))
             {
-                logger.LogError(
-                    "Failed to create branch {BranchName} from {BaseRef}: {Error}",
-                    branchName, baseRef, branchResult.Error);
                 return null;
-            }
-            
-            if (branchResult.Error.Contains("already exists"))
-            {
-                logger.LogDebug("Branch {BranchName} already exists, continuing", branchName);
             }
         }
 
         var args = $"worktree add \"{worktreePath}\" \"{branchName}\"";
-        logger.LogDebug("Running: git {Args}", args);
-        
         var result = await commandRunner.RunAsync("git", args, repoPath);
 
         if (!result.Success)
         {
-            logger.LogError(
-                "Failed to create worktree at {WorktreePath} for branch {BranchName}: {Error}",
-                worktreePath, branchName, result.Error);
             return null;
         }
         
-        logger.LogInformation(
-            "Created worktree at {WorktreePath} for branch {BranchName}",
-            worktreePath, branchName);
+        logger.LogInformation("Created worktree at {WorktreePath} for branch {BranchName}", worktreePath, branchName);
         
         return worktreePath;
     }
 
     public async Task<bool> RemoveWorktreeAsync(string repoPath, string worktreePath)
     {
-        logger.LogDebug("Removing worktree {WorktreePath} from repo {RepoPath}", worktreePath, repoPath);
-        
         var result = await commandRunner.RunAsync("git", $"worktree remove \"{worktreePath}\" --force", repoPath);
         
-        if (!result.Success)
-        {
-            logger.LogError("Failed to remove worktree {WorktreePath}: {Error}", worktreePath, result.Error);
-        }
-        else
+        if (result.Success)
         {
             logger.LogInformation("Removed worktree {WorktreePath}", worktreePath);
         }
@@ -98,13 +74,10 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
     public async Task<List<WorktreeInfo>> ListWorktreesAsync(string repoPath)
     {
-        logger.LogDebug("Listing worktrees in repo {RepoPath}", repoPath);
-        
         var result = await commandRunner.RunAsync("git", "worktree list --porcelain", repoPath);
 
         if (!result.Success)
         {
-            logger.LogWarning("Failed to list worktrees in {RepoPath}: {Error}", repoPath, result.Error);
             return [];
         }
 
@@ -157,57 +130,34 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
     public async Task<bool> PullLatestAsync(string worktreePath)
     {
-        logger.LogDebug("Pulling latest changes in worktree {WorktreePath}", worktreePath);
-        
-        // First fetch from remote
-        var fetchResult = await commandRunner.RunAsync("git", "fetch origin", worktreePath);
-        if (!fetchResult.Success)
-        {
-            // Fetch might fail if no remote tracking, that's ok for local-only branches
-            logger.LogDebug("Fetch failed (may be expected for local branches): {Error}", fetchResult.Error);
-        }
+        // First fetch from remote (may fail for local-only branches, which is OK)
+        await commandRunner.RunAsync("git", "fetch origin", worktreePath);
 
         // Try to pull with rebase to get latest changes
         var pullResult = await commandRunner.RunAsync("git", "pull --rebase --autostash", worktreePath);
         
         // Pull might fail if no upstream is set, which is fine for new branches
-        var success = pullResult.Success || 
-                      pullResult.Error.Contains("no tracking information") ||
-                      pullResult.Error.Contains("There is no tracking information");
-        
-        if (success)
-        {
-            logger.LogDebug("Pull completed for {WorktreePath}", worktreePath);
-        }
-        else
-        {
-            logger.LogWarning("Failed to pull latest in {WorktreePath}: {Error}", worktreePath, pullResult.Error);
-        }
-        
-        return success;
+        return pullResult.Success || 
+               pullResult.Error.Contains("no tracking information") ||
+               pullResult.Error.Contains("There is no tracking information");
     }
 
     public async Task<bool> FetchAndUpdateBranchAsync(string repoPath, string branchName)
     {
-        logger.LogDebug("Fetching and updating branch {BranchName} in repo {RepoPath}", branchName, repoPath);
-
         // Fetch the specific branch from origin
         var fetchResult = await commandRunner.RunAsync("git", $"fetch origin {branchName}:{branchName}", repoPath);
         
         if (!fetchResult.Success)
         {
             // Try a simple fetch if the branch update fails (might be checked out)
-            logger.LogDebug("Direct branch update failed, trying simple fetch: {Error}", fetchResult.Error);
             var simpleFetchResult = await commandRunner.RunAsync("git", "fetch origin", repoPath);
             
             if (!simpleFetchResult.Success)
             {
-                logger.LogWarning("Failed to fetch from origin in {RepoPath}: {Error}", repoPath, simpleFetchResult.Error);
                 return false;
             }
         }
 
-        logger.LogInformation("Successfully fetched and updated branch {BranchName}", branchName);
         return true;
     }
 

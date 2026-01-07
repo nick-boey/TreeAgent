@@ -25,6 +25,12 @@ public class PullRequest
     /// Null means no agent is currently running.
     /// </summary>
     public int? AgentServerPort { get; set; }
+    
+    /// <summary>
+    /// The beads issue ID that this PR implements, if applicable.
+    /// Used for traceability between beads issues and GitHub PRs.
+    /// </summary>
+    public string? BeadsIssueId { get; set; }
 
     // Navigation properties excluded from JSON serialization - populated at runtime if needed
     [JsonIgnore]

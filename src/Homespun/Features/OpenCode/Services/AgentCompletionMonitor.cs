@@ -1,7 +1,6 @@
 using System.Text.RegularExpressions;
 using Homespun.Features.GitHub;
 using Homespun.Features.OpenCode.Models;
-using Homespun.Features.Roadmap;
 using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.OpenCode.Services;
@@ -13,20 +12,17 @@ public partial class AgentCompletionMonitor : IAgentCompletionMonitor
 {
     private readonly IOpenCodeClient _client;
     private readonly IGitHubService _gitHubService;
-    private readonly IRoadmapService _roadmapService;
     private readonly AgentCompletionOptions _options;
     private readonly ILogger<AgentCompletionMonitor> _logger;
 
     public AgentCompletionMonitor(
         IOpenCodeClient client,
         IGitHubService gitHubService,
-        IRoadmapService roadmapService,
         IOptions<AgentCompletionOptions> options,
         ILogger<AgentCompletionMonitor> logger)
     {
         _client = client;
         _gitHubService = gitHubService;
-        _roadmapService = roadmapService;
         _options = options.Value;
         _logger = logger;
     }

@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Homespun.Features.OpenCode.Hubs;
 using Homespun.Features.OpenCode.Models;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
 
 namespace Homespun.Features.OpenCode.Services;
@@ -14,6 +16,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
     private readonly OpenCodeOptions _options;
     private readonly IOpenCodeClient _client;
     private readonly IPortAllocationService _portAllocationService;
+    private readonly IHubContext<AgentHub> _hubContext;
     private readonly ILogger<OpenCodeServerManager> _logger;
     private readonly ConcurrentDictionary<string, OpenCodeServer> _servers = new();
     private readonly string _resolvedExecutablePath;
@@ -23,11 +26,13 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         IOptions<OpenCodeOptions> options,
         IOpenCodeClient client,
         IPortAllocationService portAllocationService,
+        IHubContext<AgentHub> hubContext,
         ILogger<OpenCodeServerManager> logger)
     {
         _options = options.Value;
         _client = client;
         _portAllocationService = portAllocationService;
+        _hubContext = hubContext;
         _logger = logger;
         _resolvedExecutablePath = ResolveExecutablePath(_options.ExecutablePath);
         _logger.LogDebug("Resolved OpenCode executable path: {Path}", _resolvedExecutablePath);
@@ -222,9 +227,54 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
 
             // Wait for health check to pass
             await WaitForHealthyAsync(server, ct);
+            
+            // Diagnostic: Verify OpenCode is running in the expected directory
+            try
+            {
+                var reportedPath = await _client.GetCurrentPathAsync(server.BaseUrl, ct);
+                _logger.LogInformation(
+                    "OpenCode server path verification: ReportedPath={ReportedPath}, ExpectedPath={ExpectedPath}",
+                    reportedPath ?? "(null)",
+                    worktreePath);
+                
+                if (reportedPath != null)
+                {
+                    var normalizedReported = Path.GetFullPath(reportedPath);
+                    var normalizedExpected = Path.GetFullPath(worktreePath);
+                    
+                    if (!string.Equals(normalizedReported, normalizedExpected, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.LogWarning(
+                            "OpenCode working directory MISMATCH! Expected={Expected}, Actual={Actual}. " +
+                            "The agent may be working in the wrong directory.",
+                            normalizedExpected,
+                            normalizedReported);
+                    }
+                    else
+                    {
+                        _logger.LogInformation("OpenCode working directory verified successfully: {Path}", normalizedReported);
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Unable to verify OpenCode working directory - /path endpoint returned null. " +
+                        "Expected: {ExpectedPath}",
+                        worktreePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to verify OpenCode working directory for entity {EntityId}", entityId);
+            }
+            
             server.Status = OpenCodeServerStatus.Running;
             
             _logger.LogInformation("OpenCode server started on port {Port} for entity {EntityId}", port, entityId);
+            
+            // Broadcast server list change to all connected clients
+            await BroadcastServerListAsync();
+            
             return server;
         }
         catch (Exception ex)
@@ -280,6 +330,9 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         _portAllocationService.ReleasePort(server.Port);
         server.Status = OpenCodeServerStatus.Stopped;
         _logger.LogInformation("OpenCode server stopped for entity {EntityId}", entityId);
+        
+        // Broadcast server list change to all connected clients
+        await BroadcastServerListAsync();
     }
 
     public OpenCodeServer? GetServerForEntity(string entityId)
@@ -292,6 +345,26 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         return _servers.Values
             .Where(s => s.Status == OpenCodeServerStatus.Running)
             .ToList();
+    }
+
+    /// <summary>
+    /// Broadcasts the current list of running servers to all connected SignalR clients.
+    /// </summary>
+    private async Task BroadcastServerListAsync()
+    {
+        var servers = GetRunningServers()
+            .Select(s => new RunningServerInfo
+            {
+                EntityId = s.EntityId,
+                Port = s.Port,
+                BaseUrl = s.BaseUrl,
+                WorktreePath = s.WorktreePath,
+                StartedAt = s.StartedAt,
+                ActiveSessionId = s.ActiveSessionId,
+                WebViewUrl = s.WebViewUrl
+            }).ToList();
+        
+        await _hubContext.BroadcastServerListChanged(servers);
     }
 
     public async Task<bool> IsHealthyAsync(OpenCodeServer server, CancellationToken ct = default)
@@ -316,23 +389,61 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             arguments += " --continue";
         }
         
+        // Normalize the working directory path to use platform-native separators
+        // This fixes issues on Windows where mixed forward/back slashes cause problems
+        var normalizedWorkingDirectory = Path.GetFullPath(workingDirectory);
+        
+        // Pre-flight check: Verify working directory exists
+        var directoryExists = Directory.Exists(normalizedWorkingDirectory);
+        if (!directoryExists)
+        {
+            _logger.LogError(
+                "OpenCode working directory does not exist: {WorkingDirectory}",
+                normalizedWorkingDirectory);
+            throw new DirectoryNotFoundException(
+                $"OpenCode working directory does not exist: {normalizedWorkingDirectory}");
+        }
+        
+        // Check if executable is a .cmd file (Windows npm package wrapper)
+        var isCmdFile = _resolvedExecutablePath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase);
+        
+        // Log all process start parameters at Info level for debugging
+        _logger.LogInformation(
+            "Starting OpenCode server: Executable={Executable}, Arguments={Arguments}, " +
+            "WorkingDirectory={WorkingDirectory}, DirectoryExists={DirectoryExists}, IsCmdFile={IsCmdFile}",
+            _resolvedExecutablePath,
+            arguments,
+            normalizedWorkingDirectory,
+            directoryExists,
+            isCmdFile);
+        
         var startInfo = new ProcessStartInfo
         {
             FileName = _resolvedExecutablePath,
             Arguments = arguments,
-            WorkingDirectory = workingDirectory,
+            WorkingDirectory = normalizedWorkingDirectory,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true
         };
 
-        _logger.LogDebug("Starting OpenCode: {FileName} {Arguments}", startInfo.FileName, startInfo.Arguments);
+        _logger.LogInformation(
+            "ProcessStartInfo details: FileName={FileName}, Arguments={Arguments}, WorkingDirectory={WorkingDirectory}, " +
+            "UseShellExecute={UseShellExecute}, CreateNoWindow={CreateNoWindow}",
+            startInfo.FileName,
+            startInfo.Arguments,
+            startInfo.WorkingDirectory,
+            startInfo.UseShellExecute,
+            startInfo.CreateNoWindow);
         
         var process = new Process { StartInfo = startInfo };
         process.Start();
         
-        _logger.LogDebug("Started OpenCode process with PID {ProcessId} on port {Port}", process.Id, port);
+        _logger.LogInformation(
+            "Started OpenCode process: PID={ProcessId}, Port={Port}, WorkingDirectory={WorkingDirectory}",
+            process.Id, port, normalizedWorkingDirectory);
+        
         return process;
     }
 

@@ -234,6 +234,18 @@ dotnet ef migrations add <MigrationName>
 
 Migrations are applied automatically on startup.
 
+## Known Issues
+
+### OpenCode Web UI Shows Wrong Branch for Worktrees
+
+When running OpenCode in a Git worktree, the web UI may display "main" (or your default branch) instead of the actual worktree branch. This is a bug in OpenCode's VCS module where it runs `git rev-parse --abbrev-ref HEAD` in the main repository directory instead of the worktree directory.
+
+**Workaround**: The terminal within the OpenCode web UI correctly operates in the worktree, so you can verify the actual branch using `git branch` in the terminal.
+
+**Root Cause**: In OpenCode's `packages/opencode/src/project/vcs.ts`, line 35 uses `.cwd(Instance.worktree)` which points to the main repository path (from `git rev-parse --git-common-dir`), not the worktree directory (`Instance.directory`).
+
+**Status**: A similar fix was applied to OpenCode's TUI in commit `16f9edc1a` but the web app still has this issue. The fix requires changing `.cwd(Instance.worktree)` to `.cwd(Instance.directory)` in the `currentBranch()` function.
+
 ## License
 
 MIT

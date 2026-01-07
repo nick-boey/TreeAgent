@@ -1,9 +1,9 @@
+using Homespun.Features.Beads.Data;
 using Homespun.Features.OpenCode;
 using Homespun.Features.OpenCode.Models;
 using Homespun.Features.OpenCode.Services;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
-using Homespun.Features.Roadmap;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -16,7 +16,6 @@ public class AgentWorkflowServiceTests
     private Mock<IOpenCodeClient> _mockClient = null!;
     private Mock<IOpenCodeConfigGenerator> _mockConfigGenerator = null!;
     private Mock<PullRequestDataService> _mockPullRequestService = null!;
-    private Mock<IRoadmapService> _mockRoadmapService = null!;
     private Mock<ILogger<AgentWorkflowService>> _mockLogger = null!;
 
     [SetUp]
@@ -26,104 +25,111 @@ public class AgentWorkflowServiceTests
         _mockClient = new Mock<IOpenCodeClient>();
         _mockConfigGenerator = new Mock<IOpenCodeConfigGenerator>();
         _mockPullRequestService = new Mock<PullRequestDataService>(MockBehavior.Loose, null!);
-        _mockRoadmapService = new Mock<IRoadmapService>();
         _mockLogger = new Mock<ILogger<AgentWorkflowService>>();
     }
 
-    #region BuildInitialPrompt Tests
+    #region BuildInitialPromptForBeadsIssue Tests
 
     [Test]
-    public void BuildInitialPrompt_IncludesBranchName()
+    public void BuildInitialPromptForBeadsIssue_IncludesBranchName()
     {
-        var change = CreateTestChange();
+        var issue = CreateTestIssue();
+        var branchName = "core/feature/add-auth+bd-a3f8";
         
-        var prompt = AgentWorkflowService.BuildInitialPrompt(change);
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main");
         
-        Assert.That(prompt, Does.Contain("core/feature/add-auth"));
+        Assert.That(prompt, Does.Contain(branchName));
         Assert.That(prompt, Does.Contain("Branch:").Or.Contain("branch"));
     }
 
     [Test]
-    public void BuildInitialPrompt_IncludesTitle()
+    public void BuildInitialPromptForBeadsIssue_IncludesTitle()
     {
-        var change = CreateTestChange();
+        var issue = CreateTestIssue();
+        var branchName = "core/feature/add-auth+bd-a3f8";
         
-        var prompt = AgentWorkflowService.BuildInitialPrompt(change);
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main");
         
         Assert.That(prompt, Does.Contain("Add Authentication"));
     }
 
     [Test]
-    public void BuildInitialPrompt_IncludesDescription_WhenProvided()
+    public void BuildInitialPromptForBeadsIssue_IncludesIssueId()
     {
-        var change = CreateTestChange();
-        change.Description = "Implement OAuth2 authentication flow";
+        var issue = CreateTestIssue();
+        var branchName = "core/feature/add-auth+bd-a3f8";
         
-        var prompt = AgentWorkflowService.BuildInitialPrompt(change);
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main");
+        
+        Assert.That(prompt, Does.Contain("bd-a3f8"));
+    }
+
+    [Test]
+    public void BuildInitialPromptForBeadsIssue_IncludesDescription_WhenProvided()
+    {
+        var issue = CreateTestIssue();
+        issue.Description = "Implement OAuth2 authentication flow";
+        var branchName = "core/feature/add-auth+bd-a3f8";
+        
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main");
         
         Assert.That(prompt, Does.Contain("OAuth2 authentication flow"));
     }
 
     [Test]
-    public void BuildInitialPrompt_ExcludesDescription_WhenNull()
+    public void BuildInitialPromptForBeadsIssue_ExcludesDescription_WhenNull()
     {
-        var change = CreateTestChange();
-        change.Description = null;
+        var issue = CreateTestIssue();
+        issue.Description = null;
+        var branchName = "core/feature/add-auth+bd-a3f8";
         
-        var prompt = AgentWorkflowService.BuildInitialPrompt(change);
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main");
         
         Assert.That(prompt, Does.Not.Contain("Description:"));
     }
 
     [Test]
-    public void BuildInitialPrompt_IncludesInstructions_WhenProvided()
+    public void BuildInitialPromptForBeadsIssue_IncludesPriority_WhenProvided()
     {
-        var change = CreateTestChange();
-        change.Instructions = "Use JWT tokens for session management";
+        var issue = CreateTestIssue();
+        issue.Priority = 1;
+        var branchName = "core/feature/add-auth+bd-a3f8";
         
-        var prompt = AgentWorkflowService.BuildInitialPrompt(change);
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main");
         
-        Assert.That(prompt, Does.Contain("JWT tokens for session management"));
+        Assert.That(prompt, Does.Contain("P1"));
     }
 
     [Test]
-    public void BuildInitialPrompt_ExcludesInstructions_WhenNull()
+    public void BuildInitialPromptForBeadsIssue_IncludesPrCreationInstructions()
     {
-        var change = CreateTestChange();
-        change.Instructions = null;
+        var issue = CreateTestIssue();
+        var branchName = "core/feature/add-auth+bd-a3f8";
         
-        var prompt = AgentWorkflowService.BuildInitialPrompt(change);
-        
-        Assert.That(prompt, Does.Not.Contain("Instructions:"));
-    }
-
-    [Test]
-    public void BuildInitialPrompt_IncludesPrCreationInstructions()
-    {
-        var change = CreateTestChange();
-        
-        var prompt = AgentWorkflowService.BuildInitialPrompt(change);
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main");
         
         Assert.That(prompt, Does.Contain("gh pr create"));
     }
 
     [Test]
-    public void BuildInitialPrompt_InstructsToCommitToBranch()
+    public void BuildInitialPromptForBeadsIssue_InstructsToCommitToBranch()
     {
-        var change = CreateTestChange();
+        var issue = CreateTestIssue();
+        var branchName = "core/feature/add-auth+bd-a3f8";
         
-        var prompt = AgentWorkflowService.BuildInitialPrompt(change);
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main");
         
         Assert.That(prompt, Does.Contain("commit").IgnoreCase);
-        Assert.That(prompt, Does.Contain("core/feature/add-auth"));
+        Assert.That(prompt, Does.Contain(branchName));
     }
 
     [Test]
-    public void BuildInitialPrompt_IncludesWorkflowInstructions()
+    public void BuildInitialPromptForBeadsIssue_IncludesWorkflowInstructions()
     {
-        var change = CreateTestChange();
+        var issue = CreateTestIssue();
+        var branchName = "core/feature/add-auth+bd-a3f8";
         
-        var prompt = AgentWorkflowService.BuildInitialPrompt(change);
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main");
         
         // Should instruct to create PR when done
         Assert.That(prompt, Does.Contain("create").IgnoreCase.And.Contain("pull request").IgnoreCase
@@ -131,57 +137,31 @@ public class AgentWorkflowServiceTests
     }
 
     [Test]
-    public void BuildInitialPrompt_SpecifiesBaseBranch_WhenParentsExist()
+    public void BuildInitialPromptForBeadsIssue_UsesProvidedBaseBranch()
     {
-        var change = CreateTestChange();
-        change.Parents = ["core/feature/base-feature"];
+        var issue = CreateTestIssue();
+        var branchName = "core/feature/add-auth+bd-a3f8";
         
-        var prompt = AgentWorkflowService.BuildInitialPrompt(change);
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "develop");
         
-        // Should mention the parent branch as the base for the PR
-        Assert.That(prompt, Does.Contain("core/feature/base-feature"));
-    }
-
-    [Test]
-    public void BuildInitialPrompt_UsesMainAsBase_WhenNoParents()
-    {
-        var change = CreateTestChange();
-        change.Parents = [];
-        
-        var prompt = AgentWorkflowService.BuildInitialPrompt(change);
-        
-        // Should mention main/master as the base when no parents
-        Assert.That(prompt, Does.Contain("main").Or.Contain("master"));
-    }
-
-    [Test]
-    public void BuildInitialPrompt_UsesFirstParent_WhenMultipleParentsExist()
-    {
-        var change = CreateTestChange();
-        change.Parents = ["core/feature/first-parent", "core/feature/second-parent"];
-        
-        var prompt = AgentWorkflowService.BuildInitialPrompt(change);
-        
-        // Should use the first parent as the base branch
-        Assert.That(prompt, Does.Contain("core/feature/first-parent"));
+        // Should mention the base branch for the PR
+        Assert.That(prompt, Does.Contain("develop"));
     }
 
     #endregion
 
     #region Helper Methods
 
-    private static FutureChange CreateTestChange()
+    private static BeadsIssue CreateTestIssue()
     {
-        return new FutureChange
+        return new BeadsIssue
         {
-            Id = "core/feature/add-auth",
-            ShortTitle = "add-auth",
-            Group = "core",
-            Type = ChangeType.Feature,
+            Id = "bd-a3f8",
             Title = "Add Authentication",
+            Type = BeadsIssueType.Feature,
+            Status = BeadsIssueStatus.Open,
             Description = null,
-            Instructions = null,
-            Parents = []
+            Priority = null
         };
     }
 

@@ -62,7 +62,7 @@ public class GitHubServiceIntegrationTests
             })
             .Build();
 
-        var runner = new CommandRunner();
+        var runner = new CommandRunner(new Microsoft.Extensions.Logging.Abstractions.NullLogger<CommandRunner>());
         var client = new GitHubClientWrapper();
         var logger = new Microsoft.Extensions.Logging.Abstractions.NullLogger<GitHubService>();
         var service = new GitHubService(_dataStore, runner, config, client, logger);

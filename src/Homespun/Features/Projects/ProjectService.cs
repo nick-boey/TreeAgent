@@ -1,8 +1,8 @@
+using Homespun.Features.Beads.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
-using Homespun.Features.Roadmap.Sync;
 
 namespace Homespun.Features.Projects;
 
@@ -23,7 +23,8 @@ public class ProjectService(
     IDataStore dataStore,
     IGitHubService gitHubService,
     ICommandRunner commandRunner,
-    IRoadmapSyncService? roadmapSyncService = null)
+    IBeadsInitializer beadsInitializer,
+    ILogger<ProjectService> logger)
 {
     /// <summary>
     /// Base path for all project worktrees.
@@ -43,10 +44,10 @@ public class ProjectService(
     {
         var project = dataStore.GetProject(id);
         
-        // Initialize local roadmap when project is loaded
-        if (project != null && roadmapSyncService != null)
+        if (project != null)
         {
-            await roadmapSyncService.InitializeLocalRoadmapAsync(project.Id);
+            // Initialize beads if not already initialized
+            await InitializeBeadsIfNeededAsync(project);
         }
         
         return project;
@@ -57,6 +58,103 @@ public class ProjectService(
     /// </summary>
     /// <param name="ownerRepo">GitHub owner and repository in "owner/repo" format</param>
     /// <returns>Result containing the created project or an error message</returns>
+    /// <summary>
+    /// Creates a new local project with a fresh git repository.
+    /// </summary>
+    /// <param name="name">Project name (used for folder name)</param>
+    /// <param name="defaultBranch">Default branch name (defaults to "main")</param>
+    public async Task<CreateProjectResult> CreateLocalAsync(string name, string defaultBranch = "main")
+    {
+        // Validate name
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return CreateProjectResult.Error("Project name is required.");
+        }
+        
+        if (!IsValidProjectName(name))
+        {
+            return CreateProjectResult.Error("Invalid project name. Use only letters, numbers, hyphens, and underscores.");
+        }
+        
+        if (string.IsNullOrWhiteSpace(defaultBranch))
+        {
+            defaultBranch = "main";
+        }
+
+        // Calculate path: ~/.homespun/src/<name>/<defaultBranch>
+        var repoPath = Path.Combine(HomespunBasePath, name);
+        var localPath = Path.Combine(repoPath, defaultBranch);
+
+        // Check if already exists
+        if (Directory.Exists(localPath))
+        {
+            return CreateProjectResult.Error($"Project already exists at {localPath}");
+        }
+
+        // Create directory
+        Directory.CreateDirectory(localPath);
+
+        try
+        {
+            // Initialize git repo
+            var initResult = await commandRunner.RunAsync("git", "init", localPath);
+            if (!initResult.Success)
+            {
+                return CreateProjectResult.Error($"Failed to initialize git: {initResult.Error}");
+            }
+
+            // Set default branch name
+            await commandRunner.RunAsync("git", $"branch -M {defaultBranch}", localPath);
+
+            // Create initial commit (required for beads and worktrees)
+            var commitResult = await commandRunner.RunAsync("git", "commit --allow-empty -m \"Initial commit\"", localPath);
+            if (!commitResult.Success)
+            {
+                return CreateProjectResult.Error($"Failed to create initial commit: {commitResult.Error}");
+            }
+
+            // Create project entity (no GitHub owner/repo)
+            var project = new Project
+            {
+                Name = name,
+                LocalPath = localPath,
+                GitHubOwner = null,
+                GitHubRepo = null,
+                DefaultBranch = defaultBranch
+            };
+
+            await dataStore.AddProjectAsync(project);
+            await InitializeBeadsIfNeededAsync(project);
+
+            logger.LogInformation("Created local project {Name} at {LocalPath}", name, localPath);
+            return CreateProjectResult.Ok(project);
+        }
+        catch (Exception ex)
+        {
+            // Clean up on failure
+            try
+            {
+                if (Directory.Exists(localPath))
+                {
+                    Directory.Delete(localPath, true);
+                }
+            }
+            catch
+            {
+                // Ignore cleanup errors
+            }
+            
+            logger.LogError(ex, "Failed to create local project {Name}", name);
+            return CreateProjectResult.Error($"Failed to create project: {ex.Message}");
+        }
+    }
+
+    private static bool IsValidProjectName(string name)
+    {
+        // Allow alphanumeric, hyphens, underscores
+        return System.Text.RegularExpressions.Regex.IsMatch(name, @"^[a-zA-Z0-9_-]+$");
+    }
+
     public async Task<CreateProjectResult> CreateAsync(string ownerRepo)
     {
         // Parse owner/repo
@@ -111,13 +209,41 @@ public class ProjectService(
 
         await dataStore.AddProjectAsync(project);
 
-        // Initialize local roadmap for new project
-        if (roadmapSyncService != null)
-        {
-            await roadmapSyncService.InitializeLocalRoadmapAsync(project.Id);
-        }
+        // Initialize beads for new project
+        await InitializeBeadsIfNeededAsync(project);
 
         return CreateProjectResult.Ok(project);
+    }
+    
+    /// <summary>
+    /// Initializes beads for a project if not already initialized.
+    /// Sets up the beads-sync branch for synchronization.
+    /// </summary>
+    private async Task InitializeBeadsIfNeededAsync(Project project)
+    {
+        try
+        {
+            if (!await beadsInitializer.IsInitializedAsync(project.LocalPath))
+            {
+                logger.LogInformation("Initializing beads for project {ProjectName} at {LocalPath}", 
+                    project.Name, project.LocalPath);
+                
+                var success = await beadsInitializer.InitializeAsync(project.LocalPath, syncBranch: "beads-sync");
+                
+                if (success)
+                {
+                    logger.LogInformation("Successfully initialized beads for project {ProjectName}", project.Name);
+                }
+                else
+                {
+                    logger.LogWarning("Failed to initialize beads for project {ProjectName}", project.Name);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error initializing beads for project {ProjectName}", project.Name);
+        }
     }
 
     public async Task<Project?> UpdateAsync(
