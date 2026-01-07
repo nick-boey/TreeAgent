@@ -61,7 +61,7 @@ builder.Services.Configure<AgentCompletionOptions>(
 builder.Services.AddHttpClient<IOpenCodeClient, OpenCodeClient>();
 builder.Services.AddSingleton<IPortAllocationService, PortAllocationService>();
 builder.Services.AddSingleton<IOpenCodeServerManager, OpenCodeServerManager>();
-builder.Services.AddScoped<IOpenCodeConfigGenerator, OpenCodeConfigGenerator>();
+builder.Services.AddSingleton<IOpenCodeConfigGenerator, OpenCodeConfigGenerator>();
 builder.Services.AddScoped<IAgentCompletionMonitor, AgentCompletionMonitor>();
 builder.Services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
 #if DEBUG

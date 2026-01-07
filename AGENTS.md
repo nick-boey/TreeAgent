@@ -91,6 +91,21 @@ The application will be available at `https://localhost:5001` (or the configured
 dotnet test
 ```
 
+### Verifying DI Configuration
+
+After adding or modifying service registrations, always run the application to verify dependency injection is configured correctly:
+
+```bash
+cd src/Homespun
+dotnet run
+```
+
+Common DI issues to watch for:
+- **Scoped service from Singleton**: A Singleton service cannot inject a Scoped service directly. Either make the dependent service Singleton (if stateless) or use `IServiceScopeFactory` to create scopes.
+- **Missing registrations**: Ensure all interfaces have corresponding implementations registered in `Program.cs`.
+
+The application validates DI at startup and will fail fast with a clear error message if there are configuration issues.
+
 ### Database
 
 - SQLite database with EF Core
@@ -184,3 +199,29 @@ SignalR is used for real-time updates:
 - Agent message streaming
 - Agent status changes
 - Connect to `/hubs/agent` for agent-related updates
+
+## Landing the Plane (Session Completion)
+
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+
+**MANDATORY WORKFLOW:**
+
+1. **File issues for remaining work** - Create issues for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds
+3. **Update issue status** - Close finished work, update in-progress items
+4. **PUSH TO REMOTE** - This is MANDATORY:
+   ```bash
+   git pull --rebase
+   bd sync
+   git push
+   git status  # MUST show "up to date with origin"
+   ```
+5. **Clean up** - Clear stashes, prune remote branches
+6. **Verify** - All changes committed AND pushed
+7. **Hand off** - Provide context for next session
+
+**CRITICAL RULES:**
+- Work is NOT complete until `git push` succeeds
+- NEVER stop before pushing - that leaves work stranded locally
+- NEVER say "ready to push when you are" - YOU must push
+- If push fails, resolve and retry until it succeeds
