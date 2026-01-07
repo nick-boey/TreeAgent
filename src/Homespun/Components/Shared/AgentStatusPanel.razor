@@ -61,9 +61,16 @@
         @if (CanStart)
         {
             <div class="panel-footer">
-                <button class="btn btn-sm btn-success" @onclick="StartAgent" disabled="@IsLoading">
-                    Start Agent
-                </button>
+                <div class="d-flex gap-2 align-items-center">
+                    <select class="form-select form-select-sm" style="width: auto;" @bind="_selectedModel">
+                        <option value="anthropic/claude-opus-4">Opus 4</option>
+                        <option value="anthropic/claude-sonnet-4-5">Sonnet 4.5</option>
+                        <option value="anthropic/claude-haiku-4-5">Haiku 4.5</option>
+                    </select>
+                    <button class="btn btn-sm btn-success" @onclick="StartAgent" disabled="@IsLoading">
+                        Start Agent
+                    </button>
+                </div>
             </div>
         }
     }
@@ -147,6 +154,7 @@
     private string? ErrorMessage { get; set; }
     private string? LastMessage { get; set; }
     private HubConnection? _hubConnection;
+    private string _selectedModel = "anthropic/claude-opus-4";
     
     private bool IsRunning => AgentStatus != null;
     
@@ -228,7 +236,7 @@
         ErrorMessage = null;
         try
         {
-            AgentStatus = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequestId);
+            AgentStatus = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequestId, _selectedModel);
             await OnStatusChanged.InvokeAsync();
         }
         catch (Exception ex)
