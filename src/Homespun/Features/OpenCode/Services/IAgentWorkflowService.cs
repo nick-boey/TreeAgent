@@ -26,11 +26,12 @@ public interface IAgentWorkflowService
     /// </summary>
     /// <param name="projectId">The project ID</param>
     /// <param name="issueId">The beads issue ID (e.g., "bd-a3f8")</param>
+    /// <param name="agentMode">The mode to start the agent in (Planning or Building)</param>
     /// <param name="model">Optional model override</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The agent status including server and session info</returns>
     /// <exception cref="InvalidOperationException">Thrown if the issue does not have an hsp: label</exception>
-    Task<AgentStatus> StartAgentForBeadsIssueAsync(string projectId, string issueId, string? model = null, CancellationToken ct = default);
+    Task<AgentStatus> StartAgentForBeadsIssueAsync(string projectId, string issueId, AgentMode agentMode = AgentMode.Building, string? model = null, CancellationToken ct = default);
 
     /// <summary>
     /// Stops the agent for an entity (PR, FutureChange, or Beads Issue).

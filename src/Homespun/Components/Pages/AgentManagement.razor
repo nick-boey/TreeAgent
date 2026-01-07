@@ -1,0 +1,108 @@
+@page "/agents"
+@using Homespun.Features.OpenCode.Services
+@using Homespun.Features.OpenCode.Models
+@using Homespun.Features.OpenCode.Hubs
+@using Homespun.Components.Shared
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+@inject IAgentWorkflowService AgentWorkflowService
+@inject NavigationManager NavigationManager
+@rendermode InteractiveServer
+
+<PageTitle>Agent Management - Homespun</PageTitle>
+
+<h1>Agent Management</h1>
+
+<div class="agent-management-page">
+    @if (_isLoading)
+    {
+        <div class="d-flex justify-content-center py-5">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading agents...</span>
+            </div>
+        </div>
+    }
+    else
+    {
+        <AgentManagementPanel 
+            RunningServers="_runningServers"
+            OnAgentStopped="HandleAgentStopped"
+            OnRefreshRequested="RefreshServers" />
+    }
+    
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger mt-3">@_errorMessage</div>
+    }
+</div>
+
+@code {
+    private List<RunningServerInfo> _runningServers = new();
+    private bool _isLoading = true;
+    private string? _errorMessage;
+    private HubConnection? _hubConnection;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        await SetupSignalRConnection();
+        await RefreshServers();
+        _isLoading = false;
+    }
+    
+    private async Task SetupSignalRConnection()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/agent"))
+                .WithAutomaticReconnect()
+                .Build();
+            
+            _hubConnection.On("ServerListChanged", async () =>
+            {
+                await RefreshServers();
+                await InvokeAsync(StateHasChanged);
+            });
+            
+            await _hubConnection.StartAsync();
+            await _hubConnection.InvokeAsync("JoinGlobalGroup");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to connect to real-time updates: {ex.Message}";
+        }
+    }
+    
+    private async Task RefreshServers()
+    {
+        try
+        {
+            if (_hubConnection?.State == HubConnectionState.Connected)
+            {
+                _runningServers = await _hubConnection.InvokeAsync<List<RunningServerInfo>>("GetAllRunningServers");
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to refresh servers: {ex.Message}";
+        }
+    }
+    
+    private async Task HandleAgentStopped()
+    {
+        await RefreshServers();
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            try
+            {
+                await _hubConnection.InvokeAsync("LeaveGlobalGroup");
+                await _hubConnection.DisposeAsync();
+            }
+            catch { }
+        }
+    }
+}

@@ -1,6 +1,7 @@
 @using Homespun.Features.Beads
 @using Homespun.Features.Beads.Data
 @using Homespun.Features.OpenCode.Services
+@using Homespun.Features.OpenCode.Models
 
 @inject IAgentWorkflowService AgentWorkflowService
 @inject NavigationManager NavigationManager
@@ -141,18 +142,28 @@
             }
             else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo != null)
             {
-                <button class="btn btn-sm btn-success" @onclick="StartDevelopment" disabled="@_isLoading">
+                <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" disabled="@_isLoading">
                     @if (_isLoading)
                     {
                         <span class="spinner-border spinner-border-sm me-1" role="status"></span>
                     }
-                    Start Development
+                    Start Planning
+                </button>
+                <button class="btn btn-sm btn-success" @onclick="StartBuilding" disabled="@_isLoading">
+                    @if (_isLoading)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    Start Building
                 </button>
             }
             else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo == null)
             {
                 <button class="btn btn-sm btn-secondary" disabled title="Add an hsp: label to enable development">
-                    Start Development
+                    Start Planning
+                </button>
+                <button class="btn btn-sm btn-secondary" disabled title="Add an hsp: label to enable development">
+                    Start Building
                 </button>
             }
             else if (Issue.Status == BeadsIssueStatus.InProgress && _agentStatus == null && _branchInfo != null)
@@ -252,15 +263,36 @@
         }
     }
 
-    private async Task StartDevelopment()
+    private async Task StartPlanning()
     {
         _isLoading = true;
         _errorMessage = null;
         try
         {
-            // Creates branch/worktree, starts agent, and sends initial prompt
+            // Creates branch/worktree, starts agent in planning mode, and sends initial prompt
             // Group and branch ID are parsed from the hsp: label in AgentWorkflowService
-            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id);
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Planning);
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task StartBuilding()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            // Creates branch/worktree, starts agent in building mode, and sends initial prompt
+            // Group and branch ID are parsed from the hsp: label in AgentWorkflowService
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Building);
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
@@ -279,8 +311,8 @@
         _errorMessage = null;
         try
         {
-            // Resume development on an InProgress issue
-            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id);
+            // Resume development on an InProgress issue (defaults to Building mode)
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Building);
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
