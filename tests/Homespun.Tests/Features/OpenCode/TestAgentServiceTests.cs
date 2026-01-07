@@ -160,6 +160,8 @@ public class TestAgentServiceTests
         Assert.That(status!.ProjectId, Is.EqualTo("proj-123"));
         Assert.That(status.ServerUrl, Is.EqualTo("http://127.0.0.1:4099"));
         Assert.That(status.SessionId, Is.EqualTo("ses_test123"));
+        Assert.That(status.WebViewUrl, Is.Not.Null);
+        Assert.That(status.WebViewUrl, Does.Contain("ses_test123"));
     }
 
     [Test]
