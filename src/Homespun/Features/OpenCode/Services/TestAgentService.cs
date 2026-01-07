@@ -39,7 +39,21 @@ public class TestAgentService(
             logger.LogInformation("Starting test agent for project {ProjectId} at {LocalPath}", 
                 projectId, project.LocalPath);
             
-            // 2. Create or get worktree path
+            // 2. Clean up any existing test worktree and branch first
+            // This ensures a fresh start even if previous cleanup failed
+            if (await worktreeService.WorktreeExistsAsync(project.LocalPath, TestBranchName))
+            {
+                logger.LogInformation("Removing existing test worktree for branch {Branch}", TestBranchName);
+                await worktreeService.RemoveWorktreeAsync(project.LocalPath, TestBranchName);
+                
+                // Also delete the branch to ensure clean state
+                await commandRunner.RunAsync("git", $"branch -D \"{TestBranchName}\"", project.LocalPath);
+            }
+            
+            // Prune any stale worktree references
+            await worktreeService.PruneWorktreesAsync(project.LocalPath);
+            
+            // 3. Create worktree path
             // Worktree will be: ~/.homespun/src/<project>/hsp/test
             var worktreePath = await worktreeService.CreateWorktreeAsync(
                 project.LocalPath, 
@@ -56,7 +70,7 @@ public class TestAgentService(
             worktreePath = Path.GetFullPath(worktreePath);
             logger.LogInformation("Test worktree at {WorktreePath}", worktreePath);
             
-            // 3. Delete test.txt if it exists
+            // 4. Delete test.txt if it exists
             var testFilePath = Path.Combine(worktreePath, TestFileName);
             if (File.Exists(testFilePath))
             {
@@ -64,34 +78,38 @@ public class TestAgentService(
                 logger.LogInformation("Deleted existing {TestFile}", testFilePath);
             }
             
-            // 4. Generate opencode.json config
+            // 5. Generate opencode.json config
             var config = configGenerator.CreateDefaultConfig(project.DefaultModel);
             await configGenerator.GenerateConfigAsync(worktreePath, config, ct);
             
-            // 5. Start OpenCode server
+            // 6. Start OpenCode server
             var entityId = $"{TestEntityPrefix}{projectId}";
             var server = await serverManager.StartServerAsync(entityId, worktreePath, continueSession: false, ct);
             
             logger.LogInformation("Test OpenCode server started at {BaseUrl}", server.BaseUrl);
             
-            // 6. Create session
+            // 7. Create session
             var session = await client.CreateSessionAsync(server.BaseUrl, "Test Agent Session", ct);
             logger.LogInformation("Test session created: {SessionId}", session.Id);
             
-            // 7. Send test prompt (fire and forget)
+            // Set ActiveSessionId so WebViewUrl computes correctly
+            server.ActiveSessionId = session.Id;
+            
+            // 8. Send test prompt (fire and forget)
             var prompt = PromptRequest.FromText(
                 $"Create a file called '{TestFileName}' in the current directory with the content 'Hello from OpenCode test agent - created at {DateTime.UtcNow:O}'");
             
             await client.SendPromptAsyncNoWait(server.BaseUrl, session.Id, prompt, ct);
             logger.LogInformation("Test prompt sent to session {SessionId}", session.Id);
             
-            // 8. Track status
+            // 9. Track status
             var status = new TestAgentStatus
             {
                 ProjectId = projectId,
                 ServerUrl = server.BaseUrl,
                 SessionId = session.Id,
                 WorktreePath = worktreePath,
+                WebViewUrl = server.WebViewUrl,
                 StartedAt = DateTime.UtcNow
             };
             _activeTestAgents[projectId] = status;

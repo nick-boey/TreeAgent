@@ -55,6 +55,10 @@ public class TestAgentStatus
     public required string ServerUrl { get; init; }
     public required string SessionId { get; init; }
     public required string WorktreePath { get; init; }
+    /// <summary>
+    /// The full web view URL including encoded path and session ID.
+    /// </summary>
+    public string? WebViewUrl { get; init; }
     public DateTime StartedAt { get; init; }
 }
 

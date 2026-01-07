@@ -294,7 +294,7 @@ else
                                         <div><strong>Worktree:</strong> <code class="text-break">@_testAgentStatus.WorktreePath</code></div>
                                     </div>
                                     <div class="btn-group btn-group-sm mb-2">
-                                        <a href="@_testAgentStatus.ServerUrl" target="_blank" class="btn btn-outline-primary">
+                                        <a href="@(_testAgentStatus.WebViewUrl ?? _testAgentStatus.ServerUrl)" target="_blank" class="btn btn-outline-primary">
                                             Open Web View
                                         </a>
                                         <button class="btn btn-outline-info" @onclick="VerifySession" disabled="@_isVerifying">
