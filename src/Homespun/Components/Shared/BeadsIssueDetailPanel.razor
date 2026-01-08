@@ -1,244 +1,320 @@
 @using Homespun.Features.Beads
 @using Homespun.Features.Beads.Data
+@using Homespun.Features.Beads.Services
 @using Homespun.Features.OpenCode.Services
 @using Homespun.Features.OpenCode.Models
+@using Homespun.Features.Projects
 
 @inject IAgentWorkflowService AgentWorkflowService
 @inject IAgentStartupTracker StartupTracker
+@inject IBeadsService BeadsService
+@inject ProjectService ProjectService
 @inject NavigationManager NavigationManager
 
-<div class="card beads-issue-detail-panel">
+<div class="card beads-issue-detail-panel" @onkeydown="HandleKeyDown" tabindex="0">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Issue Details</span>
-        <button type="button" class="btn-close" @onclick="OnClose"></button>
-    </div>
-    <div class="card-body">
-        <h5 class="card-title">@Issue.Title</h5>
-
-        <div class="mb-3">
-            <span class="badge bg-secondary">@Issue.Id</span>
-            <span class="badge @GetTypeBadgeClass() ms-1">@Issue.Type</span>
-            <span class="badge @GetStatusBadgeClass() ms-1">@GetStatusDisplay()</span>
-            @if (Issue.Priority.HasValue)
+        <span>@(_isEditMode ? "Edit Issue" : "Issue Details")</span>
+        <div class="d-flex gap-1">
+            @if (!_isEditMode)
             {
-                <span class="badge @GetPriorityBadgeClass() ms-1">P@Issue.Priority</span>
-            }
-            @if (StartupTracker.IsStarting(Issue.Id))
-            {
-                <span class="badge bg-warning text-dark ms-1">
-                    <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
-                    Starting...
-                </span>
-            }
-            else if (_agentStatus != null)
-            {
-                <span class="badge bg-success ms-1">Agent Running</span>
-            }
-        </div>
-
-        @if (!string.IsNullOrEmpty(Issue.Description))
-        {
-            <div class="description-content mb-3">
-                <pre class="mb-0">@Issue.Description</pre>
-            </div>
-        }
-
-        <dl class="row small">
-            @if (Metadata != null && !string.IsNullOrEmpty(Metadata.BranchName))
-            {
-                <dt class="col-4">Branch</dt>
-                <dd class="col-8"><code>@Metadata.BranchName</code></dd>
-            }
-            else if (_branchInfo != null)
-            {
-                <dt class="col-4">Branch Preview</dt>
-                <dd class="col-8"><code>@GetBranchPreview()</code></dd>
-            }
-            
-            @if (_branchInfo != null)
-            {
-                <dt class="col-4">Group</dt>
-                <dd class="col-8">@_branchInfo.Value.Group</dd>
-                
-                <dt class="col-4">Branch ID</dt>
-                <dd class="col-8">@_branchInfo.Value.BranchId</dd>
-            }
-            
-            @if (Issue.Labels.Count > 0)
-            {
-                <dt class="col-4">Labels</dt>
-                <dd class="col-8">
-                    @foreach (var label in Issue.Labels.Where(l => !BeadsBranchLabel.IsHomespunLabel(l)))
-                    {
-                        <span class="badge bg-light text-dark me-1">@label</span>
-                    }
-                    @if (_branchInfo != null)
-                    {
-                        <span class="badge bg-info text-dark me-1" title="Homespun branch label">@GetHspLabel()</span>
-                    }
-                </dd>
-            }
-            
-            @if (!string.IsNullOrEmpty(Issue.ParentId))
-            {
-                <dt class="col-4">Parent</dt>
-                <dd class="col-8"><code>@Issue.ParentId</code></dd>
-            }
-            
-            @if (!string.IsNullOrEmpty(Issue.Assignee))
-            {
-                <dt class="col-4">Assignee</dt>
-                <dd class="col-8">@Issue.Assignee</dd>
-            }
-        </dl>
-
-        @* Warning if no hsp: label *@
-        @if (_branchInfo == null)
-        {
-            <div class="alert alert-warning py-2 small">
-                <strong>Missing branch label:</strong> This issue needs an <code>hsp:</code> label to start development.
-                <br />
-                Example: <code>hsp:frontend/-/update-page</code>
-            </div>
-        }
-
-        @* Agent Status Display *@
-        @if (_agentStatus != null)
-        {
-            <div class="border-top pt-3 mt-3">
-                <h6>OpenCode Agent</h6>
-                <div class="mb-2">
-                    <span class="badge bg-success">Running</span>
-                    @if (_agentStatus.Server.WebViewUrl != null)
-                    {
-                        <a href="@_agentStatus.Server.WebViewUrl" target="_blank" 
-                           class="btn btn-sm btn-outline-primary ms-2">
-                            Open Web View
-                        </a>
-                    }
-                    else
-                    {
-                        <span class="text-muted ms-2">Session initializing...</span>
-                    }
-                </div>
-                <div class="mb-2">
-                    <small class="text-muted">
-                        Server: <code>@_agentStatus.Server.BaseUrl</code>
-                    </small>
-                    @if (_agentStatus.ActiveSession != null)
-                    {
-                        <br/>
-                        <small class="text-muted">
-                            Session: <code>@_agentStatus.ActiveSession.Id</code>
-                        </small>
-                    }
-                </div>
-            </div>
-        }
-    </div>
-    <div class="card-footer">
-        <div class="d-flex flex-wrap gap-2">
-            @if (StartupTracker.IsStarting(Issue.Id))
-            {
-                <button class="btn btn-sm btn-secondary" disabled>
-                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    Starting Agent...
+                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="EnterEditMode" title="Edit issue">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
+                    </svg>
                 </button>
             }
-            else if (_agentStatus != null)
+            <button type="button" class="btn-close" @onclick="HandleClose"></button>
+        </div>
+    </div>
+    
+    @if (_isEditMode)
+    {
+        @* Edit Mode *@
+        <div class="card-body edit-mode-body">
+            <div class="mb-3">
+                <label class="form-label small">Title <span class="text-danger">*</span></label>
+                <input type="text" class="form-control form-control-sm" @bind="_editModel.Title" />
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-6">
+                    <label class="form-label small">Group</label>
+                    <input type="text" class="form-control form-control-sm" 
+                           list="editGroupList"
+                           @bind="_editModel.Group" 
+                           placeholder="e.g., frontend" />
+                    <datalist id="editGroupList">
+                        @foreach (var group in _existingGroups)
+                        {
+                            <option value="@group" />
+                        }
+                    </datalist>
+                </div>
+                <div class="col-6">
+                    <label class="form-label small">Branch ID</label>
+                    <input type="text" class="form-control form-control-sm font-monospace" 
+                           @bind="_editModel.BranchId" 
+                           placeholder="e.g., update-page" />
+                </div>
+            </div>
+            
+            @if (!string.IsNullOrWhiteSpace(_editModel.Group) || !string.IsNullOrWhiteSpace(_editModel.BranchId))
             {
-                <button class="btn btn-sm btn-outline-danger" @onclick="StopAgent" disabled="@_isLoading">
+                <div class="mb-3 p-2 bg-light rounded small">
+                    <strong>Branch:</strong> <code>@GetEditBranchPreview()</code>
+                    <br />
+                    <strong>Label:</strong> <code>@GetEditHspLabelPreview()</code>
+                </div>
+            }
+            
+            <div class="row mb-3">
+                <div class="col-6">
+                    <label class="form-label small">Type</label>
+                    <select class="form-select form-select-sm" @bind="_editModel.Type">
+                        @foreach (var type in Enum.GetValues<BeadsIssueType>())
+                        {
+                            <option value="@type">@type</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-6">
+                    <label class="form-label small">Priority</label>
+                    <select class="form-select form-select-sm" @bind="_editModel.Priority">
+                        <option value="">Not set</option>
+                        <option value="0">P0 - Critical</option>
+                        <option value="1">P1 - High</option>
+                        <option value="2">P2 - Medium</option>
+                        <option value="3">P3 - Low</option>
+                        <option value="4">P4 - Backlog</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label small">Description</label>
+                <textarea class="form-control form-control-sm" rows="4" @bind="_editModel.Description" 
+                          placeholder="Implementation details, acceptance criteria..."></textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label small">Parent Issue</label>
+                <input type="text" class="form-control form-control-sm" @bind="_editModel.ParentId" 
+                       placeholder="bd-XXXX" />
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label small">Additional Labels</label>
+                <input type="text" class="form-control form-control-sm" @bind="_editModel.Labels" 
+                       placeholder="label1, label2" />
+                <div class="form-text small">Comma-separated list (hsp: label managed separately)</div>
+            </div>
+            
+            <div class="text-muted small mb-2">
+                Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to save, <kbd>Esc</kbd> to cancel
+            </div>
+        </div>
+        <div class="card-footer">
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-primary" @onclick="SaveChanges" disabled="@_isLoading">
                     @if (_isLoading)
                     {
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        <span class="spinner-border spinner-border-sm me-1"></span>
                     }
-                    Stop Agent
+                    Save
                 </button>
-            }
-            else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo != null)
+                <button class="btn btn-sm btn-secondary" @onclick="CancelEdit" disabled="@_isLoading">
+                    Cancel
+                </button>
+            </div>
+            
+            @if (!string.IsNullOrEmpty(_errorMessage))
             {
-                <div class="d-flex gap-2 align-items-center">
-                    <select class="form-select form-select-sm" style="width: auto;" @bind="_selectedModel">
-                        <option value="anthropic/claude-opus-4">Opus 4</option>
-                        <option value="anthropic/claude-sonnet-4-5">Sonnet 4.5</option>
-                        <option value="anthropic/claude-haiku-4-5">Haiku 4.5</option>
-                    </select>
-                    <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" disabled="@(StartupTracker.IsStarting(Issue.Id))">
-                        @if (StartupTracker.IsStarting(Issue.Id))
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
-                        Start Planning
-                    </button>
-                    <button class="btn btn-sm btn-success" @onclick="StartBuilding" disabled="@(StartupTracker.IsStarting(Issue.Id))">
-                        @if (StartupTracker.IsStarting(Issue.Id))
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
-                        Start Building
-                    </button>
+                <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
+            }
+        </div>
+    }
+    else
+    {
+        @* View Mode *@
+        <div class="card-body">
+            <h5 class="card-title">@Issue.Title</h5>
+
+            <div class="mb-3">
+                <span class="badge bg-secondary">@Issue.Id</span>
+                <span class="badge @GetTypeBadgeClass() ms-1">@Issue.Type</span>
+                <span class="badge @GetStatusBadgeClass() ms-1">@GetStatusDisplay()</span>
+                @if (Issue.Priority.HasValue)
+                {
+                    <span class="badge @GetPriorityBadgeClass() ms-1">P@Issue.Priority</span>
+                }
+                @if (_agentStatus != null)
+                {
+                    <span class="badge bg-success ms-1">Agent Running</span>
+                }
+            </div>
+
+            @if (!string.IsNullOrEmpty(Issue.Description))
+            {
+                <div class="description-content mb-3">
+                    <pre class="mb-0">@Issue.Description</pre>
                 </div>
             }
-            else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo == null)
-            {
-                <button class="btn btn-sm btn-secondary" disabled title="Add an hsp: label to enable development">
-                    Start Planning
-                </button>
-                <button class="btn btn-sm btn-secondary" disabled title="Add an hsp: label to enable development">
-                    Start Building
-                </button>
-            }
-            else if (Issue.Status == BeadsIssueStatus.InProgress && _agentStatus == null && _branchInfo != null)
-            {
-                <div class="d-flex gap-2 align-items-center">
-                    <select class="form-select form-select-sm" style="width: auto;" @bind="_selectedModel">
-                        <option value="anthropic/claude-opus-4">Opus 4</option>
-                        <option value="anthropic/claude-sonnet-4-5">Sonnet 4.5</option>
-                        <option value="anthropic/claude-haiku-4-5">Haiku 4.5</option>
-                    </select>
-                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@(StartupTracker.IsStarting(Issue.Id))">
-                        @if (StartupTracker.IsStarting(Issue.Id))
+
+            <dl class="row small">
+                @if (Metadata != null && !string.IsNullOrEmpty(Metadata.BranchName))
+                {
+                    <dt class="col-4">Branch</dt>
+                    <dd class="col-8"><code>@Metadata.BranchName</code></dd>
+                }
+                else if (_branchInfo != null)
+                {
+                    <dt class="col-4">Branch Preview</dt>
+                    <dd class="col-8"><code>@GetBranchPreview()</code></dd>
+                }
+                
+                @if (_branchInfo != null)
+                {
+                    <dt class="col-4">Group</dt>
+                    <dd class="col-8">@_branchInfo.Value.Group</dd>
+                    
+                    <dt class="col-4">Branch ID</dt>
+                    <dd class="col-8">@_branchInfo.Value.BranchId</dd>
+                }
+                
+                @if (Issue.Labels.Count > 0)
+                {
+                    <dt class="col-4">Labels</dt>
+                    <dd class="col-8">
+                        @foreach (var label in Issue.Labels.Where(l => !BeadsBranchLabel.IsHomespunLabel(l)))
                         {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <span class="badge bg-light text-dark me-1">@label</span>
                         }
-                        Resume Agent
-                    </button>
+                        @if (_branchInfo != null)
+                        {
+                            <span class="badge bg-info text-dark me-1" title="Homespun branch label">@GetHspLabel()</span>
+                        }
+                    </dd>
+                }
+                
+                @if (!string.IsNullOrEmpty(Issue.ParentId))
+                {
+                    <dt class="col-4">Parent</dt>
+                    <dd class="col-8"><code>@Issue.ParentId</code></dd>
+                }
+                
+                @if (!string.IsNullOrEmpty(Issue.Assignee))
+                {
+                    <dt class="col-4">Assignee</dt>
+                    <dd class="col-8">@Issue.Assignee</dd>
+                }
+            </dl>
+
+            @* Warning if no hsp: label *@
+            @if (_branchInfo == null)
+            {
+                <div class="alert alert-warning py-2 small">
+                    <strong>Missing branch label:</strong> This issue needs an <code>hsp:</code> label to start development.
+                    <button class="btn btn-sm btn-link p-0 ms-1" @onclick="EnterEditMode">Add one now</button>
                 </div>
             }
-            else if (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr") && _branchInfo != null)
+
+            @* Agent Status Display *@
+            @if (_agentStatus != null)
             {
-                <div class="d-flex gap-2 align-items-center">
-                    <select class="form-select form-select-sm" style="width: auto;" @bind="_selectedModel">
-                        <option value="anthropic/claude-opus-4">Opus 4</option>
-                        <option value="anthropic/claude-sonnet-4-5">Sonnet 4.5</option>
-                        <option value="anthropic/claude-haiku-4-5">Haiku 4.5</option>
-                    </select>
-                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@(StartupTracker.IsStarting(Issue.Id))">
-                        @if (StartupTracker.IsStarting(Issue.Id))
+                <div class="border-top pt-3 mt-3">
+                    <h6>OpenCode Agent</h6>
+                    <div class="mb-2">
+                        <span class="badge bg-success">Running</span>
+                        @if (_agentStatus.Server.WebViewUrl != null)
                         {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            <a href="@_agentStatus.Server.WebViewUrl" target="_blank" 
+                               class="btn btn-sm btn-outline-primary ms-2">
+                                Open Web View
+                            </a>
                         }
-                        Resume Agent
-                    </button>
+                        else
+                        {
+                            <span class="text-muted ms-2">Session initializing...</span>
+                        }
+                    </div>
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            Server: <code>@_agentStatus.Server.BaseUrl</code>
+                        </small>
+                        @if (_agentStatus.ActiveSession != null)
+                        {
+                            <br/>
+                            <small class="text-muted">
+                                Session: <code>@_agentStatus.ActiveSession.Id</code>
+                            </small>
+                        }
+                    </div>
                 </div>
             }
         </div>
-
-        @if (StartupTracker.HasFailed(Issue.Id))
-        {
-            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">
-                @(StartupTracker.GetState(Issue.Id).ErrorMessage ?? "Failed to start agent")
-                <button class="btn btn-link btn-sm p-0 ms-2" @onclick="ClearStartupError">Dismiss</button>
+        <div class="card-footer">
+            <div class="d-flex flex-wrap gap-2">
+                @if (_agentStatus != null)
+                {
+                    <button class="btn btn-sm btn-outline-danger" @onclick="StopAgent" disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Stop Agent
+                    </button>
+                }
+                else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo != null)
+                {
+                    <button class="btn btn-sm btn-success" @onclick="StartDevelopment" disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Start Development
+                    </button>
+                }
+                else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo == null)
+                {
+                    <button class="btn btn-sm btn-secondary" disabled title="Add an hsp: label to enable development">
+                        Start Development
+                    </button>
+                }
+                else if (Issue.Status == BeadsIssueStatus.InProgress && _agentStatus == null && _branchInfo != null)
+                {
+                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Resume Agent
+                    </button>
+                }
+                else if (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr") && _branchInfo != null)
+                {
+                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
+                        @if (_isLoading)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Resume Agent
+                    </button>
+                }
             </div>
-        }
-        else if (!string.IsNullOrEmpty(_errorMessage))
-        {
-            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
-        }
-    </div>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
+            }
+        </div>
+    }
 </div>
 
 <style>
+    .beads-issue-detail-panel:focus {
+        outline: none;
+    }
+    
     .description-content pre {
         background-color: var(--bg-secondary);
         padding: var(--spacing-sm);
@@ -249,6 +325,24 @@
         max-height: 200px;
         overflow-y: auto;
     }
+    
+    .edit-mode-body {
+        max-height: calc(100vh - 250px);
+        overflow-y: auto;
+    }
+    
+    .edit-mode-body .form-label {
+        margin-bottom: 0.25rem;
+        font-weight: 500;
+    }
+    
+    kbd {
+        background-color: var(--bg-tertiary, #e9ecef);
+        border: 1px solid var(--border-color);
+        border-radius: 3px;
+        padding: 0.1rem 0.3rem;
+        font-size: 0.75rem;
+    }
 </style>
 
 @code {
@@ -257,30 +351,253 @@
     [Parameter] public required BeadsIssue Issue { get; set; }
     
     [Parameter] public BeadsIssueMetadata? Metadata { get; set; }
+    
+    [Parameter] public List<string> ExistingGroups { get; set; } = [];
 
     [Parameter] public EventCallback OnActionCompleted { get; set; }
 
     [Parameter] public EventCallback OnClose { get; set; }
 
     private bool _isLoading;
+    private bool _isEditMode;
     private string? _errorMessage;
     private AgentStatus? _agentStatus;
     private (string Group, string BranchId)? _branchInfo;
-    private string _selectedModel = "anthropic/claude-opus-4";
+    private EditModel _editModel = new();
+    private List<string> _existingGroups = [];
+    private string? _projectLocalPath;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load project info for local path
+        var project = await ProjectService.GetByIdAsync(ProjectId);
+        _projectLocalPath = project?.LocalPath;
+        
+        // Load existing groups for autocomplete
+        if (_projectLocalPath != null)
+        {
+            try
+            {
+                _existingGroups = await BeadsService.GetUniqueGroupsAsync(_projectLocalPath);
+            }
+            catch
+            {
+                _existingGroups = [];
+            }
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
         _agentStatus = null;
         _errorMessage = null;
+        _isEditMode = false;
+        
+        // Use passed ExistingGroups if provided and we don't have any yet
+        if (_existingGroups.Count == 0 && ExistingGroups.Count > 0)
+        {
+            _existingGroups = ExistingGroups;
+        }
         
         // Parse group and branch ID from hsp: label
         _branchInfo = BeadsBranchLabel.Parse(Issue.Labels);
+        
+        // Initialize edit model from current issue
+        InitializeEditModel();
         
         // If the issue is in progress, there might be an agent running
         if (Issue.Status == BeadsIssueStatus.InProgress || Issue.Status == BeadsIssueStatus.Blocked)
         {
             await TryRefreshAgentStatus();
         }
+    }
+    
+    private void InitializeEditModel()
+    {
+        _editModel = new EditModel
+        {
+            Title = Issue.Title,
+            Description = Issue.Description ?? "",
+            Type = Issue.Type,
+            Priority = Issue.Priority?.ToString() ?? "",
+            ParentId = Issue.ParentId ?? "",
+            Group = _branchInfo?.Group ?? "",
+            BranchId = _branchInfo?.BranchId ?? "",
+            Labels = string.Join(", ", Issue.Labels.Where(l => !BeadsBranchLabel.IsHomespunLabel(l)))
+        };
+    }
+
+    private void EnterEditMode()
+    {
+        InitializeEditModel();
+        _isEditMode = true;
+        _errorMessage = null;
+    }
+    
+    private void CancelEdit()
+    {
+        _isEditMode = false;
+        _errorMessage = null;
+        InitializeEditModel();
+    }
+    
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (_isEditMode)
+        {
+            if (e.Key == "Enter" && e.CtrlKey)
+            {
+                await SaveChanges();
+            }
+            else if (e.Key == "Escape")
+            {
+                CancelEdit();
+            }
+        }
+    }
+    
+    private void HandleClose()
+    {
+        if (_isEditMode)
+        {
+            CancelEdit();
+        }
+        OnClose.InvokeAsync();
+    }
+    
+    private async Task SaveChanges()
+    {
+        if (string.IsNullOrWhiteSpace(_editModel.Title))
+        {
+            _errorMessage = "Title is required.";
+            return;
+        }
+        
+        if (_projectLocalPath == null)
+        {
+            _errorMessage = "Project path not available.";
+            return;
+        }
+        
+        _isLoading = true;
+        _errorMessage = null;
+        
+        try
+        {
+            var group = _editModel.Group.Trim().ToLowerInvariant();
+            var branchId = _editModel.BranchId.Trim().ToLowerInvariant();
+            
+            // Validate group and branch ID if provided
+            if (!string.IsNullOrWhiteSpace(group) && !BeadsBranchLabel.IsValidGroup(group))
+            {
+                _errorMessage = "Group must be lowercase alphanumeric with hyphens.";
+                return;
+            }
+            
+            if (!string.IsNullOrWhiteSpace(branchId) && !BeadsBranchLabel.IsValidBranchId(branchId))
+            {
+                _errorMessage = "Branch ID must be lowercase alphanumeric with hyphens.";
+                return;
+            }
+            
+            // Build update options
+            var updateOptions = new BeadsUpdateOptions
+            {
+                Title = _editModel.Title.Trim() != Issue.Title ? _editModel.Title.Trim() : null,
+                Description = _editModel.Description.Trim() != (Issue.Description ?? "") ? _editModel.Description.Trim() : null,
+                Type = _editModel.Type != Issue.Type ? _editModel.Type : null,
+                Priority = int.TryParse(_editModel.Priority, out var p) ? (p != Issue.Priority ? p : null) : null,
+                ParentId = _editModel.ParentId.Trim() != (Issue.ParentId ?? "") ? _editModel.ParentId.Trim() : null
+            };
+            
+            // Handle hsp: label changes
+            var newHspLabel = !string.IsNullOrWhiteSpace(group) && !string.IsNullOrWhiteSpace(branchId) 
+                ? BeadsBranchLabel.Create(group, branchId) 
+                : null;
+            var oldHspLabel = _branchInfo != null 
+                ? BeadsBranchLabel.Create(_branchInfo.Value.Group, _branchInfo.Value.BranchId) 
+                : null;
+            
+            // Determine labels to add/remove
+            var labelsToAdd = new List<string>();
+            var labelsToRemove = new List<string>();
+            
+            // Handle hsp: label
+            if (newHspLabel != oldHspLabel)
+            {
+                if (oldHspLabel != null)
+                    labelsToRemove.Add(oldHspLabel);
+                if (newHspLabel != null)
+                    labelsToAdd.Add(newHspLabel);
+            }
+            
+            // Handle other labels
+            var currentOtherLabels = Issue.Labels.Where(l => !BeadsBranchLabel.IsHomespunLabel(l)).ToHashSet();
+            var newOtherLabels = _editModel.Labels
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet();
+            
+            foreach (var label in newOtherLabels.Except(currentOtherLabels))
+            {
+                labelsToAdd.Add(label);
+            }
+            
+            foreach (var label in currentOtherLabels.Except(newOtherLabels))
+            {
+                labelsToRemove.Add(label);
+            }
+            
+            if (labelsToAdd.Count > 0)
+                updateOptions.LabelsToAdd = labelsToAdd;
+            if (labelsToRemove.Count > 0)
+                updateOptions.LabelsToRemove = labelsToRemove;
+            
+            // Perform update
+            var success = await BeadsService.UpdateIssueAsync(_projectLocalPath, Issue.Id, updateOptions);
+            
+            if (!success)
+            {
+                _errorMessage = "Failed to update issue.";
+                return;
+            }
+            
+            // Sync changes
+            await BeadsService.SyncAsync(_projectLocalPath);
+            
+            _isEditMode = false;
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to save: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+    
+    private string GetEditBranchPreview()
+    {
+        var group = _editModel.Group.Trim().ToLowerInvariant();
+        var branchId = _editModel.BranchId.Trim().ToLowerInvariant();
+        var type = _editModel.Type.ToString().ToLowerInvariant();
+        
+        if (string.IsNullOrWhiteSpace(group)) group = "<group>";
+        if (string.IsNullOrWhiteSpace(branchId)) branchId = "<branch-id>";
+        
+        return $"{group}/{type}/{branchId}+{Issue.Id}";
+    }
+    
+    private string GetEditHspLabelPreview()
+    {
+        var group = _editModel.Group.Trim().ToLowerInvariant();
+        var branchId = _editModel.BranchId.Trim().ToLowerInvariant();
+        
+        if (string.IsNullOrWhiteSpace(group)) group = "<group>";
+        if (string.IsNullOrWhiteSpace(branchId)) branchId = "<branch-id>";
+        
+        return $"hsp:{group}/-/{branchId}";
     }
 
     private string GetBranchPreview()
@@ -307,127 +624,13 @@
         }
     }
 
-    private async Task StartPlanning()
+    private async Task StartDevelopment()
     {
-        _errorMessage = null;
-        
-        // Mark as starting immediately (fire-and-forget pattern)
-        StartupTracker.MarkAsStarting(Issue.Id);
-        
-        // Notify parent that action started (allows UI to update)
-        await OnActionCompleted.InvokeAsync();
-        
-        // Start agent in background - don't await, allowing user to navigate away
-        _ = StartPlanningInBackgroundAsync();
-    }
-
-    private async Task StartBuilding()
-    {
-        _errorMessage = null;
-        
-        // Mark as starting immediately (fire-and-forget pattern)
-        StartupTracker.MarkAsStarting(Issue.Id);
-        
-        // Notify parent that action started (allows UI to update)
-        await OnActionCompleted.InvokeAsync();
-        
-        // Start agent in background - don't await, allowing user to navigate away
-        _ = StartBuildingInBackgroundAsync();
-    }
-
-    private async Task ResumeAgent()
-    {
-        _errorMessage = null;
-        
-        // Mark as starting immediately (fire-and-forget pattern)
-        StartupTracker.MarkAsStarting(Issue.Id);
-        
-        // Notify parent that action started (allows UI to update)
-        await OnActionCompleted.InvokeAsync();
-        
-        // Start agent in background - don't await, allowing user to navigate away
-        _ = StartAgentInBackgroundAsync();
-    }
-
-    private async Task StartPlanningInBackgroundAsync()
-    {
-        try
-        {
-            // Creates branch/worktree, starts agent in planning mode, and sends initial prompt
-            // Group and branch ID are parsed from the hsp: label in AgentWorkflowService
-            var status = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Planning, _selectedModel);
-            
-            // Mark as started - this will broadcast via SignalR
-            StartupTracker.MarkAsStarted(Issue.Id);
-            
-            // Update local state if still viewing this issue
-            _agentStatus = status;
-        }
-        catch (Exception ex)
-        {
-            // Mark as failed - this will broadcast via SignalR
-            StartupTracker.MarkAsFailed(Issue.Id, ex.Message);
-            _errorMessage = ex.Message;
-        }
-    }
-
-    private async Task StartBuildingInBackgroundAsync()
-    {
-        try
-        {
-            // Creates branch/worktree, starts agent in building mode, and sends initial prompt
-            // Group and branch ID are parsed from the hsp: label in AgentWorkflowService
-            var status = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Building, _selectedModel);
-            
-            // Mark as started - this will broadcast via SignalR
-            StartupTracker.MarkAsStarted(Issue.Id);
-            
-            // Update local state if still viewing this issue
-            _agentStatus = status;
-        }
-        catch (Exception ex)
-        {
-            // Mark as failed - this will broadcast via SignalR
-            StartupTracker.MarkAsFailed(Issue.Id, ex.Message);
-            _errorMessage = ex.Message;
-        }
-    }
-
-    private async Task StartAgentInBackgroundAsync()
-    {
-        try
-        {
-            // Resume development on an InProgress issue (defaults to Building mode)
-            var status = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id, AgentMode.Building, _selectedModel);
-            
-            // Mark as started - this will broadcast via SignalR
-            StartupTracker.MarkAsStarted(Issue.Id);
-            
-            // Update local state if still viewing this issue
-            _agentStatus = status;
-        }
-        catch (Exception ex)
-        {
-            // Mark as failed - this will broadcast via SignalR
-            StartupTracker.MarkAsFailed(Issue.Id, ex.Message);
-            _errorMessage = ex.Message;
-        }
-    }
-
-    private async Task StopAgent()
-    {
-        if (_agentStatus == null)
-        {
-            return;
-        }
-
         _isLoading = true;
         _errorMessage = null;
         try
         {
-            await AgentWorkflowService.StopAgentAsync(Issue.Id);
-            _agentStatus = null;
-            StartupTracker.ClearState(Issue.Id);
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id);
             await OnActionCompleted.InvokeAsync();
         }
         catch (Exception ex)
@@ -440,17 +643,51 @@
         }
     }
 
-    private void ClearStartupError()
+    private async Task ResumeAgent()
     {
-        StartupTracker.ClearState(Issue.Id);
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id);
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task StopAgent()
+    {
+        if (_agentStatus == null) return;
+
+        _isLoading = true;
+        _errorMessage = null;
+        try
+        {
+            await AgentWorkflowService.StopAgentAsync(Issue.Id);
+            _agentStatus = null;
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
     }
     
     private string GetStatusDisplay()
     {
         if (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr"))
-        {
             return "Awaiting PR";
-        }
         return Issue.Status.ToString();
     }
 
@@ -476,11 +713,23 @@
 
     private string GetPriorityBadgeClass() => Issue.Priority switch
     {
-        0 => "bg-danger",     // P0 - Critical
-        1 => "bg-warning text-dark", // P1 - High
-        2 => "bg-info",       // P2 - Medium
-        3 => "bg-secondary",  // P3 - Low
-        4 => "bg-light text-dark", // P4 - Backlog
+        0 => "bg-danger",
+        1 => "bg-warning text-dark",
+        2 => "bg-info",
+        3 => "bg-secondary",
+        4 => "bg-light text-dark",
         _ => "bg-secondary"
     };
+    
+    private class EditModel
+    {
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public BeadsIssueType Type { get; set; } = BeadsIssueType.Feature;
+        public string Priority { get; set; } = "";
+        public string ParentId { get; set; } = "";
+        public string Group { get; set; } = "";
+        public string BranchId { get; set; } = "";
+        public string Labels { get; set; } = "";
+    }
 }

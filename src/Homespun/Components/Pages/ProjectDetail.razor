@@ -158,20 +158,7 @@ else
                         <span class="section-count">@_openIssues.Count</span>
                     }
                 </div>
-                @if (_openIssues == null || _openIssues.Count == 0)
-                {
-                    <a href="projects/@Id/issues/create" class="add-item">
-                        <div class="item-graph">
-                            <div class="graph-line graph-line-top"></div>
-                            <div class="graph-node status-add">+</div>
-                            <div class="graph-line graph-line-bottom hidden"></div>
-                        </div>
-                        <div class="item-body">
-                            <span class="item-title add-title">Add an issue...</span>
-                        </div>
-                    </a>
-                }
-                else
+                @if (_openIssues != null && _openIssues.Count > 0)
                 {
                 @for (var i = 0; i < _openIssues.Count; i++)
                     {
@@ -189,17 +176,6 @@ else
                                   StartupErrorMessage="@GetStartupErrorMessage(issueWithMeta.Issue.Id)"
                                   OnClick="@(() => SelectBeadsIssue(issueWithMeta.Issue.Id))"/>
                     }
-
-                    <a href="projects/@Id/issues/create" class="add-item">
-                        <div class="item-graph">
-                            <div class="graph-line graph-line-top"></div>
-                            <div class="graph-node status-add">+</div>
-                            <div class="graph-line graph-line-bottom hidden"></div>
-                        </div>
-                        <div class="item-body">
-                            <span class="item-title add-title">Add an issue...</span>
-                        </div>
-                    </a>
                 }
             </div>
         </div>
@@ -216,6 +192,7 @@ else
                 <BeadsIssueDetailPanel ProjectId="@Id"
                                        Issue="_selectedBeadsIssue.Issue"
                                        Metadata="_selectedBeadsIssue.Metadata"
+                                       ExistingGroups="_existingGroups"
                                        OnActionCompleted="RefreshData"
                                        OnClose="ClearSelection"/>
             }
@@ -354,6 +331,11 @@ else
             }
         </div>
     </div>
+    
+    <QuickIssueCreateBar ProjectId="@Id" 
+                         LocalPath="@_project.LocalPath" 
+                         ExistingGroups="_existingGroups"
+                         OnIssueCreated="RefreshData" />
 }
 
 <style>
@@ -362,6 +344,7 @@ else
         grid-template-columns: 1fr 300px;
         gap: var(--spacing-md);
         align-items: start;
+        padding-bottom: 70px; /* Space for fixed quick-issue-bar */
     }
 
     @@media (max-width: 900px) {
@@ -588,6 +571,7 @@ else
     private List<PullRequestWithTime>? _pastPRs;
     private List<BeadsIssueWithMetadata>? _openIssues;
     private List<BeadsIssueWithMetadata>? _inProgressIssues;
+    private List<string> _existingGroups = [];
     private int _pastPRsDisplayCount = 10;
 
     // Debug-only fields (always declared, only used in DEBUG builds)
@@ -680,12 +664,16 @@ else
                 _openIssues = issuesWithMeta
                     .Where(i => i.Issue.Status == BeadsIssueStatus.Open)
                     .ToList();
+                
+                // Extract unique groups for the quick create bar
+                _existingGroups = BeadsBranchLabel.ExtractUniqueGroups(allIssues.Select(i => i.Labels));
             }
             catch (Exception ex)
             {
                 Logger.LogWarning(ex, "Failed to load beads issues for project {ProjectId}", Id);
                 _openIssues = [];
                 _inProgressIssues = [];
+                _existingGroups = [];
             }
         }
     }

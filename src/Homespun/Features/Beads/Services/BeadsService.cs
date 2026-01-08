@@ -125,21 +125,48 @@ public class BeadsService : IBeadsService
     
     public async Task<bool> UpdateIssueAsync(string workingDirectory, string issueId, BeadsUpdateOptions options)
     {
+        var success = true;
+        
+        // Handle main update arguments via bd update command
         var args = BuildUpdateArguments(options);
-        if (string.IsNullOrWhiteSpace(args))
+        if (!string.IsNullOrWhiteSpace(args))
         {
-            _logger.LogDebug("No update options specified for {IssueId}", issueId);
-            return true;
+            var result = await RunBdCommandAsync(workingDirectory, $"update {issueId} {args} --json");
+            
+            if (!result.Success)
+            {
+                _logger.LogWarning("Failed to update issue {IssueId}: {Error}", issueId, result.Error);
+                success = false;
+            }
         }
         
-        var result = await RunBdCommandAsync(workingDirectory, $"update {issueId} {args} --json");
-        
-        if (!result.Success)
+        // Handle label additions separately
+        if (options.LabelsToAdd?.Count > 0)
         {
-            _logger.LogWarning("Failed to update issue {IssueId}: {Error}", issueId, result.Error);
+            foreach (var label in options.LabelsToAdd)
+            {
+                var labelResult = await AddLabelAsync(workingDirectory, issueId, label);
+                if (!labelResult)
+                {
+                    success = false;
+                }
+            }
         }
         
-        return result.Success;
+        // Handle label removals separately
+        if (options.LabelsToRemove?.Count > 0)
+        {
+            foreach (var label in options.LabelsToRemove)
+            {
+                var labelResult = await RemoveLabelAsync(workingDirectory, issueId, label);
+                if (!labelResult)
+                {
+                    success = false;
+                }
+            }
+        }
+        
+        return success;
     }
     
     public async Task<bool> CloseIssueAsync(string workingDirectory, string issueId, string? reason = null)
@@ -358,6 +385,15 @@ public class BeadsService : IBeadsService
     {
         var args = new List<string>();
         
+        if (!string.IsNullOrWhiteSpace(options.Title))
+            args.Add($"--title \"{EscapeQuotes(options.Title)}\"");
+        
+        if (!string.IsNullOrWhiteSpace(options.Description))
+            args.Add($"--description \"{EscapeQuotes(options.Description)}\"");
+        
+        if (options.Type.HasValue)
+            args.Add($"--type {options.Type.Value.ToString().ToLowerInvariant()}");
+        
         if (options.Status.HasValue)
             args.Add($"--status {StatusToString(options.Status.Value)}");
         
@@ -366,6 +402,9 @@ public class BeadsService : IBeadsService
         
         if (!string.IsNullOrWhiteSpace(options.Assignee))
             args.Add($"--assignee {options.Assignee}");
+        
+        if (!string.IsNullOrWhiteSpace(options.ParentId))
+            args.Add($"--parent {options.ParentId}");
         
         return string.Join(" ", args);
     }
