@@ -212,8 +212,35 @@ Homespun uses SignalR for real-time updates. Connect to `/hubs/agent` for:
 - Agent status changes
 - Feature status changes
 
+## Deployment
+
+Homespun can be deployed to Ubuntu virtual machines, Docker containers, or Azure Container Apps. All deployment methods support secure access via Tailscale.
+
+For detailed deployment instructions, see the [Installation Guide](docs/installation.md).
+
+### Quick start
+
+**Docker:**
+```bash
+docker build -f install/container/Dockerfile -t homespun:latest .
+docker run -d -p 8080:8080 -v homespun-data:/data -e GITHUB_TOKEN=ghp_xxx homespun:latest
+```
+
+**Ubuntu VM:**
+```bash
+sudo ./install/vm/install.sh
+sudo ./install/vm/run.sh
+```
+
+**Azure Container Apps:**
+```bash
+cd install/cloud/azure
+terraform init && terraform apply -var="github_token=ghp_xxx"
+```
+
 ## Documentation
 
+- [Installation Guide](docs/installation.md) - Deployment options (VM, Docker, Azure)
 - [SPECIFICATION.md](SPECIFICATION.md) - Technical specification
 - [ROADMAP.md](ROADMAP.md) - Development roadmap
 
