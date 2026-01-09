@@ -220,10 +220,16 @@ For detailed deployment instructions, see the [Installation Guide](docs/installa
 
 ### Quick start
 
-**Docker:**
+**Docker (Windows):**
+```powershell
+docker build -t homespun:local .
+.\install\container\run-homespun-container.ps1
+```
+
+**Docker (Linux/macOS):**
 ```bash
-docker build -f install/container/Dockerfile -t homespun:latest .
-docker run -d -p 8080:8080 -v homespun-data:/data -e GITHUB_TOKEN=ghp_xxx homespun:latest
+docker build -t homespun:local .
+docker run --rm -it -p 8080:8080 -v ~/.homespun-container/data:/data -v ~/.ssh:/home/homespun/.ssh:ro -e GITHUB_TOKEN=ghp_xxx homespun:local
 ```
 
 **Ubuntu VM:**

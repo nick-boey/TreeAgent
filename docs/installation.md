@@ -146,10 +146,39 @@ Run Homespun as a Docker container with persistent storage.
 From the repository root:
 
 ```bash
-docker build -f install/container/Dockerfile -t homespun:latest .
+docker build -t homespun:local .
 ```
 
 ### Step 2: Run the container
+
+**Windows (Automated - Recommended):**
+
+Use the PowerShell script which automatically configures everything:
+
+```powershell
+.\install\container\run-homespun-container.ps1
+```
+
+This script will:
+- Read GitHub token from .NET user secrets
+- Mount `~/.homespun-container/data` for persistent storage
+- Mount SSH keys for git operations
+- Run in interactive mode on port 8080
+
+**Linux/macOS (Manual):**
+
+```bash
+docker run --rm -it \
+  --name homespun-local \
+  -p 8080:8080 \
+  -v ~/.homespun-container/data:/data \
+  -v ~/.ssh:/home/homespun/.ssh:ro \
+  -e GITHUB_TOKEN=ghp_your_token_here \
+  -e ASPNETCORE_ENVIRONMENT=Development \
+  homespun:local
+```
+
+**Production (Detached mode):**
 
 ```bash
 docker run -d \
@@ -157,10 +186,19 @@ docker run -d \
   -p 8080:8080 \
   -v homespun-data:/data \
   -e GITHUB_TOKEN=ghp_your_token_here \
-  homespun:latest
+  -e ASPNETCORE_ENVIRONMENT=Production \
+  --restart unless-stopped \
+  homespun:local
 ```
 
 ### Step 3: Verify the deployment
+
+**Interactive mode (Windows script):**
+- The application will start and display logs
+- Open http://localhost:8080 in your browser
+- Press Ctrl+C to stop
+
+**Detached mode:**
 
 ```bash
 # Check container status
@@ -184,7 +222,7 @@ services:
   homespun:
     build:
       context: .
-      dockerfile: install/container/Dockerfile
+      dockerfile: Dockerfile
     container_name: homespun
     ports:
       - "8080:8080"
