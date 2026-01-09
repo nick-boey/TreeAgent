@@ -24,16 +24,44 @@ public class ProjectService(
     IGitHubService gitHubService,
     ICommandRunner commandRunner,
     IBeadsInitializer beadsInitializer,
+    IConfiguration configuration,
     ILogger<ProjectService> logger)
 {
     /// <summary>
     /// Base path for all project worktrees.
+    /// Uses HOMESPUN_BASE_PATH environment variable if set, otherwise defaults to ~/.homespun/src
     /// </summary>
-    private static string HomespunBasePath =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun", "src");
+    private string HomespunBasePath
+    {
+        get
+        {
+            // Check for explicit configuration first (for container environments)
+            var configuredPath = configuration["HOMESPUN_BASE_PATH"];
+            if (!string.IsNullOrEmpty(configuredPath))
+            {
+                return configuredPath;
+            }
+            
+            // Check for HOMESPUN_DATA_PATH and derive base path from it
+            var dataPath = configuration["HOMESPUN_DATA_PATH"];
+            if (!string.IsNullOrEmpty(dataPath))
+            {
+                // If data path is /data/.homespun/homespun-data.json, base path should be /data/.homespun/src
+                var dataDir = Path.GetDirectoryName(dataPath);
+                if (!string.IsNullOrEmpty(dataDir))
+                {
+                    return Path.Combine(dataDir, "src");
+                }
+            }
+            
+            // Default: ~/.homespun/src
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun", "src");
+        }
+    }
 
     public Task<List<Project>> GetAllAsync()
     {
+        logger.LogDebug("GetAllAsync called, HomespunBasePath={HomespunBasePath}", HomespunBasePath);
         var projects = dataStore.Projects
             .OrderByDescending(p => p.UpdatedAt)
             .ToList();
@@ -157,62 +185,92 @@ public class ProjectService(
 
     public async Task<CreateProjectResult> CreateAsync(string ownerRepo)
     {
+        logger.LogInformation("CreateAsync called with ownerRepo: {OwnerRepo}", ownerRepo);
+        
         // Parse owner/repo
         var parts = ownerRepo.Split('/', 2);
         if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
         {
+            logger.LogWarning("Invalid ownerRepo format: {OwnerRepo}", ownerRepo);
             return CreateProjectResult.Error("Invalid format. Expected 'owner/repository'.");
         }
 
         var owner = parts[0].Trim();
         var repo = parts[1].Trim();
+        logger.LogInformation("Parsed owner={Owner}, repo={Repo}", owner, repo);
 
         // Get default branch from GitHub
-        var defaultBranch = await gitHubService.GetDefaultBranchAsync(owner, repo);
-        if (defaultBranch == null)
+        logger.LogInformation("Fetching default branch from GitHub for {Owner}/{Repo}", owner, repo);
+        try
         {
-            return CreateProjectResult.Error($"Could not fetch repository '{owner}/{repo}' from GitHub. Check that the repository exists and GITHUB_TOKEN is configured.");
-        }
-
-        // Calculate local path: ~/.homespun/src/<repo>/<branch>
-        var repoPath = Path.Combine(HomespunBasePath, repo);
-        var localPath = Path.Combine(repoPath, defaultBranch);
-
-        // Create directory structure if it doesn't exist
-        Directory.CreateDirectory(repoPath);
-
-        // Clone the repository to the local path
-        var cloneUrl = $"https://github.com/{owner}/{repo}.git";
-        var cloneResult = await commandRunner.RunAsync("git", $"clone \"{cloneUrl}\" \"{localPath}\"", repoPath);
-
-        if (!cloneResult.Success)
-        {
-            // Check if it already exists
-            if (Directory.Exists(localPath) && Directory.Exists(Path.Combine(localPath, ".git")))
+            var defaultBranch = await gitHubService.GetDefaultBranchAsync(owner, repo);
+            if (defaultBranch == null)
             {
-                // Already cloned, continue
+                logger.LogWarning("GitHub API returned null for default branch of {Owner}/{Repo}", owner, repo);
+                return CreateProjectResult.Error($"Could not fetch repository '{owner}/{repo}' from GitHub. Check that the repository exists and GITHUB_TOKEN is configured.");
             }
-            else
+            logger.LogInformation("Default branch for {Owner}/{Repo} is {DefaultBranch}", owner, repo, defaultBranch);
+
+            // Calculate local path: ~/.homespun/src/<repo>/<branch>
+            var repoPath = Path.Combine(HomespunBasePath, repo);
+            var localPath = Path.Combine(repoPath, defaultBranch);
+            logger.LogInformation("Calculated paths: HomespunBasePath={BasePath}, repoPath={RepoPath}, localPath={LocalPath}", 
+                HomespunBasePath, repoPath, localPath);
+
+            // Create directory structure if it doesn't exist
+            logger.LogInformation("Creating directory structure at {RepoPath}", repoPath);
+            Directory.CreateDirectory(repoPath);
+            logger.LogInformation("Directory created/verified: {RepoPath}, Exists={Exists}", repoPath, Directory.Exists(repoPath));
+
+            // Clone the repository to the local path
+            var cloneUrl = $"https://github.com/{owner}/{repo}.git";
+            logger.LogInformation("Cloning repository from {CloneUrl} to {LocalPath}", cloneUrl, localPath);
+            var cloneResult = await commandRunner.RunAsync("git", $"clone \"{cloneUrl}\" \"{localPath}\"", repoPath);
+            logger.LogInformation("Clone result: Success={Success}, ExitCode={ExitCode}, Output={Output}, Error={Error}", 
+                cloneResult.Success, cloneResult.ExitCode, cloneResult.Output, cloneResult.Error);
+
+            if (!cloneResult.Success)
             {
-                return CreateProjectResult.Error($"Failed to clone repository: {cloneResult.Error}");
+                // Check if it already exists
+                var gitDirExists = Directory.Exists(Path.Combine(localPath, ".git"));
+                logger.LogInformation("Clone failed. Checking if already cloned: localPath exists={LocalPathExists}, .git exists={GitDirExists}", 
+                    Directory.Exists(localPath), gitDirExists);
+                
+                if (Directory.Exists(localPath) && gitDirExists)
+                {
+                    logger.LogInformation("Repository already cloned at {LocalPath}, continuing", localPath);
+                }
+                else
+                {
+                    logger.LogError("Failed to clone repository {Owner}/{Repo}: {Error}", owner, repo, cloneResult.Error);
+                    return CreateProjectResult.Error($"Failed to clone repository: {cloneResult.Error}");
+                }
             }
+
+            var project = new Project
+            {
+                Name = repo,
+                LocalPath = localPath,
+                GitHubOwner = owner,
+                GitHubRepo = repo,
+                DefaultBranch = defaultBranch
+            };
+
+            logger.LogInformation("Adding project to data store: {ProjectName} at {LocalPath}", project.Name, project.LocalPath);
+            await dataStore.AddProjectAsync(project);
+
+            // Initialize beads for new project
+            logger.LogInformation("Initializing beads for project {ProjectName}", project.Name);
+            await InitializeBeadsIfNeededAsync(project);
+
+            logger.LogInformation("Project {ProjectName} created successfully", project.Name);
+            return CreateProjectResult.Ok(project);
         }
-
-        var project = new Project
+        catch (Exception ex)
         {
-            Name = repo,
-            LocalPath = localPath,
-            GitHubOwner = owner,
-            GitHubRepo = repo,
-            DefaultBranch = defaultBranch
-        };
-
-        await dataStore.AddProjectAsync(project);
-
-        // Initialize beads for new project
-        await InitializeBeadsIfNeededAsync(project);
-
-        return CreateProjectResult.Ok(project);
+            logger.LogError(ex, "Exception during CreateAsync for {OwnerRepo}", ownerRepo);
+            return CreateProjectResult.Error($"Failed to create project: {ex.Message}");
+        }
     }
     
     /// <summary>

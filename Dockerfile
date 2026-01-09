@@ -53,7 +53,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
     && rm -rf /var/lib/apt/lists/*
 
 # Install beads (bd) and OpenCode globally
-RUN npm install -g @beads/bd @anomalyco/opencode
+RUN npm install -g @beads/bd opencode-ai@latest
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash homespun
