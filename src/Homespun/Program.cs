@@ -145,11 +145,7 @@ if (!app.Environment.IsDevelopment())
 }
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 
-// Only redirect to HTTPS in production environments where HTTPS is configured
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
+// Note: HTTPS redirection removed - container runs HTTP-only behind a reverse proxy
 
 app.UseAntiforgery();
 

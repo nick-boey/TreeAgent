@@ -202,7 +202,7 @@ Write-Host "======================================" -ForegroundColor Cyan
 Write-Host "  Name:        homespun-local" -ForegroundColor White
 Write-Host "  Port:        8080" -ForegroundColor White
 Write-Host "  URL:         http://localhost:8080" -ForegroundColor White
-Write-Host "  Environment: Development" -ForegroundColor White
+Write-Host "  Environment: Production" -ForegroundColor White
 Write-Host "  Data mount:  $dataDir" -ForegroundColor White
 if ($mountSsh) {
     Write-Host "  SSH mount:   $sshDir (read-only)" -ForegroundColor White
@@ -225,7 +225,6 @@ $dockerArgs = @(
     "--name", "homespun-local"
     "-p", "8080:8080"
     "-v", "${dataDirUnix}:/data"
-    "-e", "ASPNETCORE_ENVIRONMENT=Development"
 )
 
 # Add SSH mount if directory exists
