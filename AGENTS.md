@@ -119,18 +119,14 @@ Common DI issues to watch for:
 
 The application validates DI at startup and will fail fast with a clear error message if there are configuration issues.
 
-### Database
+### Data Storage
 
-- SQLite database with EF Core
-- Migrations applied automatically on startup
-- Database file: `homespun.db` (gitignored)
+- JSON file storage
+- Data file: `homespun-data.json` (stored in `.homespun` directory)
 
 ### Creating Migrations
 
-```bash
-cd src/Homespun
-dotnet ef migrations add <MigrationName>
-```
+*Not applicable for JSON storage.*
 
 ## Key Services
 
@@ -196,14 +192,13 @@ dotnet user-secrets set "GitHub:Token" "ghp_your_token_here"
 
 ### Environment Variables
 
-- `HOMESPUN_DB_PATH`: Path to SQLite database (default: `homespun.db`)
+- `HOMESPUN_DATA_PATH`: Path to data file (default: `~/.homespun/homespun-data.json`)
 - `GITHUB_TOKEN`: GitHub personal access token for PR operations (alternative to user secrets)
-- `HOMESPUN_VERBOSE_SQL`: Set to `true` to enable detailed EF Core SQL logging
 
 ## Health Checks
 
 The application exposes a health check endpoint at `/health` that monitors:
-- Database connectivity
+- Data store accessibility
 - Process manager status
 
 ## Real-time Updates

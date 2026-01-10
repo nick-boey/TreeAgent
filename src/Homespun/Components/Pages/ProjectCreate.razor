@@ -2,6 +2,7 @@
 @using Homespun.Features.Projects
 @inject ProjectService ProjectService
 @inject NavigationManager Navigation
+@inject ILogger<ProjectCreate> Logger
 @rendermode InteractiveServer
 
 <PageTitle>New Project</PageTitle>
@@ -90,6 +91,9 @@
 
     private async Task HandleSubmit()
     {
+        Logger.LogInformation("HandleSubmit called: mode={Mode}, ownerRepo={OwnerRepo}, projectName={ProjectName}", 
+            _mode, _ownerRepo, _projectName);
+        
         _errorMessage = null;
         _isSubmitting = true;
 
@@ -99,26 +103,40 @@
             
             if (_mode == "github")
             {
+                Logger.LogInformation("Creating GitHub project from {OwnerRepo}", _ownerRepo);
                 result = await ProjectService.CreateAsync(_ownerRepo);
+                Logger.LogInformation("CreateAsync returned: Success={Success}, ErrorMessage={ErrorMessage}", 
+                    result.Success, result.ErrorMessage);
             }
             else
             {
                 var branch = string.IsNullOrWhiteSpace(_defaultBranch) ? "main" : _defaultBranch.Trim();
+                Logger.LogInformation("Creating local project {ProjectName} with branch {Branch}", _projectName, branch);
                 result = await ProjectService.CreateLocalAsync(_projectName.Trim(), branch);
+                Logger.LogInformation("CreateLocalAsync returned: Success={Success}, ErrorMessage={ErrorMessage}", 
+                    result.Success, result.ErrorMessage);
             }
 
             if (result.Success)
             {
+                Logger.LogInformation("Project created successfully, navigating to projects list");
                 Navigation.NavigateTo("projects");
             }
             else
             {
+                Logger.LogWarning("Project creation failed: {ErrorMessage}", result.ErrorMessage);
                 _errorMessage = result.ErrorMessage;
             }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Exception in HandleSubmit");
+            _errorMessage = $"An error occurred: {ex.Message}";
         }
         finally
         {
             _isSubmitting = false;
+            Logger.LogInformation("HandleSubmit completed, isSubmitting={IsSubmitting}", _isSubmitting);
         }
     }
 }

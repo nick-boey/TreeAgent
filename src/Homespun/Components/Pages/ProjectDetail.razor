@@ -18,7 +18,7 @@
 @inject IAgentStartupTracker StartupTracker
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
-@inject ITestAgentService? TestAgentService
+@inject ITestAgentService TestAgentService
 @rendermode InteractiveServer
 
 <PageTitle>@(_project?.Name ?? "Project")</PageTitle>
@@ -160,7 +160,7 @@ else
                 </div>
                 @if (_openIssues != null && _openIssues.Count > 0)
                 {
-                @for (var i = 0; i < _openIssues.Count; i++)
+                    @for (var i = 0; i < _openIssues.Count; i++)
                     {
                         var issueWithMeta = _openIssues[i];
                         <WorkItem Title="@issueWithMeta.Issue.Title"
@@ -249,17 +249,17 @@ else
                                 </dd>
                             }
                         </dl>
-                        
+
                         @* DEBUG-only test agent controls *@
-                        @if (IsDebugBuild && TestAgentService != null)
+                        @if (IsDebugBuild)
                         {
                             <div class="border-top mt-3 pt-3">
                                 <h6 class="text-muted mb-2">Debug Tools</h6>
-                                
+
                                 @if (_testAgentStatus == null)
                                 {
-                                    <button class="btn btn-outline-warning btn-sm" 
-                                            @onclick="StartTestAgent" 
+                                    <button class="btn btn-outline-warning btn-sm"
+                                            @onclick="StartTestAgent"
                                             disabled="@_isTestAgentLoading">
                                         @if (_isTestAgentLoading)
                                         {
@@ -276,24 +276,28 @@ else
                                     <div class="mb-2 small">
                                         <div><strong>Server:</strong> <code>@_testAgentStatus.ServerUrl</code></div>
                                         <div><strong>Session:</strong> <code>@_testAgentStatus.SessionId</code></div>
-                                        <div><strong>Worktree:</strong> <code class="text-break">@_testAgentStatus.WorktreePath</code></div>
+                                        <div><strong>Worktree:</strong> <code
+                                                class="text-break">@_testAgentStatus.WorktreePath</code></div>
                                     </div>
                                     <div class="btn-group btn-group-sm mb-2">
-                                        <a href="@(_testAgentStatus.WebViewUrl ?? _testAgentStatus.ServerUrl)" target="_blank" class="btn btn-outline-primary">
+                                        <a href="@(_testAgentStatus.WebViewUrl ?? _testAgentStatus.ServerUrl)"
+                                           target="_blank" class="btn btn-outline-primary">
                                             Open Web View
                                         </a>
-                                        <button class="btn btn-outline-info" @onclick="VerifySession" disabled="@_isVerifying">
+                                        <button class="btn btn-outline-info" @onclick="VerifySession"
+                                                disabled="@_isVerifying">
                                             @if (_isVerifying)
                                             {
                                                 <span class="spinner-border spinner-border-sm me-1"></span>
                                             }
                                             Verify Session
                                         </button>
-                                        <button class="btn btn-outline-danger" @onclick="StopTestAgent" disabled="@_isTestAgentLoading">
+                                        <button class="btn btn-outline-danger" @onclick="StopTestAgent"
+                                                disabled="@_isTestAgentLoading">
                                             Stop
                                         </button>
                                     </div>
-                                    
+
                                     @if (_verificationResult != null)
                                     {
                                         <div class="p-2 border rounded small">
@@ -314,12 +318,13 @@ else
                                             <div>Total sessions: @_verificationResult.TotalSessions</div>
                                             @if (_verificationResult.AllSessionIds.Count > 0)
                                             {
-                                                <div>IDs: @string.Join(", ", _verificationResult.AllSessionIds.Take(3))@(_verificationResult.AllSessionIds.Count > 3 ? "..." : "")</div>
+                                                <div>
+                                                    IDs: @string.Join(", ", _verificationResult.AllSessionIds.Take(3))@(_verificationResult.AllSessionIds.Count > 3 ? "..." : "")</div>
                                             }
                                         </div>
                                     }
                                 }
-                                
+
                                 @if (!string.IsNullOrEmpty(_testAgentError))
                                 {
                                     <div class="alert alert-danger mt-2 py-1 px-2 small mb-0">@_testAgentError</div>
@@ -331,11 +336,11 @@ else
             }
         </div>
     </div>
-    
-    <QuickIssueCreateBar ProjectId="@Id" 
-                         LocalPath="@_project.LocalPath" 
+
+    <QuickIssueCreateBar ProjectId="@Id"
+                         LocalPath="@_project.LocalPath"
                          ExistingGroups="_existingGroups"
-                         OnIssueCreated="RefreshData" />
+                         OnIssueCreated="RefreshData"/>
 }
 
 <style>
@@ -421,7 +426,7 @@ else
         text-transform: uppercase;
         letter-spacing: 0.03em;
     }
-    
+
     .timeline-section-label .section-count {
         margin-left: var(--spacing-xs);
     }
@@ -593,15 +598,17 @@ else
     {
         // Subscribe to agent startup state changes to update UI
         StartupTracker.StateChanged += OnStartupStateChanged;
-        
+
         await LoadData();
-        
+
         // Check for existing test agent (DEBUG builds only)
-        if (IsDebugBuild && TestAgentService != null && _project != null)
+#if DEBUG
+        if (IsDebugBuild && _project != null)
         {
             _testAgentStatus = TestAgentService.GetTestAgentStatus(_project.Id);
         }
-        
+#endif
+
         // Start sync and load past PRs after project is loaded
         // Using Task.Run to not block the initial render
         if (_project != null)
@@ -640,11 +647,11 @@ else
             {
                 // Load beads issues from the CLI
                 var allIssues = await BeadsService.ListIssuesAsync(_project.LocalPath);
-                
+
                 // Load local metadata for matching
                 var metadataList = DataStore.GetBeadsIssueMetadataByProject(Id);
                 var metadataLookup = metadataList.ToDictionary(m => m.IssueId);
-                
+
                 // Convert to BeadsIssueWithMetadata
                 var issuesWithMeta = allIssues.Select((issue, index) => new BeadsIssueWithMetadata
                 {
@@ -653,18 +660,18 @@ else
                     Time = index,
                     Depth = 0 // Flat for now; could calculate from dependencies
                 }).ToList();
-                
+
                 // Separate in-progress issues (InProgress, Blocked with awaiting-pr label) from open issues
                 // Filter out issues that have a hsp:pr-* label (they are linked to a PR and shown there instead)
                 _inProgressIssues = issuesWithMeta
                     .Where(i => i.Issue.Status == BeadsIssueStatus.InProgress ||
-                               (i.Issue.Status == BeadsIssueStatus.Blocked && i.Issue.Labels.Contains("awaiting-pr")))
+                                (i.Issue.Status == BeadsIssueStatus.Blocked && i.Issue.Labels.Contains("awaiting-pr")))
                     .Where(i => !BranchNameParser.HasPrLabel(i.Issue.Labels))
                     .ToList();
                 _openIssues = issuesWithMeta
                     .Where(i => i.Issue.Status == BeadsIssueStatus.Open)
                     .ToList();
-                
+
                 // Extract unique groups for the quick create bar
                 _existingGroups = BeadsBranchLabel.ExtractUniqueGroups(allIssues.Select(i => i.Labels));
             }
@@ -696,7 +703,7 @@ else
     private async Task LoadPastPRsAsync()
     {
         Logger.LogInformation("LoadPastPRsAsync started for project {ProjectId}", Id);
-        
+
         if (_project == null)
         {
             Logger.LogWarning("LoadPastPRsAsync: _project is null, returning early");
@@ -716,11 +723,11 @@ else
             Logger.LogInformation("LoadPastPRsAsync: Fetching merged PRs...");
             var mergedPRs = await PullRequestWorkflowService.GetMergedPullRequestsWithTimeAsync(Id);
             Logger.LogInformation("LoadPastPRsAsync: Got {Count} merged PRs", mergedPRs.Count);
-            
+
             Logger.LogInformation("LoadPastPRsAsync: Fetching closed PRs...");
             var closedPRs = await PullRequestWorkflowService.GetClosedPullRequestsWithTimeAsync(Id);
             Logger.LogInformation("LoadPastPRsAsync: Got {Count} closed PRs", closedPRs.Count);
-            
+
             _pastPRs = mergedPRs.Concat(closedPRs).ToList();
             Logger.LogInformation("LoadPastPRsAsync: Total past PRs = {Count}", _pastPRs.Count);
         }
@@ -812,7 +819,7 @@ else
         // Clear any beads issue selection
         _selectedBeadsIssueId = null;
         _selectedBeadsIssue = null;
-        
+
         _selectedPullRequestId = pullRequestId;
         _selectedPullRequest = await PullRequestDataService.GetByIdAsync(pullRequestId);
     }
@@ -822,10 +829,10 @@ else
         // Clear any pull request selection
         _selectedPullRequestId = null;
         _selectedPullRequest = null;
-        
+
         _selectedBeadsIssueId = issueId;
         _selectedBeadsIssue = _openIssues?.FirstOrDefault(i => i.Issue.Id == issueId)
-                           ?? _inProgressIssues?.FirstOrDefault(i => i.Issue.Id == issueId);
+                              ?? _inProgressIssues?.FirstOrDefault(i => i.Issue.Id == issueId);
     }
 
     private void ClearSelection()
@@ -951,8 +958,8 @@ else
 
     private async Task StartTestAgent()
     {
-        if (_project == null || TestAgentService == null) return;
-        
+        if (_project == null) return;
+
         _isTestAgentLoading = true;
         _testAgentError = null;
         _verificationResult = null;
@@ -982,8 +989,8 @@ else
 
     private async Task StopTestAgent()
     {
-        if (_project == null || TestAgentService == null) return;
-        
+        if (_project == null) return;
+
         _isTestAgentLoading = true;
         _testAgentError = null;
         _verificationResult = null;
@@ -1006,8 +1013,8 @@ else
 
     private async Task VerifySession()
     {
-        if (_project == null || TestAgentService == null) return;
-        
+        if (_project == null) return;
+
         _isVerifying = true;
         StateHasChanged();
 

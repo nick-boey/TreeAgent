@@ -46,7 +46,7 @@ Features are color-coded by status:
 |----------------|-----------------------------------------|
 | Runtime        | .NET 8+                                 |
 | Web Framework  | Blazor Server (SSR)                     |
-| Database       | SQLite with EF Core                     |
+| Data Storage   | JSON File Storage                       |
 | Network Access | Tailscale (optional, for remote access) |
 | AI Agent       | Claude Code CLI                         |
 
@@ -88,7 +88,7 @@ Features are color-coded by status:
 ┌─────────────────────────────────────────────────────────────┐
 │                       Data Layer                             │
 │  ┌─────────────────────────────────────────────────────────┐ │
-│  │                 SQLite + EF Core                         │ │
+│  │                   JSON Data Store                        │ │
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────┐ │ │
 │  │  │ Projects │ │ Features │ │ Messages │ │   Agents   │ │ │
 │  │  └──────────┘ └──────────┘ └──────────┘ └────────────┘ │ │
@@ -115,7 +115,6 @@ Homespun/
 │       │   └── Entities/    # Entity classes (Project, Feature, Agent, Message)
 │       ├── HealthChecks/    # Health check implementations
 │       ├── Hubs/            # SignalR hubs for real-time updates
-│       ├── Migrations/      # EF Core migrations
 │       ├── Services/        # Business logic services
 │       └── Program.cs
 ├── tests/
@@ -205,7 +204,7 @@ Homespun/
 ### 5.2 Security
 
 - **NFR-S-01**: Tailscale can restrict access to private network
-- **NFR-S-02**: No sensitive credentials stored in database
+- **NFR-S-02**: No sensitive credentials stored in data file
 - **NFR-S-03**: Environment-based configuration for secrets
 
 ### 5.3 Reliability
@@ -213,90 +212,63 @@ Homespun/
 - **NFR-R-01**: Graceful handling of agent crashes
 - **NFR-R-02**: Automatic reconnection to agents
 
-## 6. Data Model
+## 6. Data Schema
 
-### 6.1 Projects Table
+The application uses a JSON file store. The schema consists of the following entities:
 
-```sql
-CREATE TABLE Projects
-(
-    Id            TEXT PRIMARY KEY,
-    Name          TEXT NOT NULL,
-    LocalPath     TEXT NOT NULL,
-    GitHubOwner   TEXT,
-    GitHubRepo    TEXT,
-    DefaultBranch TEXT DEFAULT 'main',
-    CreatedAt     TEXT NOT NULL,
-    UpdatedAt     TEXT NOT NULL
-);
-```
+### 6.1 Project
 
-### 6.2 Features Table
+- **Id**: Unique identifier
+- **Name**: Project name
+- **LocalPath**: Local filesystem path
+- **GitHubOwner**: GitHub repository owner (optional)
+- **GitHubRepo**: GitHub repository name (optional)
+- **DefaultBranch**: Default branch name (e.g., 'main')
+- **CreatedAt**: Timestamp
+- **UpdatedAt**: Timestamp
 
-```sql
-CREATE TABLE Features
-(
-    Id             TEXT PRIMARY KEY,
-    ProjectId      TEXT NOT NULL,
-    ParentId       TEXT,
-    Title          TEXT NOT NULL,
-    Description    TEXT,
-    BranchName     TEXT,
-    Status         TEXT NOT NULL,
-    GitHubPRNumber INTEGER,
-    WorktreePath   TEXT,
-    CreatedAt      TEXT NOT NULL,
-    UpdatedAt      TEXT NOT NULL,
-    FOREIGN KEY (ProjectId) REFERENCES Projects (Id),
-    FOREIGN KEY (ParentId) REFERENCES Features (Id)
-);
-```
+### 6.2 Feature (Pull Request)
 
-### 6.3 Agents Table
+- **Id**: Unique identifier
+- **ProjectId**: Reference to parent Project
+- **ParentId**: Reference to parent Feature (for tree structure)
+- **Title**: Feature title
+- **Description**: Feature description
+- **BranchName**: Git branch name
+- **Status**: Current status (e.g., InDevelopment, ReadyForReview)
+- **GitHubPRNumber**: Associated GitHub PR number
+- **WorktreePath**: Path to the feature's git worktree
+- **CreatedAt**: Timestamp
+- **UpdatedAt**: Timestamp
 
-```sql
-CREATE TABLE Agents
-(
-    Id           TEXT PRIMARY KEY,
-    FeatureId    TEXT NOT NULL,
-    ProcessId    INTEGER,
-    Status       TEXT NOT NULL,
-    SystemPrompt TEXT,
-    CreatedAt    TEXT NOT NULL,
-    UpdatedAt    TEXT NOT NULL,
-    FOREIGN KEY (FeatureId) REFERENCES Features (Id)
-);
-```
+### 6.3 Agent
 
-### 6.4 Messages Table
+- **Id**: Unique identifier
+- **FeatureId**: Reference to associated Feature
+- **ProcessId**: OS process ID for the agent process
+- **Status**: Agent status (e.g., Running, Stopped, Error)
+- **SystemPrompt**: Custom system prompt used
+- **CreatedAt**: Timestamp
+- **UpdatedAt**: Timestamp
 
-```sql
-CREATE TABLE Messages
-(
-    Id        TEXT PRIMARY KEY,
-    AgentId   TEXT NOT NULL,
-    Role      TEXT NOT NULL,
-    Content   TEXT NOT NULL,
-    Timestamp TEXT NOT NULL,
-    Metadata  TEXT,
-    FOREIGN KEY (AgentId) REFERENCES Agents (Id)
-);
-```
+### 6.4 Message
 
-### 6.5 PromptTemplates Table
+- **Id**: Unique identifier
+- **AgentId**: Reference to associated Agent
+- **Role**: Sender role (e.g., User, Assistant)
+- **Content**: Message content
+- **Timestamp**: Timestamp
+- **Metadata**: Additional metadata
 
-```sql
-CREATE TABLE PromptTemplates
-(
-    Id          TEXT PRIMARY KEY,
-    Name        TEXT NOT NULL,
-    Content     TEXT NOT NULL,
-    Description TEXT,
-    IsDefault   INTEGER DEFAULT 0,
-    CreatedAt   TEXT NOT NULL,
-    UpdatedAt   TEXT NOT NULL
-);
-```
+### 6.5 PromptTemplate
+
+- **Id**: Unique identifier
+- **Name**: Template name
+- **Content**: Template content
+- **Description**: Template description
+- **IsDefault**: Whether this is the default template
+- **CreatedAt**: Timestamp
+- **UpdatedAt**: Timestamp
 
 ## 7. External Dependencies
 
@@ -330,7 +302,7 @@ git clone https://github.com/slopus/happy-cli .tmp/happy-cli
 
 Environment variables:
 
-- `HOMESPUN_DB_PATH`: SQLite database path
+- `HOMESPUN_DATA_PATH`: Path to data file (default: `homespun-data.json`)
 - `HOMESPUN_WORKTREE_ROOT`: Base directory for worktrees
 - `GITHUB_TOKEN`: GitHub API access token
 - `CLAUDE_CODE_PATH`: Path to Claude Code CLI executable
@@ -339,7 +311,7 @@ Environment variables:
 
 The application exposes a health check endpoint at `/health` that monitors:
 
-- Database connectivity
+- Data store accessibility
 - Process manager status
 
 ### 8.4 Real-time Communication

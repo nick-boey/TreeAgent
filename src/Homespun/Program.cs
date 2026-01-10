@@ -10,6 +10,7 @@ using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Components;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,7 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
-// Add services to the container.
+// Resolve data path from configuration or use default
 var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
 var defaultDataPath = Path.Combine(homespunDir, "homespun-data.json");
 var dataPath = builder.Configuration["HOMESPUN_DATA_PATH"] ?? defaultDataPath;
@@ -35,6 +36,18 @@ builder.Services.AddSingleton<IDataStore>(sp =>
     var logger = sp.GetRequiredService<ILogger<JsonDataStore>>();
     return new JsonDataStore(dataPath, logger);
 });
+
+// Configure Data Protection to persist keys in the data directory
+// This ensures keys survive container restarts and prevents antiforgery token errors
+var dataProtectionKeysPath = Path.Combine(dataDirectory!, "DataProtection-Keys");
+if (!Directory.Exists(dataProtectionKeysPath))
+{
+    Directory.CreateDirectory(dataProtectionKeysPath);
+}
+
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
+    .SetApplicationName("Homespun");
 
 // Core services
 builder.Services.AddScoped<ProjectService>();
@@ -69,9 +82,7 @@ builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
 builder.Services.AddHostedService<AgentStartupBroadcaster>();
 builder.Services.AddScoped<IAgentCompletionMonitor, AgentCompletionMonitor>();
 builder.Services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
-#if DEBUG
 builder.Services.AddSingleton<ITestAgentService, TestAgentService>();
-#endif
 
 // GitHub sync polling service (PR sync, review polling, issue linking)
 builder.Services.Configure<GitHubSyncPollingOptions>(
@@ -91,8 +102,10 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+
+// Note: HTTPS redirection removed - container runs HTTP-only behind a reverse proxy
 
 app.UseAntiforgery();
 
