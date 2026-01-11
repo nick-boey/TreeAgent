@@ -43,7 +43,7 @@ To run Homespun on a cloud VM and access it securely via Tailscale:
 
 1.  **Generate a Tailscale Auth Key:**
     - Go to [Tailscale Admin Console](https://login.tailscale.com/admin/settings/keys)
-    - Generate an ephemeral key (reusable if you plan to spin up multiple instances, or single-use)
+    - Generate a **reusable** auth key (recommended - allows container restarts without generating new keys)
     - Ensure the key has tags if you use ACLs (e.g., `tag:homespun`)
 
 2.  **Run with Tailscale:**
@@ -55,15 +55,22 @@ To run Homespun on a cloud VM and access it securely via Tailscale:
 
     **Using the Bash script (Linux/macOS):**
     ```bash
+    export GITHUB_TOKEN="ghp_..."
     ./install/container/run.sh --tailscale-auth-key "tskey-auth-..." --tailscale-hostname "homespun-azure"
     ```
+
+    **Note:** The bash script reads `GITHUB_TOKEN` from the environment. Set it before running the script.
 
     **Using Docker directly:**
     ```bash
     docker run --rm -it \
+      --user "$(id -u):$(id -g)" \
       --name homespun-azure \
       -p 8080:8080 \
       -v ~/.homespun-container/data:/data \
+      -v ~/.homespun-container/data:/home/containeruser \
+      -v ~/.ssh:/home/containeruser/.ssh:ro \
+      -e HOME=/home/containeruser \
       -e GITHUB_TOKEN=your_token \
       -e TAILSCALE_AUTH_KEY=tskey-auth-... \
       -e TAILSCALE_HOSTNAME=homespun-azure \
@@ -121,10 +128,13 @@ docker run --rm -it `
 **Linux/macOS:**
 ```bash
 docker run --rm -it \
+  --user "$(id -u):$(id -g)" \
   --name homespun-local \
   -p 8080:8080 \
   -v ~/.homespun-container/data:/data \
-  -v ~/.ssh:/home/homespun/.ssh:ro \
+  -v ~/.homespun-container/data:/home/containeruser \
+  -v ~/.ssh:/home/containeruser/.ssh:ro \
+  -e HOME=/home/containeruser \
   -e GITHUB_TOKEN=your_token_here \
   -e ASPNETCORE_ENVIRONMENT=Development \
   homespun:local
@@ -214,7 +224,7 @@ docker-compose up -d
 |----------|-------------|---------|
 | `ASPNETCORE_URLS` | URL bindings | `http://+:8080` |
 | `ASPNETCORE_ENVIRONMENT` | Environment (Development/Production) | `Production` |
-| `HOMESPUN_DATA_PATH` | Path to data file | `/data/.homespun/homespun-data.json` |
+| `HOMESPUN_DATA_PATH` | Path to data file | `/data/homespun-data.json` |
 | `GITHUB_TOKEN` | GitHub personal access token | (none) |
 | `TAILSCALE_AUTH_KEY` | Tailscale auth key (optional) | (none) |
 | `TAILSCALE_HOSTNAME` | Hostname for Tailscale | `homespun-container` |
@@ -225,10 +235,12 @@ docker-compose up -d
 
 | Container Path | Purpose |
 |----------------|---------|
-| `/data` | Persistent data storage (database, configuration) |
+| `/data` | Persistent data storage (database, configuration, Tailscale state) |
 | `/app` | Application binaries (Homespun.dll) |
-| `/home/homespun` | Home directory for the homespun user |
-| `/home/homespun/.ssh` | SSH keys (mounted from host, read-only) |
+| `/home/containeruser` | Home directory (mapped to /data for correct file ownership) |
+| `/home/containeruser/.ssh` | SSH keys (mounted from host, read-only) |
+
+**Note:** When using the run scripts, the container runs as your host user (matching UID/GID) so that files created in mounted volumes have correct ownership. This allows you to run `git` commands on cloned repositories from the host without "dubious ownership" errors.
 
 ### Local Development (Bind Mounts)
 
@@ -270,7 +282,20 @@ docker logs homespun-local
 
 ### Permission issues with mounted volumes
 
-Ensure the mounted directories have proper permissions. The container runs as user `homespun` (UID/GID created during build).
+The run scripts automatically set proper permissions (`chmod 777`) on the data directory. If you're running Docker directly, ensure the mounted directory is writable by the container user.
+
+**Git "dubious ownership" errors:**
+If you see `fatal: detected dubious ownership in repository`, this means the repository was created by a different user. The run scripts solve this by running the container as your host user. If running Docker directly, use `--user "$(id -u):$(id -g)"`.
+
+### Tailscale authentication fails
+
+**"invalid key" error:**
+- If you used a one-time auth key, it can only be used once. Generate a new **reusable** key from the [Tailscale Admin Console](https://login.tailscale.com/admin/settings/keys).
+- If you previously ran the container with `sudo`, the Tailscale state may be corrupted. Clear it:
+  ```bash
+  rm -rf ~/.homespun-container/data/tailscale
+  ```
+- Remove any stale devices from the [Tailscale Machines page](https://login.tailscale.com/admin/machines).
 
 ### Cannot connect to GitHub
 
@@ -279,14 +304,22 @@ Verify your GitHub token is set:
 docker exec homespun-local env | grep GITHUB_TOKEN
 ```
 
-If using the PowerShell script, ensure your .NET user secrets are configured:
-```powershell
-dotnet user-secrets list --project src/Homespun
+**On Linux/macOS (bash script):**
+Set the environment variable before running:
+```bash
+export GITHUB_TOKEN="ghp_your_token_here"
+./install/container/run.sh
 ```
 
-To set the GitHub token:
+**On Windows (PowerShell script):**
+The script reads from .NET user secrets. Configure with:
 ```powershell
 dotnet user-secrets set "GitHub:Token" "your_token_here" --project src/Homespun
+```
+
+To verify your secrets:
+```powershell
+dotnet user-secrets list --project src/Homespun
 ```
 
 ### Data file issues
@@ -345,9 +378,11 @@ For production deployments, consider:
 
 ## Notes
 
-- The container runs as a non-root user (`homespun`) for security
+- When using the run scripts, the container runs as your host user (matching UID/GID) for correct file ownership
+- When running Docker directly, specify `--user "$(id -u):$(id -g)"` to avoid permission issues
 - Node.js and beads (bd) are pre-installed for git workflow management
 - OpenCode is pre-installed for AI agent orchestration
 - The GitHub CLI (gh) is available for PR operations
+- Tailscale state is persisted in `/data/tailscale` for consistent device identity across restarts
 - Data Protection keys are persisted to prevent antiforgery token errors across container restarts
 - Health checks run every 30 seconds on the `/health` endpoint
