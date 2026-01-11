@@ -10,19 +10,32 @@ public class GitWorktreeServiceTests
 {
     private Mock<ICommandRunner> _mockRunner = null!;
     private GitWorktreeService _service = null!;
+    private string _tempDir = null!;
 
     [SetUp]
     public void SetUp()
     {
         _mockRunner = new Mock<ICommandRunner>();
         _service = new GitWorktreeService(_mockRunner.Object, Mock.Of<ILogger<GitWorktreeService>>());
+        _tempDir = Path.Combine(Path.GetTempPath(), "homespun-test-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(_tempDir);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        if (Directory.Exists(_tempDir))
+        {
+            Directory.Delete(_tempDir, recursive: true);
+        }
     }
 
     [Test]
     public async Task CreateWorktree_Success_ReturnsPath()
     {
         // Arrange
-        var repoPath = "/repo";
+        var repoPath = Path.Combine(_tempDir, "repo");
+        Directory.CreateDirectory(repoPath);
         var branchName = "feature/test";
 
         _mockRunner.Setup(r => r.RunAsync("git", It.IsAny<string>(), repoPath))
@@ -42,7 +55,8 @@ public class GitWorktreeServiceTests
     public async Task CreateWorktree_GitError_ReturnsNull()
     {
         // Arrange
-        var repoPath = "/repo";
+        var repoPath = Path.Combine(_tempDir, "repo");
+        Directory.CreateDirectory(repoPath);
         var branchName = "feature/test";
 
         _mockRunner.Setup(r => r.RunAsync("git", It.IsAny<string>(), repoPath))
@@ -59,8 +73,8 @@ public class GitWorktreeServiceTests
     public async Task RemoveWorktree_Success_ReturnsTrue()
     {
         // Arrange
-        var repoPath = "/repo";
-        var worktreePath = "/repo/.worktrees/feature-test";
+        var repoPath = Path.Combine(_tempDir, "repo");
+        var worktreePath = Path.Combine(repoPath, ".worktrees", "feature-test");
 
         _mockRunner.Setup(r => r.RunAsync("git", $"worktree remove \"{worktreePath}\" --force", repoPath))
             .ReturnsAsync(new CommandResult { Success = true });
@@ -76,8 +90,8 @@ public class GitWorktreeServiceTests
     public async Task RemoveWorktree_GitError_ReturnsFalse()
     {
         // Arrange
-        var repoPath = "/repo";
-        var worktreePath = "/repo/.worktrees/feature-test";
+        var repoPath = Path.Combine(_tempDir, "repo");
+        var worktreePath = Path.Combine(repoPath, ".worktrees", "feature-test");
 
         _mockRunner.Setup(r => r.RunAsync("git", It.IsAny<string>(), repoPath))
             .ReturnsAsync(new CommandResult { Success = false });
@@ -93,11 +107,12 @@ public class GitWorktreeServiceTests
     public async Task ListWorktrees_Success_ReturnsWorktrees()
     {
         // Arrange
-        var repoPath = "/repo";
-        var gitOutput = "/repo\n/repo/.worktrees/feature-1\n/repo/.worktrees/feature-2\n";
+        var repoPath = Path.Combine(_tempDir, "repo");
+        var worktree1 = Path.Combine(repoPath, ".worktrees", "feature-1");
+        var worktree2 = Path.Combine(repoPath, ".worktrees", "feature-2");
 
         _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
-            .ReturnsAsync(new CommandResult { Success = true, Output = "worktree /repo\nworktree /repo/.worktrees/feature-1\nworktree /repo/.worktrees/feature-2" });
+            .ReturnsAsync(new CommandResult { Success = true, Output = $"worktree {repoPath}\nworktree {worktree1}\nworktree {worktree2}" });
 
         // Act
         var result = await _service.ListWorktreesAsync(repoPath);
@@ -111,7 +126,7 @@ public class GitWorktreeServiceTests
     public async Task ListWorktrees_GitError_ReturnsEmptyList()
     {
         // Arrange
-        var repoPath = "/repo";
+        var repoPath = Path.Combine(_tempDir, "repo");
 
         _mockRunner.Setup(r => r.RunAsync("git", It.IsAny<string>(), repoPath))
             .ReturnsAsync(new CommandResult { Success = false });
@@ -128,7 +143,7 @@ public class GitWorktreeServiceTests
     public async Task PruneWorktrees_CallsGitPrune()
     {
         // Arrange
-        var repoPath = "/repo";
+        var repoPath = Path.Combine(_tempDir, "repo");
 
         _mockRunner.Setup(r => r.RunAsync("git", "worktree prune", repoPath))
             .ReturnsAsync(new CommandResult { Success = true });
@@ -184,7 +199,8 @@ public class GitWorktreeServiceTests
     public async Task CreateWorktree_WithNewBranch_CreatesBranchFirst()
     {
         // Arrange
-        var repoPath = "/repo";
+        var repoPath = Path.Combine(_tempDir, "repo");
+        Directory.CreateDirectory(repoPath);
         var branchName = "feature/new-branch";
 
         _mockRunner.SetupSequence(r => r.RunAsync("git", It.IsAny<string>(), repoPath))
