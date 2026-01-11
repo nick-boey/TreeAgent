@@ -62,22 +62,21 @@ log_success "      Image found."
 
 # Step 3: Read GitHub token
 log_info "[3/6] Reading GitHub token..."
-GITHUB_TOKEN=""
 
-# Try reading from .NET user secrets JSON directly if available
-SECRETS_PATH="$HOME/.microsoft/usersecrets/$USER_SECRETS_ID/secrets.json"
-if [ -f "$SECRETS_PATH" ]; then
-    # Try to extract token using grep/sed to avoid jq dependency if possible, or python
-    if command -v python3 &>/dev/null; then
-        GITHUB_TOKEN=$(python3 -c "import json, sys; print(json.load(open('$SECRETS_PATH')).get('GitHub:Token', ''))" 2>/dev/null)
-    elif command -v jq &>/dev/null; then
-         GITHUB_TOKEN=$(jq -r '."GitHub:Token" // empty' "$SECRETS_PATH")
-    fi
-fi
+# First check environment variable
+GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 
-# Fallback: Check environment variable if not found in secrets
+# If not in environment, try reading from .NET user secrets JSON
 if [ -z "$GITHUB_TOKEN" ]; then
-    GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+    SECRETS_PATH="$HOME/.microsoft/usersecrets/$USER_SECRETS_ID/secrets.json"
+    if [ -f "$SECRETS_PATH" ]; then
+        # Try to extract token using grep/sed to avoid jq dependency if possible, or python
+        if command -v python3 &>/dev/null; then
+            GITHUB_TOKEN=$(python3 -c "import json, sys; print(json.load(open('$SECRETS_PATH')).get('GitHub:Token', ''))" 2>/dev/null)
+        elif command -v jq &>/dev/null; then
+             GITHUB_TOKEN=$(jq -r '."GitHub:Token" // empty' "$SECRETS_PATH")
+        fi
+    fi
 fi
 
 if [ -z "$GITHUB_TOKEN" ]; then
