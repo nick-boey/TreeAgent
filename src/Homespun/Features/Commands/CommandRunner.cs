@@ -2,15 +2,8 @@ using System.Diagnostics;
 
 namespace Homespun.Features.Commands;
 
-public class CommandRunner : ICommandRunner
+public class CommandRunner(ILogger<CommandRunner> logger) : ICommandRunner
 {
-    private readonly ILogger<CommandRunner> _logger;
-
-    public CommandRunner(ILogger<CommandRunner> logger)
-    {
-        _logger = logger;
-    }
-
     public async Task<CommandResult> RunAsync(string command, string arguments, string workingDirectory)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -19,7 +12,7 @@ public class CommandRunner : ICommandRunner
         // TODO: Make --no-daemon configurable via BeadsService options
         var effectiveArguments = AddBeadsFlags(command, arguments);
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "Executing command: {Command} {Arguments} in {WorkingDirectory}",
             command, effectiveArguments, workingDirectory);
 
@@ -56,19 +49,19 @@ public class CommandRunner : ICommandRunner
 
             if (result.Success)
             {
-                _logger.LogInformation(
+                logger.LogInformation(
                     "Command completed: {Command} {Arguments} | ExitCode={ExitCode} | Duration={Duration}ms",
                     command, arguments, result.ExitCode, stopwatch.ElapsedMilliseconds);
                 
                 // Log output at debug level for successful commands
                 if (!string.IsNullOrWhiteSpace(output))
                 {
-                    _logger.LogDebug("Command output: {Output}", TruncateOutput(output));
+                    logger.LogDebug("Command output: {Output}", TruncateOutput(output));
                 }
             }
             else
             {
-                _logger.LogWarning(
+                logger.LogWarning(
                     "Command failed: {Command} {Arguments} | ExitCode={ExitCode} | Duration={Duration}ms | Error={Error}",
                     command, arguments, result.ExitCode, stopwatch.ElapsedMilliseconds, 
                     TruncateOutput(error));
@@ -80,7 +73,7 @@ public class CommandRunner : ICommandRunner
         {
             stopwatch.Stop();
             
-            _logger.LogError(
+            logger.LogError(
                 ex,
                 "Command exception: {Command} {Arguments} in {WorkingDirectory} | Duration={Duration}ms",
                 command, arguments, workingDirectory, stopwatch.ElapsedMilliseconds);

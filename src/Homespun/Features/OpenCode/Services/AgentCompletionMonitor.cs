@@ -8,24 +8,14 @@ namespace Homespun.Features.OpenCode.Services;
 /// <summary>
 /// Monitors agent SSE events to detect PR creation and handle completion workflow.
 /// </summary>
-public partial class AgentCompletionMonitor : IAgentCompletionMonitor
+public partial class AgentCompletionMonitor(
+    IOpenCodeClient client,
+    IGitHubService gitHubService,
+    IOptions<AgentCompletionOptions> options,
+    ILogger<AgentCompletionMonitor> logger)
+    : IAgentCompletionMonitor
 {
-    private readonly IOpenCodeClient _client;
-    private readonly IGitHubService _gitHubService;
-    private readonly AgentCompletionOptions _options;
-    private readonly ILogger<AgentCompletionMonitor> _logger;
-
-    public AgentCompletionMonitor(
-        IOpenCodeClient client,
-        IGitHubService gitHubService,
-        IOptions<AgentCompletionOptions> options,
-        ILogger<AgentCompletionMonitor> logger)
-    {
-        _client = client;
-        _gitHubService = gitHubService;
-        _options = options.Value;
-        _logger = logger;
-    }
+    private readonly AgentCompletionOptions _options = options.Value;
 
     /// <summary>
     /// Checks if an SSE event represents a PR creation command.
@@ -85,18 +75,18 @@ public partial class AgentCompletionMonitor : IAgentCompletionMonitor
         try
         {
             // Monitor SSE events until server stops (no timeout)
-            await foreach (var evt in _client.SubscribeToEventsAsync(baseUrl, ct))
+            await foreach (var evt in client.SubscribeToEventsAsync(baseUrl, ct))
             {
                 if (!IsPrCreationEvent(evt))
                     continue;
 
-                _logger.LogInformation("Detected PR creation event for branch {Branch}", branchName);
+                logger.LogInformation("Detected PR creation event for branch {Branch}", branchName);
 
                 // Try to parse PR URL from the event content
                 var parseResult = ParsePrUrl(evt.Properties?.Content ?? "");
                 if (parseResult != null)
                 {
-                    _logger.LogInformation("PR URL found: {Url} (PR #{Number})", parseResult.Url, parseResult.PrNumber);
+                    logger.LogInformation("PR URL found: {Url} (PR #{Number})", parseResult.Url, parseResult.PrNumber);
                     return new AgentCompletionResult
                     {
                         Success = true,
@@ -142,18 +132,18 @@ public partial class AgentCompletionMonitor : IAgentCompletionMonitor
         {
             if (attempt > 0)
             {
-                _logger.LogDebug("Retrying PR detection (attempt {Attempt}/{Total})", 
+                logger.LogDebug("Retrying PR detection (attempt {Attempt}/{Total})", 
                     attempt + 1, _options.PrDetectionRetryCount);
                 await Task.Delay(_options.PrDetectionRetryDelayMs, ct);
             }
 
-            var prs = await _gitHubService.GetOpenPullRequestsAsync(projectId);
+            var prs = await gitHubService.GetOpenPullRequestsAsync(projectId);
             var matchingPr = prs.FirstOrDefault(pr => 
                 pr.BranchName?.Equals(branchName, StringComparison.OrdinalIgnoreCase) == true);
 
             if (matchingPr != null)
             {
-                _logger.LogInformation("Found PR #{Number} for branch {Branch}", 
+                logger.LogInformation("Found PR #{Number} for branch {Branch}", 
                     matchingPr.Number, branchName);
                 return new AgentCompletionResult
                 {

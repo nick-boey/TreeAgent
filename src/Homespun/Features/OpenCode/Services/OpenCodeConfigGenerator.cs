@@ -7,22 +7,16 @@ namespace Homespun.Features.OpenCode.Services;
 /// <summary>
 /// Generates opencode.json configuration files for worktrees.
 /// </summary>
-public class OpenCodeConfigGenerator : IOpenCodeConfigGenerator
+public class OpenCodeConfigGenerator(IOptions<OpenCodeOptions> options, ILogger<OpenCodeConfigGenerator> logger)
+    : IOpenCodeConfigGenerator
 {
-    private readonly OpenCodeOptions _options;
-    private readonly ILogger<OpenCodeConfigGenerator> _logger;
-    
+    private readonly OpenCodeOptions _options = options.Value;
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
     };
-
-    public OpenCodeConfigGenerator(IOptions<OpenCodeOptions> options, ILogger<OpenCodeConfigGenerator> logger)
-    {
-        _options = options.Value;
-        _logger = logger;
-    }
 
     public async Task GenerateConfigAsync(string worktreePath, OpenCodeConfig config, CancellationToken ct = default)
     {
@@ -31,7 +25,7 @@ public class OpenCodeConfigGenerator : IOpenCodeConfigGenerator
         var json = JsonSerializer.Serialize(config, JsonOptions);
         await File.WriteAllTextAsync(configPath, json, ct);
         
-        _logger.LogInformation("Generated OpenCode config at {ConfigPath}", configPath);
+        logger.LogInformation("Generated OpenCode config at {ConfigPath}", configPath);
     }
 
     public OpenCodeConfig CreateDefaultConfig(string? model = null)

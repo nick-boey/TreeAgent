@@ -7,26 +7,16 @@ namespace Homespun.Features.OpenCode.Hubs;
 /// <summary>
 /// SignalR hub for real-time agent communication.
 /// </summary>
-public class AgentHub : Hub
+public class AgentHub(
+    IAgentWorkflowService workflowService,
+    IOpenCodeServerManager serverManager,
+    IOpenCodeClient openCodeClient)
+    : Hub
 {
-    private readonly IAgentWorkflowService _workflowService;
-    private readonly IOpenCodeServerManager _serverManager;
-    private readonly IOpenCodeClient _openCodeClient;
-    
     /// <summary>
     /// The name of the global group for server list updates.
     /// </summary>
     public const string GlobalGroupName = "global-servers";
-
-    public AgentHub(
-        IAgentWorkflowService workflowService,
-        IOpenCodeServerManager serverManager,
-        IOpenCodeClient openCodeClient)
-    {
-        _workflowService = workflowService;
-        _serverManager = serverManager;
-        _openCodeClient = openCodeClient;
-    }
 
     /// <summary>
     /// Join a group to receive updates for a specific pull request's agent.
@@ -49,7 +39,7 @@ public class AgentHub : Hub
     /// </summary>
     public async Task<AgentStatus> StartAgent(string pullRequestId, string? model = null)
     {
-        var status = await _workflowService.StartAgentForPullRequestAsync(pullRequestId, model);
+        var status = await workflowService.StartAgentForPullRequestAsync(pullRequestId, model);
         await Clients.Group(pullRequestId).SendAsync("AgentStarted", pullRequestId, status);
         return status;
     }
@@ -59,7 +49,7 @@ public class AgentHub : Hub
     /// </summary>
     public async Task StopAgent(string pullRequestId)
     {
-        await _workflowService.StopAgentAsync(pullRequestId);
+        await workflowService.StopAgentAsync(pullRequestId);
         await Clients.Group(pullRequestId).SendAsync("AgentStopped", pullRequestId);
     }
 
@@ -68,7 +58,7 @@ public class AgentHub : Hub
     /// </summary>
     public async Task<AgentStatus?> GetAgentStatus(string pullRequestId)
     {
-        return await _workflowService.GetAgentStatusAsync(pullRequestId);
+        return await workflowService.GetAgentStatusAsync(pullRequestId);
     }
 
     /// <summary>
@@ -76,7 +66,7 @@ public class AgentHub : Hub
     /// </summary>
     public async Task<OpenCodeMessage> SendPrompt(string pullRequestId, string prompt)
     {
-        var response = await _workflowService.SendPromptAsync(pullRequestId, prompt);
+        var response = await workflowService.SendPromptAsync(pullRequestId, prompt);
         await Clients.Group(pullRequestId).SendAsync("MessageReceived", pullRequestId, response);
         return response;
     }
@@ -102,7 +92,7 @@ public class AgentHub : Hub
     /// </summary>
     public IReadOnlyList<RunningServerInfo> GetAllRunningServers()
     {
-        return _serverManager.GetRunningServers()
+        return serverManager.GetRunningServers()
             .Select(s => new RunningServerInfo
             {
                 EntityId = s.EntityId,
@@ -123,13 +113,13 @@ public class AgentHub : Hub
     /// <returns>List of sessions, or empty list if server not found</returns>
     public async Task<List<OpenCodeSession>> GetSessionsForServer(string entityId, CancellationToken ct = default)
     {
-        var server = _serverManager.GetServerForEntity(entityId);
+        var server = serverManager.GetServerForEntity(entityId);
         if (server == null)
         {
             return [];
         }
         
-        return await _openCodeClient.ListSessionsAsync(server.BaseUrl, ct);
+        return await openCodeClient.ListSessionsAsync(server.BaseUrl, ct);
     }
 }
 

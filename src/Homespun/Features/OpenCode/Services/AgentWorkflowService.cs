@@ -12,55 +12,29 @@ namespace Homespun.Features.OpenCode.Services;
 /// <summary>
 /// High-level orchestration service for agent workflows.
 /// </summary>
-public class AgentWorkflowService : IAgentWorkflowService
+public class AgentWorkflowService(
+    IOpenCodeServerManager serverManager,
+    IOpenCodeClient client,
+    IOpenCodeConfigGenerator configGenerator,
+    PullRequestDataService pullRequestService,
+    IDataStore dataStore,
+    IGitWorktreeService worktreeService,
+    IAgentCompletionMonitor completionMonitor,
+    IGitHubService gitHubService,
+    IBeadsService beadsService,
+    IBeadsIssueTransitionService beadsTransitionService,
+    ILogger<AgentWorkflowService> logger)
+    : IAgentWorkflowService
 {
-    private readonly IOpenCodeServerManager _serverManager;
-    private readonly IOpenCodeClient _client;
-    private readonly IOpenCodeConfigGenerator _configGenerator;
-    private readonly PullRequestDataService _pullRequestService;
-    private readonly IDataStore _dataStore;
-    private readonly IGitWorktreeService _worktreeService;
-    private readonly IAgentCompletionMonitor _completionMonitor;
-    private readonly IGitHubService _gitHubService;
-    private readonly IBeadsService _beadsService;
-    private readonly IBeadsIssueTransitionService _beadsTransitionService;
-    private readonly ILogger<AgentWorkflowService> _logger;
-
     // Track which changes have active monitoring tasks (entityId -> (projectId, cts))
     private readonly Dictionary<string, (string ProjectId, CancellationTokenSource Cts)> _monitoringTasks = new();
-
-    public AgentWorkflowService(
-        IOpenCodeServerManager serverManager,
-        IOpenCodeClient client,
-        IOpenCodeConfigGenerator configGenerator,
-        PullRequestDataService pullRequestService,
-        IDataStore dataStore,
-        IGitWorktreeService worktreeService,
-        IAgentCompletionMonitor completionMonitor,
-        IGitHubService gitHubService,
-        IBeadsService beadsService,
-        IBeadsIssueTransitionService beadsTransitionService,
-        ILogger<AgentWorkflowService> logger)
-    {
-        _serverManager = serverManager;
-        _client = client;
-        _configGenerator = configGenerator;
-        _pullRequestService = pullRequestService;
-        _dataStore = dataStore;
-        _worktreeService = worktreeService;
-        _completionMonitor = completionMonitor;
-        _gitHubService = gitHubService;
-        _beadsService = beadsService;
-        _beadsTransitionService = beadsTransitionService;
-        _logger = logger;
-    }
 
     public async Task<AgentStatus> StartAgentForPullRequestAsync(
         string pullRequestId, 
         string? model = null, 
         CancellationToken ct = default)
     {
-        var pullRequest = await _pullRequestService.GetByIdAsync(pullRequestId)
+        var pullRequest = await pullRequestService.GetByIdAsync(pullRequestId)
             ?? throw new InvalidOperationException($"Pull request {pullRequestId} not found");
 
         // Create worktree if it doesn't exist
@@ -72,13 +46,13 @@ public class AgentWorkflowService : IAgentWorkflowService
                     $"Pull request {pullRequestId} does not have a branch name. Cannot create worktree.");
             }
 
-            _logger.LogInformation("Creating worktree for PR {PullRequestId} on branch {BranchName}", 
+            logger.LogInformation("Creating worktree for PR {PullRequestId} on branch {BranchName}", 
                 pullRequestId, pullRequest.BranchName);
             
-            var success = await _pullRequestService.StartDevelopmentAsync(pullRequestId);
+            var success = await pullRequestService.StartDevelopmentAsync(pullRequestId);
             if (!success)
             {
-                _logger.LogError(
+                logger.LogError(
                     "Failed to create worktree for PR {PullRequestId} branch {BranchName}. " +
                     "Project: {ProjectId}, LocalPath: {LocalPath}",
                     pullRequestId, 
@@ -92,33 +66,33 @@ public class AgentWorkflowService : IAgentWorkflowService
             }
 
             // Refresh pull request to get the worktree path
-            pullRequest = await _pullRequestService.GetByIdAsync(pullRequestId)
+            pullRequest = await pullRequestService.GetByIdAsync(pullRequestId)
                 ?? throw new InvalidOperationException($"Pull request {pullRequestId} not found after creating worktree");
         }
 
         // Check if server already running
-        var existingServer = _serverManager.GetServerForEntity(pullRequestId);
+        var existingServer = serverManager.GetServerForEntity(pullRequestId);
         if (existingServer != null && existingServer.Status == OpenCodeServerStatus.Running)
         {
-            _logger.LogInformation("Server already running for PR {PullRequestId}", pullRequestId);
+            logger.LogInformation("Server already running for PR {PullRequestId}", pullRequestId);
             return await BuildAgentStatusAsync(existingServer, ct);
         }
 
         // Pull latest changes before starting agent
-        _logger.LogInformation("Pulling latest changes for PR {PullRequestId}", pullRequestId);
-        var pullSuccess = await _worktreeService.PullLatestAsync(pullRequest.WorktreePath!);
+        logger.LogInformation("Pulling latest changes for PR {PullRequestId}", pullRequestId);
+        var pullSuccess = await worktreeService.PullLatestAsync(pullRequest.WorktreePath!);
         if (!pullSuccess)
         {
-            _logger.LogWarning("Failed to pull latest changes for PR {PullRequestId}, continuing anyway", pullRequestId);
+            logger.LogWarning("Failed to pull latest changes for PR {PullRequestId}, continuing anyway", pullRequestId);
         }
 
         // Generate config with model from: parameter -> project -> global default
         var effectiveModel = model ?? pullRequest.Project.DefaultModel;
-        var config = _configGenerator.CreateDefaultConfig(effectiveModel);
-        await _configGenerator.GenerateConfigAsync(pullRequest.WorktreePath!, config, ct);
+        var config = configGenerator.CreateDefaultConfig(effectiveModel);
+        await configGenerator.GenerateConfigAsync(pullRequest.WorktreePath!, config, ct);
 
         // Start server
-        var server = await _serverManager.StartServerAsync(pullRequestId, pullRequest.WorktreePath!, continueSession: false, ct);
+        var server = await serverManager.StartServerAsync(pullRequestId, pullRequest.WorktreePath!, continueSession: false, ct);
 
         // Get or create session
         var status = await BuildAgentStatusAsync(server, ct);
@@ -126,7 +100,7 @@ public class AgentWorkflowService : IAgentWorkflowService
         // If there's an existing session, use it. Otherwise create new.
         if (status.Sessions.Count == 0)
         {
-            var session = await _client.CreateSessionAsync(server.BaseUrl, pullRequest.Title, ct);
+            var session = await client.CreateSessionAsync(server.BaseUrl, pullRequest.Title, ct);
             status.ActiveSession = session;
             status.Sessions.Add(session);
             server.ActiveSessionId = session.Id;
@@ -139,7 +113,7 @@ public class AgentWorkflowService : IAgentWorkflowService
             server.ActiveSessionId = mostRecent.Id;
         }
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "Agent started for PR {PullRequestId} on port {Port}, session {SessionId}",
             pullRequestId, server.Port, status.ActiveSession?.Id);
 
@@ -158,8 +132,8 @@ public class AgentWorkflowService : IAgentWorkflowService
         }
 
         // Stop the server
-        await _serverManager.StopServerAsync(entityId, ct);
-        _logger.LogInformation("Agent stopped for entity {EntityId}", entityId);
+        await serverManager.StopServerAsync(entityId, ct);
+        logger.LogInformation("Agent stopped for entity {EntityId}", entityId);
 
         // Handle agent completion
         await TryHandleAgentCompletionForEntityAsync(entityId, ct);
@@ -167,7 +141,7 @@ public class AgentWorkflowService : IAgentWorkflowService
 
     public async Task<AgentStatus?> GetAgentStatusAsync(string pullRequestId, CancellationToken ct = default)
     {
-        var server = _serverManager.GetServerForEntity(pullRequestId);
+        var server = serverManager.GetServerForEntity(pullRequestId);
         if (server == null || server.Status != OpenCodeServerStatus.Running)
         {
             return null;
@@ -178,13 +152,13 @@ public class AgentWorkflowService : IAgentWorkflowService
 
     public async Task<OpenCodeMessage> SendPromptAsync(string entityId, string prompt, CancellationToken ct = default)
     {
-        _logger.LogInformation(
+        logger.LogInformation(
             "SendPromptAsync called for entity {EntityId}. Prompt length: {PromptLength} chars. Preview: {PromptPreview}",
             entityId,
             prompt.Length,
             prompt.Length > 100 ? prompt[..100] + "..." : prompt);
         
-        var server = _serverManager.GetServerForEntity(entityId)
+        var server = serverManager.GetServerForEntity(entityId)
             ?? throw new InvalidOperationException($"No agent running for entity {entityId}");
 
         if (string.IsNullOrEmpty(server.ActiveSessionId))
@@ -192,14 +166,14 @@ public class AgentWorkflowService : IAgentWorkflowService
             throw new InvalidOperationException($"No active session for entity {entityId}");
         }
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "Sending prompt to agent at {BaseUrl}, session {SessionId}",
             server.BaseUrl, server.ActiveSessionId);
 
         var request = PromptRequest.FromText(prompt);
-        var response = await _client.SendPromptAsync(server.BaseUrl, server.ActiveSessionId, request, ct);
+        var response = await client.SendPromptAsync(server.BaseUrl, server.ActiveSessionId, request, ct);
         
-        _logger.LogInformation(
+        logger.LogInformation(
             "Prompt sent successfully to entity {EntityId}. Response message ID: {MessageId}",
             entityId, response.Info.Id);
         
@@ -223,16 +197,16 @@ public class AgentWorkflowService : IAgentWorkflowService
     {
         try
         {
-            _logger.LogInformation("Starting SSE monitoring for issue {IssueId}", issueId);
+            logger.LogInformation("Starting SSE monitoring for issue {IssueId}", issueId);
 
             // Monitor SSE events until server stops (no timeout)
-            var result = await _completionMonitor.MonitorForPrCreationAsync(
+            var result = await completionMonitor.MonitorForPrCreationAsync(
                 serverBaseUrl, projectId, branchName, ct);
             
             if (result.Success && result.PrNumber.HasValue)
             {
                 // PR detected via SSE - promote issue immediately
-                _logger.LogInformation(
+                logger.LogInformation(
                     "PR #{PrNumber} detected via SSE for issue {IssueId}",
                     result.PrNumber.Value, issueId);
                 
@@ -240,25 +214,25 @@ public class AgentWorkflowService : IAgentWorkflowService
             }
             else
             {
-                _logger.LogInformation(
+                logger.LogInformation(
                     "SSE monitoring ended without PR detection for issue {IssueId}: {Error}",
                     issueId, result.Error);
             }
         }
         catch (OperationCanceledException)
         {
-            _logger.LogDebug("SSE monitoring cancelled for issue {IssueId}", issueId);
+            logger.LogDebug("SSE monitoring cancelled for issue {IssueId}", issueId);
         }
         catch (HttpRequestException ex)
         {
             // Server stopped - this is expected when the agent finishes
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Agent server stopped for issue {IssueId} (HTTP error: {Message})",
                 issueId, ex.Message);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error during SSE monitoring for issue {IssueId}", issueId);
+            logger.LogError(ex, "Error during SSE monitoring for issue {IssueId}", issueId);
         }
         finally
         {
@@ -269,7 +243,7 @@ public class AgentWorkflowService : IAgentWorkflowService
     private async Task TryHandleAgentCompletionForEntityAsync(string entityId, CancellationToken ct)
     {
         // Check if this is a beads issue
-        var beadsMetadata = _dataStore.GetBeadsIssueMetadata(entityId);
+        var beadsMetadata = dataStore.GetBeadsIssueMetadata(entityId);
         if (beadsMetadata != null)
         {
             await HandleAgentCompletionForBeadsIssueAsync(beadsMetadata.ProjectId, entityId, ct);
@@ -277,12 +251,12 @@ public class AgentWorkflowService : IAgentWorkflowService
         }
 
         // If we get here, it's either a PR (not a beads issue) or the entity wasn't found
-        _logger.LogDebug("No beads issue found for entity {EntityId}", entityId);
+        logger.LogDebug("No beads issue found for entity {EntityId}", entityId);
     }
 
     private async Task<AgentStatus> BuildAgentStatusAsync(OpenCodeServer server, CancellationToken ct)
     {
-        var sessions = await _client.ListSessionsAsync(server.BaseUrl, ct);
+        var sessions = await client.ListSessionsAsync(server.BaseUrl, ct);
         var activeSession = sessions.FirstOrDefault(s => s.Id == server.ActiveSessionId);
 
         return new AgentStatus
@@ -303,11 +277,11 @@ public class AgentWorkflowService : IAgentWorkflowService
         string? model = null, 
         CancellationToken ct = default)
     {
-        var project = _dataStore.GetProject(projectId)
+        var project = dataStore.GetProject(projectId)
             ?? throw new InvalidOperationException($"Project {projectId} not found");
         
         // Get the beads issue
-        var issue = await _beadsService.GetIssueAsync(project.LocalPath, issueId)
+        var issue = await beadsService.GetIssueAsync(project.LocalPath, issueId)
             ?? throw new InvalidOperationException($"Beads issue {issueId} not found in project {projectId}");
         
         // Parse group and branch ID from hsp: label
@@ -322,7 +296,7 @@ public class AgentWorkflowService : IAgentWorkflowService
         var (group, branchId) = branchInfo.Value;
         
         // Transition to InProgress status
-        var transitionResult = await _beadsTransitionService.TransitionToInProgressAsync(projectId, issueId);
+        var transitionResult = await beadsTransitionService.TransitionToInProgressAsync(projectId, issueId);
         if (!transitionResult.Success)
         {
             throw new InvalidOperationException(
@@ -332,7 +306,7 @@ public class AgentWorkflowService : IAgentWorkflowService
         try
         {
             // Check for existing metadata or create new
-            var metadata = _dataStore.GetBeadsIssueMetadata(issueId);
+            var metadata = dataStore.GetBeadsIssueMetadata(issueId);
             string worktreePath;
             string branchName;
             
@@ -349,10 +323,10 @@ public class AgentWorkflowService : IAgentWorkflowService
                     group, issue.Type.ToString().ToLowerInvariant(), branchId, issueId);
                 
                 // Create worktree
-                _logger.LogInformation("Creating worktree for beads issue {IssueId} on branch {BranchName}", 
+                logger.LogInformation("Creating worktree for beads issue {IssueId} on branch {BranchName}", 
                     issueId, branchName);
                 
-                var createdWorktreePath = await _worktreeService.CreateWorktreeAsync(
+                var createdWorktreePath = await worktreeService.CreateWorktreeAsync(
                     project.LocalPath, 
                     branchName, 
                     createBranch: true, 
@@ -369,51 +343,51 @@ public class AgentWorkflowService : IAgentWorkflowService
                     BranchName = branchName,
                     WorktreePath = worktreePath
                 };
-                await _dataStore.AddBeadsIssueMetadataAsync(metadata);
+                await dataStore.AddBeadsIssueMetadataAsync(metadata);
             }
             
             // Check if server already running
-            var existingServer = _serverManager.GetServerForEntity(issueId);
+            var existingServer = serverManager.GetServerForEntity(issueId);
             if (existingServer != null && existingServer.Status == OpenCodeServerStatus.Running)
             {
-                _logger.LogInformation("Server already running for issue {IssueId}", issueId);
+                logger.LogInformation("Server already running for issue {IssueId}", issueId);
                 return await BuildAgentStatusAsync(existingServer, ct);
             }
             
             // Pull latest changes before starting agent
-            _logger.LogInformation("Pulling latest changes for issue {IssueId}", issueId);
-            var pullSuccess = await _worktreeService.PullLatestAsync(worktreePath!);
+            logger.LogInformation("Pulling latest changes for issue {IssueId}", issueId);
+            var pullSuccess = await worktreeService.PullLatestAsync(worktreePath!);
             if (!pullSuccess)
             {
-                _logger.LogWarning("Failed to pull latest changes for issue {IssueId}, continuing anyway", issueId);
+                logger.LogWarning("Failed to pull latest changes for issue {IssueId}, continuing anyway", issueId);
             }
             
             // Generate config
             var effectiveModel = model ?? project.DefaultModel;
-            var config = _configGenerator.CreateDefaultConfig(effectiveModel);
-            await _configGenerator.GenerateConfigAsync(worktreePath, config, ct);
+            var config = configGenerator.CreateDefaultConfig(effectiveModel);
+            await configGenerator.GenerateConfigAsync(worktreePath, config, ct);
             
             // Start server using issueId as the entity ID
-            var server = await _serverManager.StartServerAsync(issueId, worktreePath, continueSession: false, ct);
+            var server = await serverManager.StartServerAsync(issueId, worktreePath, continueSession: false, ct);
             
             // Create session
-            var session = await _client.CreateSessionAsync(server.BaseUrl, issue.Title, ct);
+            var session = await client.CreateSessionAsync(server.BaseUrl, issue.Title, ct);
             server.ActiveSessionId = session.Id;
             
             // Update metadata with agent server ID
             metadata.ActiveAgentServerId = server.Id;
             metadata.AgentStartedAt = DateTime.UtcNow;
-            await _dataStore.UpdateBeadsIssueMetadataAsync(metadata);
+            await dataStore.UpdateBeadsIssueMetadataAsync(metadata);
             
             // Send initial prompt with issue instructions
             var initialPrompt = BuildInitialPromptForBeadsIssue(issue, branchName, project.DefaultBranch, agentMode);
-            await _client.SendPromptAsyncNoWait(
+            await client.SendPromptAsyncNoWait(
                 server.BaseUrl, 
                 session.Id, 
                 PromptRequest.FromText(initialPrompt, model), 
                 ct);
             
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Sent initial prompt for issue {IssueId} to session {SessionId}",
                 issueId, session.Id);
             
@@ -429,7 +403,7 @@ public class AgentWorkflowService : IAgentWorkflowService
                 Sessions = [session]
             };
             
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Agent started for issue {IssueId} on port {Port}, session {SessionId}. Server URL: {ServerUrl}",
                 issueId, server.Port, session.Id, server.BaseUrl);
             
@@ -438,14 +412,14 @@ public class AgentWorkflowService : IAgentWorkflowService
         catch (Exception ex)
         {
             // Handle agent failure - revert status to Open
-            await _beadsTransitionService.HandleAgentFailureAsync(projectId, issueId, ex.Message);
+            await beadsTransitionService.HandleAgentFailureAsync(projectId, issueId, ex.Message);
             throw;
         }
     }
     
     public async Task<AgentStatus?> GetAgentStatusForBeadsIssueAsync(string issueId, CancellationToken ct = default)
     {
-        var server = _serverManager.GetServerForEntity(issueId);
+        var server = serverManager.GetServerForEntity(issueId);
         if (server == null || server.Status != OpenCodeServerStatus.Running)
         {
             return null;
@@ -456,49 +430,49 @@ public class AgentWorkflowService : IAgentWorkflowService
     
     public async Task HandleAgentCompletionForBeadsIssueAsync(string projectId, string issueId, CancellationToken ct = default)
     {
-        var project = _dataStore.GetProject(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null)
         {
-            _logger.LogWarning("Project {ProjectId} not found when handling agent completion for issue {IssueId}", 
+            logger.LogWarning("Project {ProjectId} not found when handling agent completion for issue {IssueId}", 
                 projectId, issueId);
             return;
         }
         
-        var issue = await _beadsService.GetIssueAsync(project.LocalPath, issueId);
+        var issue = await beadsService.GetIssueAsync(project.LocalPath, issueId);
         if (issue == null)
         {
-            _logger.LogWarning("Issue {IssueId} not found when handling agent completion", issueId);
+            logger.LogWarning("Issue {IssueId} not found when handling agent completion", issueId);
             return;
         }
         
         if (issue.Status != BeadsIssueStatus.InProgress)
         {
-            _logger.LogDebug("Issue {IssueId} is not InProgress (status: {Status}), skipping completion handling", 
+            logger.LogDebug("Issue {IssueId} is not InProgress (status: {Status}), skipping completion handling", 
                 issueId, issue.Status);
             return;
         }
         
-        var metadata = _dataStore.GetBeadsIssueMetadata(issueId);
+        var metadata = dataStore.GetBeadsIssueMetadata(issueId);
         if (metadata == null || string.IsNullOrEmpty(metadata.BranchName))
         {
-            _logger.LogWarning("No metadata found for issue {IssueId}", issueId);
-            await _beadsTransitionService.TransitionToAwaitingPRAsync(projectId, issueId);
+            logger.LogWarning("No metadata found for issue {IssueId}", issueId);
+            await beadsTransitionService.TransitionToAwaitingPRAsync(projectId, issueId);
             return;
         }
         
-        _logger.LogInformation("Handling agent completion for issue {IssueId}", issueId);
+        logger.LogInformation("Handling agent completion for issue {IssueId}", issueId);
         
         // Check GitHub for PR on this branch
         try
         {
-            var prs = await _gitHubService.GetOpenPullRequestsAsync(projectId);
+            var prs = await gitHubService.GetOpenPullRequestsAsync(projectId);
             var matchingPr = prs.FirstOrDefault(pr => 
                 pr.BranchName?.Equals(metadata.BranchName, StringComparison.OrdinalIgnoreCase) == true);
             
             if (matchingPr != null && matchingPr.Number > 0)
             {
                 // PR exists - close the beads issue and create tracked PR
-                _logger.LogInformation("Found GitHub PR #{PrNumber} for issue {IssueId}, closing issue and creating tracked PR",
+                logger.LogInformation("Found GitHub PR #{PrNumber} for issue {IssueId}, closing issue and creating tracked PR",
                     matchingPr.Number, issueId);
                 
                 await PromoteBeadsIssueWithPrAsync(projectId, issueId, matchingPr.Number);
@@ -506,40 +480,40 @@ public class AgentWorkflowService : IAgentWorkflowService
             else
             {
                 // No PR found - transition to AwaitingPR
-                _logger.LogInformation("No GitHub PR found for issue {IssueId}, transitioning to AwaitingPR", issueId);
-                await _beadsTransitionService.TransitionToAwaitingPRAsync(projectId, issueId);
+                logger.LogInformation("No GitHub PR found for issue {IssueId}, transitioning to AwaitingPR", issueId);
+                await beadsTransitionService.TransitionToAwaitingPRAsync(projectId, issueId);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error checking GitHub for PR on issue {IssueId}", issueId);
+            logger.LogError(ex, "Error checking GitHub for PR on issue {IssueId}", issueId);
             // Still transition to AwaitingPR on error
-            await _beadsTransitionService.TransitionToAwaitingPRAsync(projectId, issueId);
+            await beadsTransitionService.TransitionToAwaitingPRAsync(projectId, issueId);
         }
         
         // Clear agent server ID in metadata
         metadata.ActiveAgentServerId = null;
         metadata.AgentStartedAt = null;
-        await _dataStore.UpdateBeadsIssueMetadataAsync(metadata);
+        await dataStore.UpdateBeadsIssueMetadataAsync(metadata);
     }
     
     private async Task PromoteBeadsIssueWithPrAsync(string projectId, string issueId, int prNumber)
     {
         try
         {
-            var project = _dataStore.GetProject(projectId);
+            var project = dataStore.GetProject(projectId);
             if (project == null)
             {
-                _logger.LogWarning("Project {ProjectId} not found when promoting issue {IssueId}", projectId, issueId);
+                logger.LogWarning("Project {ProjectId} not found when promoting issue {IssueId}", projectId, issueId);
                 return;
             }
             
-            var issue = await _beadsService.GetIssueAsync(project.LocalPath, issueId);
-            var metadata = _dataStore.GetBeadsIssueMetadata(issueId);
+            var issue = await beadsService.GetIssueAsync(project.LocalPath, issueId);
+            var metadata = dataStore.GetBeadsIssueMetadata(issueId);
             
             if (issue == null || metadata == null)
             {
-                _logger.LogWarning("Issue or metadata not found for {IssueId}", issueId);
+                logger.LogWarning("Issue or metadata not found for {IssueId}", issueId);
                 return;
             }
             
@@ -556,21 +530,21 @@ public class AgentWorkflowService : IAgentWorkflowService
                 Status = OpenPullRequestStatus.InDevelopment
             };
             
-            await _dataStore.AddPullRequestAsync(pullRequest);
+            await dataStore.AddPullRequestAsync(pullRequest);
             
             // Close the beads issue
-            await _beadsTransitionService.TransitionToCompleteAsync(projectId, issueId, prNumber);
+            await beadsTransitionService.TransitionToCompleteAsync(projectId, issueId, prNumber);
             
             // Sync GitHub data to populate PR details
-            await _gitHubService.SyncPullRequestsAsync(projectId);
+            await gitHubService.SyncPullRequestsAsync(projectId);
             
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Issue {IssueId} promoted to PR #{PrNumber}", 
                 issueId, prNumber);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error promoting issue {IssueId} to PR #{PrNumber}", issueId, prNumber);
+            logger.LogError(ex, "Error promoting issue {IssueId} to PR #{PrNumber}", issueId, prNumber);
         }
     }
     

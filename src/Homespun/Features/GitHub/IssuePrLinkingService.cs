@@ -8,22 +8,12 @@ namespace Homespun.Features.GitHub;
 /// Service for linking beads issues to pull requests.
 /// Handles the bidirectional link: PR.BeadsIssueId and issue label hsp:pr-{number}.
 /// </summary>
-public class IssuePrLinkingService : IIssuePrLinkingService
+public class IssuePrLinkingService(
+    IDataStore dataStore,
+    IBeadsService beadsService,
+    ILogger<IssuePrLinkingService> logger)
+    : IIssuePrLinkingService
 {
-    private readonly IDataStore _dataStore;
-    private readonly IBeadsService _beadsService;
-    private readonly ILogger<IssuePrLinkingService> _logger;
-
-    public IssuePrLinkingService(
-        IDataStore dataStore,
-        IBeadsService beadsService,
-        ILogger<IssuePrLinkingService> logger)
-    {
-        _dataStore = dataStore;
-        _beadsService = beadsService;
-        _logger = logger;
-    }
-
     /// <summary>
     /// Links a pull request to a beads issue by setting the BeadsIssueId
     /// and adding the hsp:pr-{prNumber} label to the issue.
@@ -39,45 +29,45 @@ public class IssuePrLinkingService : IIssuePrLinkingService
         string issueId,
         int prNumber)
     {
-        var project = _dataStore.GetProject(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null)
         {
-            _logger.LogWarning("Cannot link PR to issue: project {ProjectId} not found", projectId);
+            logger.LogWarning("Cannot link PR to issue: project {ProjectId} not found", projectId);
             return false;
         }
 
-        var pullRequest = _dataStore.GetPullRequest(pullRequestId);
+        var pullRequest = dataStore.GetPullRequest(pullRequestId);
         if (pullRequest == null)
         {
-            _logger.LogWarning("Cannot link PR to issue: pull request {PullRequestId} not found", pullRequestId);
+            logger.LogWarning("Cannot link PR to issue: pull request {PullRequestId} not found", pullRequestId);
             return false;
         }
 
         // Check if already linked to avoid duplicate operations
         if (!string.IsNullOrEmpty(pullRequest.BeadsIssueId))
         {
-            _logger.LogDebug("PR {PullRequestId} already linked to issue {IssueId}", pullRequestId, pullRequest.BeadsIssueId);
+            logger.LogDebug("PR {PullRequestId} already linked to issue {IssueId}", pullRequestId, pullRequest.BeadsIssueId);
             return true;
         }
 
         // Update the pull request with the issue ID
         pullRequest.BeadsIssueId = issueId;
         pullRequest.UpdatedAt = DateTime.UtcNow;
-        await _dataStore.UpdatePullRequestAsync(pullRequest);
+        await dataStore.UpdatePullRequestAsync(pullRequest);
 
-        _logger.LogInformation("Linked PR {PullRequestId} to beads issue {IssueId}", pullRequestId, issueId);
+        logger.LogInformation("Linked PR {PullRequestId} to beads issue {IssueId}", pullRequestId, issueId);
 
         // Add the label to the beads issue
         var label = BranchNameParser.GetPrLabel(prNumber);
-        var labelAdded = await _beadsService.AddLabelAsync(project.LocalPath, issueId, label);
+        var labelAdded = await beadsService.AddLabelAsync(project.LocalPath, issueId, label);
 
         if (!labelAdded)
         {
-            _logger.LogWarning("Failed to add label {Label} to issue {IssueId}, but PR link was created locally", label, issueId);
+            logger.LogWarning("Failed to add label {Label} to issue {IssueId}, but PR link was created locally", label, issueId);
         }
         else
         {
-            _logger.LogInformation("Added label {Label} to beads issue {IssueId}", label, issueId);
+            logger.LogInformation("Added label {Label} to beads issue {IssueId}", label, issueId);
         }
 
         return true;
@@ -92,24 +82,24 @@ public class IssuePrLinkingService : IIssuePrLinkingService
     /// <returns>The linked issue ID if successful, null otherwise.</returns>
     public async Task<string?> TryLinkByBranchNameAsync(string projectId, string pullRequestId)
     {
-        var pullRequest = _dataStore.GetPullRequest(pullRequestId);
+        var pullRequest = dataStore.GetPullRequest(pullRequestId);
         if (pullRequest == null)
         {
-            _logger.LogWarning("Cannot link by branch: pull request {PullRequestId} not found", pullRequestId);
+            logger.LogWarning("Cannot link by branch: pull request {PullRequestId} not found", pullRequestId);
             return null;
         }
 
         // If already linked, return the existing issue ID
         if (!string.IsNullOrEmpty(pullRequest.BeadsIssueId))
         {
-            _logger.LogDebug("PR {PullRequestId} already linked to issue {IssueId}", pullRequestId, pullRequest.BeadsIssueId);
+            logger.LogDebug("PR {PullRequestId} already linked to issue {IssueId}", pullRequestId, pullRequest.BeadsIssueId);
             return pullRequest.BeadsIssueId;
         }
 
         // Can't link without a PR number (needed for the label)
         if (!pullRequest.GitHubPRNumber.HasValue)
         {
-            _logger.LogDebug("Cannot link PR {PullRequestId} by branch: no GitHub PR number", pullRequestId);
+            logger.LogDebug("Cannot link PR {PullRequestId} by branch: no GitHub PR number", pullRequestId);
             return null;
         }
 
@@ -117,7 +107,7 @@ public class IssuePrLinkingService : IIssuePrLinkingService
         var issueId = BranchNameParser.ExtractIssueId(pullRequest.BranchName);
         if (string.IsNullOrEmpty(issueId))
         {
-            _logger.LogDebug("No issue ID found in branch name {BranchName}", pullRequest.BranchName);
+            logger.LogDebug("No issue ID found in branch name {BranchName}", pullRequest.BranchName);
             return null;
         }
 
@@ -136,35 +126,35 @@ public class IssuePrLinkingService : IIssuePrLinkingService
     /// <returns>True if the issue was closed, false if no linked issue or close failed.</returns>
     public async Task<bool> CloseLinkedIssueAsync(string projectId, string pullRequestId, string? reason = null)
     {
-        var project = _dataStore.GetProject(projectId);
+        var project = dataStore.GetProject(projectId);
         if (project == null)
         {
-            _logger.LogWarning("Cannot close linked issue: project {ProjectId} not found", projectId);
+            logger.LogWarning("Cannot close linked issue: project {ProjectId} not found", projectId);
             return false;
         }
 
-        var pullRequest = _dataStore.GetPullRequest(pullRequestId);
+        var pullRequest = dataStore.GetPullRequest(pullRequestId);
         if (pullRequest == null)
         {
-            _logger.LogWarning("Cannot close linked issue: pull request {PullRequestId} not found", pullRequestId);
+            logger.LogWarning("Cannot close linked issue: pull request {PullRequestId} not found", pullRequestId);
             return false;
         }
 
         if (string.IsNullOrEmpty(pullRequest.BeadsIssueId))
         {
-            _logger.LogDebug("PR {PullRequestId} has no linked issue to close", pullRequestId);
+            logger.LogDebug("PR {PullRequestId} has no linked issue to close", pullRequestId);
             return false;
         }
 
-        var closed = await _beadsService.CloseIssueAsync(project.LocalPath, pullRequest.BeadsIssueId, reason);
+        var closed = await beadsService.CloseIssueAsync(project.LocalPath, pullRequest.BeadsIssueId, reason);
 
         if (closed)
         {
-            _logger.LogInformation("Closed beads issue {IssueId} linked to PR {PullRequestId}", pullRequest.BeadsIssueId, pullRequestId);
+            logger.LogInformation("Closed beads issue {IssueId} linked to PR {PullRequestId}", pullRequest.BeadsIssueId, pullRequestId);
         }
         else
         {
-            _logger.LogWarning("Failed to close beads issue {IssueId} linked to PR {PullRequestId}", pullRequest.BeadsIssueId, pullRequestId);
+            logger.LogWarning("Failed to close beads issue {IssueId} linked to PR {PullRequestId}", pullRequest.BeadsIssueId, pullRequestId);
         }
 
         return closed;

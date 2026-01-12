@@ -5,15 +5,8 @@ namespace Homespun.Features.Notifications;
 /// <summary>
 /// SignalR hub for real-time notification delivery.
 /// </summary>
-public class NotificationHub : Hub
+public class NotificationHub(INotificationService notificationService) : Hub
 {
-    private readonly INotificationService _notificationService;
-
-    public NotificationHub(INotificationService notificationService)
-    {
-        _notificationService = notificationService;
-    }
-
     /// <summary>
     /// Join a project group to receive project-specific notifications.
     /// </summary>
@@ -35,7 +28,7 @@ public class NotificationHub : Hub
     /// </summary>
     public IReadOnlyList<Notification> GetActiveNotifications(string? projectId = null)
     {
-        return _notificationService.GetActiveNotifications(projectId);
+        return notificationService.GetActiveNotifications(projectId);
     }
 
     /// <summary>
@@ -43,7 +36,7 @@ public class NotificationHub : Hub
     /// </summary>
     public async Task DismissNotification(string notificationId)
     {
-        _notificationService.DismissNotification(notificationId);
+        notificationService.DismissNotification(notificationId);
         await Clients.All.SendAsync("NotificationDismissed", notificationId);
     }
 }
