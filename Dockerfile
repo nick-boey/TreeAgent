@@ -19,6 +19,7 @@ RUN dotnet restore
 # Cache-busting build argument
 ARG CACHEBUST=1
 ARG VERSION=1.0.0
+ARG BUILD_CONFIGURATION=Release
 
 # Copy everything else
 COPY . .
@@ -27,7 +28,7 @@ COPY . .
 # Note: Cannot use --no-restore here because Blazor framework files
 # (blazor.web.js, etc.) are in an implicit package that's only resolved during publish
 RUN dotnet publish src/Homespun/Homespun.csproj \
-    -c Release \
+    -c $BUILD_CONFIGURATION \
     /p:Version=$VERSION \
     -o /app/publish
 

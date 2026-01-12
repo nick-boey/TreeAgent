@@ -11,6 +11,7 @@ set -e
 # Usage:
 #   ./test.sh              # Build and run interactively
 #   ./test.sh --no-build   # Run without rebuilding
+#   ./test.sh --debug      # Build in Debug configuration
 #
 # Environment Variables:
 #   HSP_GITHUB_TOKEN       GitHub token
@@ -33,14 +34,17 @@ log_error() { echo -e "${RED}$1${NC}"; }
 
 # Parse arguments
 SKIP_BUILD=false
+BUILD_CONFIG="Release"
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --no-build) SKIP_BUILD=true ;;
+        --debug) BUILD_CONFIG="Debug" ;;
         -h|--help)
-            echo "Usage: $0 [--no-build]"
+            echo "Usage: $0 [--no-build] [--debug]"
             echo ""
             echo "Options:"
             echo "  --no-build    Skip building the container"
+            echo "  --debug       Build in Debug configuration"
             exit 0
             ;;
         *) log_error "Unknown parameter: $1"; exit 1 ;;
@@ -63,9 +67,9 @@ fi
 
 # Build the container
 if [ "$SKIP_BUILD" = false ]; then
-    log_info "Building container..."
+    log_info "Building container ($BUILD_CONFIG configuration)..."
     echo
-    docker build -t homespun:local "$PROJECT_ROOT"
+    docker build -t homespun:local --build-arg BUILD_CONFIGURATION="$BUILD_CONFIG" "$PROJECT_ROOT"
     echo
     log_success "Build complete!"
     echo
