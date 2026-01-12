@@ -14,16 +14,36 @@ This directory contains Docker Compose configuration and scripts for running Hom
 
 The easiest way to run Homespun on a Linux VM with automatic updates:
 
-### Step 1: Configure environment
+### Step 1: Configure credentials
+
+For one-time or temporary use, export environment variables:
 
 ```bash
-# Set your GitHub token
 export GITHUB_TOKEN="ghp_your_token_here"
-
-# Or create a .env file
-cp install/container/.env.example install/container/.env
-# Edit .env with your values
 ```
+
+For persistent VM deployments, add credentials to `/etc/environment` so they persist across reboots and are available to all users:
+
+```bash
+# Edit /etc/environment (requires sudo)
+sudo nano /etc/environment
+
+# Add these lines:
+HSP_GITHUB_TOKEN="ghp_your_token_here"
+HSP_TAILSCALE_AUTH="tskey-auth-your_key_here"  # Optional, for Tailscale access
+```
+
+Then reload the environment:
+
+```bash
+source /etc/environment
+```
+
+**Credential priority:** The script checks for credentials in this order:
+1. Command line arguments
+2. `HSP_GITHUB_TOKEN` / `HSP_TAILSCALE_AUTH` environment variables
+3. `GITHUB_TOKEN` / `TAILSCALE_AUTH_KEY` environment variables
+4. `.env` file in the install/container directory
 
 ### Step 2: Run with the script
 
