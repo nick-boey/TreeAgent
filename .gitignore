@@ -527,3 +527,6 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# Temporary Claude files created on Windows
+tmpclaude*
