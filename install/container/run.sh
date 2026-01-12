@@ -24,6 +24,12 @@ set -e
 #   --pull                      Pull latest image before starting
 #   --tailscale-auth-key KEY    Set Tailscale auth key
 #   --tailscale-hostname NAME   Set Tailscale hostname
+#
+# Environment Variables:
+#   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
+#   HSP_TAILSCALE_AUTH          Tailscale auth key (preferred for VM secrets)
+#   GITHUB_TOKEN                GitHub token (fallback)
+#   TAILSCALE_AUTH_KEY          Tailscale auth key (fallback)
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -131,8 +137,10 @@ fi
 # Step 3: Read GitHub token
 log_info "[3/5] Reading GitHub token..."
 
-# First check environment variable
-GITHUB_TOKEN="${GITHUB_TOKEN:-}"
+# Check environment variables in order of preference:
+# 1. HSP_GITHUB_TOKEN (for VM secrets)
+# 2. GITHUB_TOKEN (standard)
+GITHUB_TOKEN="${HSP_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}"
 
 # If not in environment, try reading from .NET user secrets JSON
 if [ -z "$GITHUB_TOKEN" ]; then
@@ -153,11 +161,22 @@ fi
 
 if [ -z "$GITHUB_TOKEN" ]; then
     log_warn "      GitHub token not found."
-    log_warn "      Set GITHUB_TOKEN environment variable or create .env file."
+    log_warn "      Set HSP_GITHUB_TOKEN or GITHUB_TOKEN environment variable."
     log_warn "      See .env.example for template."
 else
     MASKED_TOKEN="${GITHUB_TOKEN:0:10}..."
     log_success "      GitHub token found: $MASKED_TOKEN"
+fi
+
+# Read Tailscale auth key from environment if not passed as argument
+if [ -z "$TAILSCALE_AUTH_KEY" ]; then
+    # Check HSP_TAILSCALE_AUTH first (for VM secrets), then TAILSCALE_AUTH_KEY
+    TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH:-${TAILSCALE_AUTH_KEY:-}}"
+fi
+
+if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+    MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
+    log_success "      Tailscale auth key found: $MASKED_TS_KEY"
 fi
 
 # Step 4: Set up directories
