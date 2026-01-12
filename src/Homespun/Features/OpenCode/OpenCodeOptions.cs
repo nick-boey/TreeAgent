@@ -40,4 +40,26 @@ public class OpenCodeOptions
     /// Format: "provider/model" (e.g., "anthropic/claude-opus-4-5")
     /// </summary>
     public string DefaultModel { get; set; } = "anthropic/claude-opus-4-5";
+
+    /// <summary>
+    /// Whether running in container mode. When true, URLs are generated for reverse proxy access.
+    /// Auto-detected from CONTAINER_MODE environment variable if not set in config.
+    /// </summary>
+    public bool ContainerMode { get; set; }
+
+    /// <summary>
+    /// The external hostname for container mode (e.g., "homespun-vm" or Tailscale hostname).
+    /// Read from TAILSCALE_HOSTNAME environment variable if not set in config.
+    /// </summary>
+    public string? ExternalHostname { get; set; }
+
+    /// <summary>
+    /// The external port for container mode. Defaults to 80 (standard HTTP via Tailscale Serve).
+    /// </summary>
+    public int ExternalPort { get; set; } = 80;
+
+    /// <summary>
+    /// The base path prefix for agent proxy routes (e.g., "/agent").
+    /// </summary>
+    public string AgentProxyBasePath { get; set; } = "/agent";
 }

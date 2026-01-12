@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# Set container mode flag for the application
+# This enables YARP reverse proxy for agent server URLs
+export CONTAINER_MODE=true
+
 # Start Tailscale if configured
 if [ ! -z "$TAILSCALE_AUTH_KEY" ]; then
     echo "Starting Tailscale..."

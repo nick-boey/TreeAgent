@@ -43,11 +43,17 @@ public class OpenCodeIntegrationTests
             _options,
             Mock.Of<ILogger<PortAllocationService>>());
         
+        var mockAgentUrlService = new Mock<IAgentUrlService>();
+        mockAgentUrlService.Setup(u => u.GetExternalBaseUrl(It.IsAny<int>()))
+            .Returns<int>(port => $"http://127.0.0.1:{port}");
+        mockAgentUrlService.Setup(u => u.IsContainerMode).Returns(false);
+
         _serverManager = new OpenCodeServerManager(
             _options,
             _client,
             portAllocationService,
             Mock.Of<IHubContext<AgentHub>>(),
+            mockAgentUrlService.Object,
             Mock.Of<ILogger<OpenCodeServerManager>>());
 
         _configGenerator = new OpenCodeConfigGenerator(
@@ -350,11 +356,16 @@ public class OpenCodeIntegrationTests
         var testPortAllocationService = new PortAllocationService(
             testOptions,
             Mock.Of<ILogger<PortAllocationService>>());
+        var testMockAgentUrlService = new Mock<IAgentUrlService>();
+        testMockAgentUrlService.Setup(u => u.GetExternalBaseUrl(It.IsAny<int>()))
+            .Returns<int>(port => $"http://127.0.0.1:{port}");
+        testMockAgentUrlService.Setup(u => u.IsContainerMode).Returns(false);
         using var testServerManager = new OpenCodeServerManager(
             testOptions,
             testClient,
             testPortAllocationService,
             Mock.Of<IHubContext<AgentHub>>(),
+            testMockAgentUrlService.Object,
             Mock.Of<ILogger<OpenCodeServerManager>>());
         var testConfigGenerator = new OpenCodeConfigGenerator(
             testOptions,

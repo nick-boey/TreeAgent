@@ -42,7 +42,10 @@ public class OpenCodeWorkingDirectoryIntegrationTests
         using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
         var testClient = new OpenCodeClient(httpClient, Mock.Of<ILogger<OpenCodeClient>>());
         var testPortAllocationService = new PortAllocationService(testOptions, Mock.Of<ILogger<PortAllocationService>>());
-        using var testServerManager = new OpenCodeServerManager(testOptions, testClient, testPortAllocationService, Mock.Of<IHubContext<AgentHub>>(), Mock.Of<ILogger<OpenCodeServerManager>>());
+        var testMockAgentUrlService = new Mock<IAgentUrlService>();
+        testMockAgentUrlService.Setup(u => u.GetExternalBaseUrl(It.IsAny<int>())).Returns<int>(port => $"http://127.0.0.1:{port}");
+        testMockAgentUrlService.Setup(u => u.IsContainerMode).Returns(false);
+        using var testServerManager = new OpenCodeServerManager(testOptions, testClient, testPortAllocationService, Mock.Of<IHubContext<AgentHub>>(), testMockAgentUrlService.Object, Mock.Of<ILogger<OpenCodeServerManager>>());
         var testConfigGenerator = new OpenCodeConfigGenerator(testOptions, Mock.Of<ILogger<OpenCodeConfigGenerator>>());
 
         Process? serverProcess = null;
@@ -119,7 +122,10 @@ public class OpenCodeWorkingDirectoryIntegrationTests
         using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
         var testClient = new OpenCodeClient(httpClient, Mock.Of<ILogger<OpenCodeClient>>());
         var testPortAllocationService = new PortAllocationService(testOptions, Mock.Of<ILogger<PortAllocationService>>());
-        using var testServerManager = new OpenCodeServerManager(testOptions, testClient, testPortAllocationService, Mock.Of<IHubContext<AgentHub>>(), Mock.Of<ILogger<OpenCodeServerManager>>());
+        var testMockAgentUrlService = new Mock<IAgentUrlService>();
+        testMockAgentUrlService.Setup(u => u.GetExternalBaseUrl(It.IsAny<int>())).Returns<int>(port => $"http://127.0.0.1:{port}");
+        testMockAgentUrlService.Setup(u => u.IsContainerMode).Returns(false);
+        using var testServerManager = new OpenCodeServerManager(testOptions, testClient, testPortAllocationService, Mock.Of<IHubContext<AgentHub>>(), testMockAgentUrlService.Object, Mock.Of<ILogger<OpenCodeServerManager>>());
         var testConfigGenerator = new OpenCodeConfigGenerator(testOptions, Mock.Of<ILogger<OpenCodeConfigGenerator>>());
 
         Process? serverProcess = null;
@@ -232,7 +238,10 @@ public class OpenCodeWorkingDirectoryIntegrationTests
         using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
         var testClient = new OpenCodeClient(httpClient, Mock.Of<ILogger<OpenCodeClient>>());
         var testPortAllocationService = new PortAllocationService(testOptions, Mock.Of<ILogger<PortAllocationService>>());
-        using var testServerManager = new OpenCodeServerManager(testOptions, testClient, testPortAllocationService, Mock.Of<IHubContext<AgentHub>>(), Mock.Of<ILogger<OpenCodeServerManager>>());
+        var testMockAgentUrlService = new Mock<IAgentUrlService>();
+        testMockAgentUrlService.Setup(u => u.GetExternalBaseUrl(It.IsAny<int>())).Returns<int>(port => $"http://127.0.0.1:{port}");
+        testMockAgentUrlService.Setup(u => u.IsContainerMode).Returns(false);
+        using var testServerManager = new OpenCodeServerManager(testOptions, testClient, testPortAllocationService, Mock.Of<IHubContext<AgentHub>>(), testMockAgentUrlService.Object, Mock.Of<ILogger<OpenCodeServerManager>>());
         var testConfigGenerator = new OpenCodeConfigGenerator(testOptions, Mock.Of<ILogger<OpenCodeConfigGenerator>>());
 
         Process? serverProcess = null;
@@ -371,7 +380,10 @@ public class OpenCodeWorkingDirectoryIntegrationTests
         using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
         var testClient = new OpenCodeClient(httpClient, Mock.Of<ILogger<OpenCodeClient>>());
         var testPortAllocationService = new PortAllocationService(testOptions, Mock.Of<ILogger<PortAllocationService>>());
-        using var testServerManager = new OpenCodeServerManager(testOptions, testClient, testPortAllocationService, Mock.Of<IHubContext<AgentHub>>(), Mock.Of<ILogger<OpenCodeServerManager>>());
+        var testMockAgentUrlService = new Mock<IAgentUrlService>();
+        testMockAgentUrlService.Setup(u => u.GetExternalBaseUrl(It.IsAny<int>())).Returns<int>(port => $"http://127.0.0.1:{port}");
+        testMockAgentUrlService.Setup(u => u.IsContainerMode).Returns(false);
+        using var testServerManager = new OpenCodeServerManager(testOptions, testClient, testPortAllocationService, Mock.Of<IHubContext<AgentHub>>(), testMockAgentUrlService.Object, Mock.Of<ILogger<OpenCodeServerManager>>());
         var testConfigGenerator = new OpenCodeConfigGenerator(testOptions, Mock.Of<ILogger<OpenCodeConfigGenerator>>());
 
         Process? serverProcess = null;
@@ -521,7 +533,10 @@ public class OpenCodeWorkingDirectoryIntegrationTests
         using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
         var testClient = new OpenCodeClient(httpClient, Mock.Of<ILogger<OpenCodeClient>>());
         var testPortAllocationService = new PortAllocationService(testOptions, Mock.Of<ILogger<PortAllocationService>>());
-        using var testServerManager = new OpenCodeServerManager(testOptions, testClient, testPortAllocationService, Mock.Of<IHubContext<AgentHub>>(), Mock.Of<ILogger<OpenCodeServerManager>>());
+        var testMockAgentUrlService = new Mock<IAgentUrlService>();
+        testMockAgentUrlService.Setup(u => u.GetExternalBaseUrl(It.IsAny<int>())).Returns<int>(port => $"http://127.0.0.1:{port}");
+        testMockAgentUrlService.Setup(u => u.IsContainerMode).Returns(false);
+        using var testServerManager = new OpenCodeServerManager(testOptions, testClient, testPortAllocationService, Mock.Of<IHubContext<AgentHub>>(), testMockAgentUrlService.Object, Mock.Of<ILogger<OpenCodeServerManager>>());
         var testConfigGenerator = new OpenCodeConfigGenerator(testOptions, Mock.Of<ILogger<OpenCodeConfigGenerator>>());
 
         Process? serverProcess = null;

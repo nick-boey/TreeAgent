@@ -17,6 +17,8 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
     private readonly IOpenCodeClient _client;
     private readonly IPortAllocationService _portAllocationService;
     private readonly IHubContext<AgentHub> _hubContext;
+    private readonly IAgentUrlService _agentUrlService;
+    private readonly AgentProxyRouteManager? _proxyRouteManager;
     private readonly ILogger<OpenCodeServerManager> _logger;
     private readonly ConcurrentDictionary<string, OpenCodeServer> _servers = new();
     private readonly string _resolvedExecutablePath;
@@ -27,12 +29,16 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         IOpenCodeClient client,
         IPortAllocationService portAllocationService,
         IHubContext<AgentHub> hubContext,
-        ILogger<OpenCodeServerManager> logger)
+        IAgentUrlService agentUrlService,
+        ILogger<OpenCodeServerManager> logger,
+        AgentProxyRouteManager? proxyRouteManager = null)
     {
         _options = options.Value;
         _client = client;
         _portAllocationService = portAllocationService;
         _hubContext = hubContext;
+        _agentUrlService = agentUrlService;
+        _proxyRouteManager = proxyRouteManager;
         _logger = logger;
         _resolvedExecutablePath = ResolveExecutablePath(_options.ExecutablePath);
         _logger.LogDebug("Resolved OpenCode executable path: {Path}", _resolvedExecutablePath);
@@ -211,6 +217,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             EntityId = entityId,
             WorktreePath = worktreePath,
             Port = port,
+            ExternalBaseUrl = _agentUrlService.GetExternalBaseUrl(port),
             Status = OpenCodeServerStatus.Starting,
             ContinueSession = continueSession
         };
@@ -267,7 +274,10 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             {
                 _logger.LogWarning(ex, "Failed to verify OpenCode working directory for entity {EntityId}", entityId);
             }
-            
+
+            // Register proxy route in container mode
+            _proxyRouteManager?.AddRoute(port);
+
             server.Status = OpenCodeServerStatus.Running;
             
             _logger.LogInformation("OpenCode server started on port {Port} for entity {EntityId}", port, entityId);
@@ -328,6 +338,10 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         }
 
         _portAllocationService.ReleasePort(server.Port);
+
+        // Unregister proxy route
+        _proxyRouteManager?.RemoveRoute(server.Port);
+
         server.Status = OpenCodeServerStatus.Stopped;
         _logger.LogInformation("OpenCode server stopped for entity {EntityId}", entityId);
         
@@ -358,6 +372,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
                 EntityId = s.EntityId,
                 Port = s.Port,
                 BaseUrl = s.BaseUrl,
+                ExternalBaseUrl = s.ExternalBaseUrl,
                 WorktreePath = s.WorktreePath,
                 StartedAt = s.StartedAt,
                 ActiveSessionId = s.ActiveSessionId,

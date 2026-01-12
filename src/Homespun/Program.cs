@@ -84,6 +84,25 @@ builder.Services.AddScoped<IAgentCompletionMonitor, AgentCompletionMonitor>();
 builder.Services.AddScoped<IAgentWorkflowService, AgentWorkflowService>();
 builder.Services.AddSingleton<ITestAgentService, TestAgentService>();
 
+// Agent URL service (handles both local and container mode URLs)
+builder.Services.AddSingleton<IAgentUrlService, AgentUrlService>();
+
+// Check if container mode is enabled for YARP proxy setup
+var openCodeOptions = builder.Configuration.GetSection(OpenCodeOptions.SectionName).Get<OpenCodeOptions>();
+var isContainerMode = openCodeOptions?.ContainerMode == true ||
+    Environment.GetEnvironmentVariable("CONTAINER_MODE") == "true" ||
+    !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("TAILSCALE_AUTH_KEY"));
+
+if (isContainerMode)
+{
+    // Register YARP reverse proxy for agent servers in container mode
+    // AgentProxyRouteManager provides dynamic routes that are added/removed as servers start/stop
+    builder.Services.AddSingleton<AgentProxyRouteManager>();
+    builder.Services.AddSingleton<Yarp.ReverseProxy.Configuration.IProxyConfigProvider>(
+        sp => sp.GetRequiredService<AgentProxyRouteManager>());
+    builder.Services.AddReverseProxy();
+}
+
 // GitHub sync polling service (PR sync, review polling, issue linking)
 builder.Services.Configure<GitHubSyncPollingOptions>(
     builder.Configuration.GetSection(GitHubSyncPollingOptions.SectionName));
@@ -116,5 +135,11 @@ app.MapRazorComponents<App>()
 // Map SignalR hubs
 app.MapHub<AgentHub>("/hubs/agent");
 app.MapHub<NotificationHub>("/hubs/notifications");
+
+// Map YARP reverse proxy for agent servers (only in container mode)
+if (isContainerMode)
+{
+    app.MapReverseProxy();
+}
 
 app.Run();

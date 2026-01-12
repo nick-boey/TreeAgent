@@ -16,13 +16,20 @@ public class OpenCodeServer
     public required string WorktreePath { get; init; }
     public required int Port { get; init; }
     public string BaseUrl => $"http://127.0.0.1:{Port}";
-    
+
+    /// <summary>
+    /// The external base URL (for client access). May differ from BaseUrl in container mode.
+    /// Set by OpenCodeServerManager based on IAgentUrlService.
+    /// </summary>
+    public string? ExternalBaseUrl { get; set; }
+
     /// <summary>
     /// Gets the full web view URL including encoded path and session.
+    /// Uses ExternalBaseUrl if set, otherwise BaseUrl.
     /// Returns null if no active session.
     /// </summary>
-    public string? WebViewUrl => ActiveSessionId != null 
-        ? $"{BaseUrl}/{Base64UrlEncode(WorktreePath)}/session/{ActiveSessionId}"
+    public string? WebViewUrl => ActiveSessionId != null
+        ? $"{ExternalBaseUrl ?? BaseUrl}/{Base64UrlEncode(WorktreePath)}/session/{ActiveSessionId}"
         : null;
 
     /// <summary>

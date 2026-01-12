@@ -19,7 +19,12 @@ public class RunningServerInfo
     /// The base URL of the server (e.g., http://127.0.0.1:4099).
     /// </summary>
     public required string BaseUrl { get; init; }
-    
+
+    /// <summary>
+    /// The external base URL for client access (may differ from BaseUrl in container mode).
+    /// </summary>
+    public string? ExternalBaseUrl { get; init; }
+
     /// <summary>
     /// The worktree path the server is operating in.
     /// </summary>
