@@ -4,6 +4,7 @@
 @using Homespun.Features.Beads.Data
 @using Homespun.Features.Beads.Services
 @using Homespun.Features.GitHub
+@using Homespun.Features.Gitgraph.Services
 @using Homespun.Features.OpenCode.Services
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests
@@ -38,146 +39,11 @@ else
                 </div>
             </div>
 
-            <div class="timeline-list">
-                @* Past PRs - from GitHub (oldest to newest) *@
-                @if (_isLoadingPastPRs)
-                {
-                    <div class="timeline-section-header">
-                        <span class="spinner-border spinner-border-sm ms-2" role="status"></span>
-                    </div>
-                }
-                else if (_pastPRs != null && _pastPRs.Count > 0)
-                {
-                    var orderedPastPRs = _pastPRs.OrderBy(p => p.Time).ToList();
-                    var hiddenCount = Math.Max(0, orderedPastPRs.Count - _pastPRsDisplayCount);
-                    var visiblePastPRs = orderedPastPRs.Skip(hiddenCount).ToList();
-
-                    @if (hiddenCount > 0)
-                    {
-                        <button class="timeline-action-btn" @onclick="LoadMorePastPRs">
-                            <div class="item-graph">
-                                <div class="graph-line graph-line-top hidden"></div>
-                                <div class="graph-node status-load-more">...</div>
-                                <div class="graph-line graph-line-bottom"></div>
-                            </div>
-                            <div class="item-body">
-                                <span
-                                    class="item-title action-title">@hiddenCount older PRs (load @Math.Min(5, hiddenCount) more)</span>
-                            </div>
-                        </button>
-                    }
-
-                    @for (var i = 0; i < visiblePastPRs.Count; i++)
-                    {
-                        var prWithTime = visiblePastPRs[i];
-                        var isFirstInTimeline = i == 0 && hiddenCount == 0;
-                        <WorkItem Title="@prWithTime.PullRequest.Title"
-                                  Number="@prWithTime.PullRequest.Number"
-                                  Url="@prWithTime.PullRequest.HtmlUrl"
-                                  StatusColor="@GetPastPRStatusColor(prWithTime.PullRequest.Status)"
-                                  StatusTooltip="@prWithTime.PullRequest.Status.ToString()"
-                                  Subtitle="@GetPastPRSubtitle(prWithTime.PullRequest)"
-                                  IsFirst="@isFirstInTimeline"
-                                  IsLast="false"/>
-                    }
-                }
-
-                @* Current PRs - from database *@
-                @if (_pastPRs != null && _pastPRs.Count > 0)
-                {
-                    <div class="timeline-section-label">
-                        <div class="label-graph">
-                            <div class="graph-line"></div>
-                        </div>
-                        <div class="label-text">Current</div>
-                        @if (GetTotalCurrentCount() > 0)
-                        {
-                            <span class="section-count">@GetTotalCurrentCount()</span>
-                        }
-                    </div>
-                }
-                @if ((_rootPullRequests == null || _rootPullRequests.Count == 0) && (_inProgressIssues == null || _inProgressIssues.Count == 0))
-                {
-                    <div class="timeline-section-label">
-                        <div class="label-graph">
-                            <div class="graph-line"></div>
-                        </div>
-                        <div class="label-text">No open pull requests</div>
-                    </div>
-                }
-                else
-                {
-                    @for (var i = 0; i < _flattenedCurrentPRs.Count; i++)
-                    {
-                        var pr = _flattenedCurrentPRs[i];
-                        <WorkItem Title="@pr.PullRequest.Title"
-                                  Number="@pr.PullRequest.GitHubPRNumber"
-                                  StatusColor="@GetCurrentPRStatusColor(pr.PullRequest.Status)"
-                                  StatusTooltip="@pr.PullRequest.Status.ToString()"
-                                  Subtitle="@GetCurrentPRSubtitle(pr.PullRequest)"
-                                  IndentLevel="@pr.Level"
-                                  IsSelected="@(_selectedPullRequestId == pr.PullRequest.Id)"
-                                  IsClickable="true"
-                                  IsFirst="false"
-                                  IsLast="false"
-                                  StartupState="@GetStartupState(pr.PullRequest.Id)"
-                                  StartupErrorMessage="@GetStartupErrorMessage(pr.PullRequest.Id)"
-                                  OnClick="@(() => SelectPullRequest(pr.PullRequest.Id))"/>
-                    }
-
-                    @* In-progress Beads Issues (shown in Current section) *@
-                    @if (_inProgressIssues != null)
-                    {
-                        @for (var i = 0; i < _inProgressIssues.Count; i++)
-                        {
-                            var issueWithMeta = _inProgressIssues[i];
-                            <WorkItem Title="@issueWithMeta.Issue.Title"
-                                      StatusColor="@GetBeadsIssueStatusColor(issueWithMeta.Issue)"
-                                      StatusTooltip="@GetBeadsIssueStatusTooltip(issueWithMeta.Issue)"
-                                      Subtitle="@GetBeadsIssueSubtitle(issueWithMeta)"
-                                      IndentLevel="@issueWithMeta.Depth"
-                                      IsSelected="@(_selectedBeadsIssueId == issueWithMeta.Issue.Id)"
-                                      IsClickable="true"
-                                      IsFirst="false"
-                                      IsLast="false"
-                                      StartupState="@GetStartupState(issueWithMeta.Issue.Id)"
-                                      StartupErrorMessage="@GetStartupErrorMessage(issueWithMeta.Issue.Id)"
-                                      OnClick="@(() => SelectBeadsIssue(issueWithMeta.Issue.Id))"/>
-                        }
-                    }
-                }
-
-                @* Future Issues - from beads *@
-                <div class="timeline-section-label">
-                    <div class="label-graph">
-                        <div class="graph-line"></div>
-                    </div>
-                    <div class="label-text">Future</div>
-                    @if (_openIssues != null && _openIssues.Count > 0)
-                    {
-                        <span class="section-count">@_openIssues.Count</span>
-                    }
-                </div>
-                @if (_openIssues != null && _openIssues.Count > 0)
-                {
-                    @for (var i = 0; i < _openIssues.Count; i++)
-                    {
-                        var issueWithMeta = _openIssues[i];
-                        <WorkItem Title="@issueWithMeta.Issue.Title"
-                                  StatusColor="@GetBeadsIssueStatusColor(issueWithMeta.Issue)"
-                                  StatusTooltip="@GetBeadsIssueStatusTooltip(issueWithMeta.Issue)"
-                                  Subtitle="@GetBeadsIssueSubtitle(issueWithMeta)"
-                                  IndentLevel="@issueWithMeta.Depth"
-                                  IsSelected="@(_selectedBeadsIssueId == issueWithMeta.Issue.Id)"
-                                  IsClickable="true"
-                                  IsFirst="false"
-                                  IsLast="false"
-                                  StartupState="@GetStartupState(issueWithMeta.Issue.Id)"
-                                  StartupErrorMessage="@GetStartupErrorMessage(issueWithMeta.Issue.Id)"
-                                  OnClick="@(() => SelectBeadsIssue(issueWithMeta.Issue.Id))"/>
-                    }
-                }
-            </div>
+            <GitgraphVisualization
+                ProjectId="@Id"
+                OnPullRequestClick="@SelectPullRequestByNumber"
+                OnIssueClick="@SelectBeadsIssue"
+                SelectedNodeId="@GetSelectedNodeId()" />
         </div>
 
         <div class="detail-column">
@@ -569,7 +435,6 @@ else
     private BeadsIssueWithMetadata? _selectedBeadsIssue;
     private string? _selectedBeadsIssueId;
     private bool _isSyncingPRs;
-    private bool _isLoadingPastPRs;
     private bool _tokenMissing;
     private string? _syncError;
     private SyncResult? _lastSyncResult;
@@ -577,7 +442,6 @@ else
     private List<BeadsIssueWithMetadata>? _openIssues;
     private List<BeadsIssueWithMetadata>? _inProgressIssues;
     private List<string> _existingGroups = [];
-    private int _pastPRsDisplayCount = 10;
 
     // Debug-only fields (always declared, only used in DEBUG builds)
     private TestAgentStatus? _testAgentStatus;
@@ -702,50 +566,24 @@ else
 
     private async Task LoadPastPRsAsync()
     {
-        Logger.LogInformation("LoadPastPRsAsync started for project {ProjectId}", Id);
-
         if (_project == null)
-        {
-            Logger.LogWarning("LoadPastPRsAsync: _project is null, returning early");
             return;
-        }
 
         var isConfigured = await GitHubService.IsConfiguredAsync(_project.Id);
-        Logger.LogInformation("LoadPastPRsAsync: GitHub configured = {IsConfigured}", isConfigured);
         if (!isConfigured)
             return;
 
-        _isLoadingPastPRs = true;
-        StateHasChanged();
-
         try
         {
-            Logger.LogInformation("LoadPastPRsAsync: Fetching merged PRs...");
             var mergedPRs = await PullRequestWorkflowService.GetMergedPullRequestsWithTimeAsync(Id);
-            Logger.LogInformation("LoadPastPRsAsync: Got {Count} merged PRs", mergedPRs.Count);
-
-            Logger.LogInformation("LoadPastPRsAsync: Fetching closed PRs...");
             var closedPRs = await PullRequestWorkflowService.GetClosedPullRequestsWithTimeAsync(Id);
-            Logger.LogInformation("LoadPastPRsAsync: Got {Count} closed PRs", closedPRs.Count);
-
             _pastPRs = mergedPRs.Concat(closedPRs).ToList();
-            Logger.LogInformation("LoadPastPRsAsync: Total past PRs = {Count}", _pastPRs.Count);
         }
         catch (Exception ex)
         {
             Logger.LogWarning(ex, "Failed to load past PRs for project {ProjectId}", Id);
             _pastPRs = [];
         }
-        finally
-        {
-            _isLoadingPastPRs = false;
-            StateHasChanged();
-        }
-    }
-
-    private void LoadMorePastPRs()
-    {
-        _pastPRsDisplayCount += 5;
     }
 
     private async Task SyncPullRequestsAsync()
@@ -833,6 +671,42 @@ else
         _selectedBeadsIssueId = issueId;
         _selectedBeadsIssue = _openIssues?.FirstOrDefault(i => i.Issue.Id == issueId)
                               ?? _inProgressIssues?.FirstOrDefault(i => i.Issue.Id == issueId);
+    }
+
+    private async Task SelectPullRequestByNumber(int prNumber)
+    {
+        // Clear any beads issue selection
+        _selectedBeadsIssueId = null;
+        _selectedBeadsIssue = null;
+
+        // Find the PR in current PRs (internal database)
+        var currentPr = _flattenedCurrentPRs.FirstOrDefault(p => p.PullRequest.GitHubPRNumber == prNumber);
+        if (currentPr != null)
+        {
+            _selectedPullRequestId = currentPr.PullRequest.Id;
+            _selectedPullRequest = await PullRequestDataService.GetByIdAsync(currentPr.PullRequest.Id);
+            return;
+        }
+
+        // For past PRs, we don't have internal IDs, so clear selection
+        // (Past PRs from GitHub API are view-only in the graph)
+        _selectedPullRequestId = null;
+        _selectedPullRequest = null;
+    }
+
+    private string? GetSelectedNodeId()
+    {
+        if (_selectedPullRequest != null && _selectedPullRequest.GitHubPRNumber.HasValue)
+        {
+            return $"pr-{_selectedPullRequest.GitHubPRNumber}";
+        }
+
+        if (_selectedBeadsIssueId != null)
+        {
+            return $"issue-{_selectedBeadsIssueId}";
+        }
+
+        return null;
     }
 
     private void ClearSelection()

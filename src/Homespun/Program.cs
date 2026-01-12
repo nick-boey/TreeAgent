@@ -2,6 +2,7 @@ using Homespun.Features.Beads.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
+using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.Notifications;
 using Homespun.Features.OpenCode;
 using Homespun.Features.OpenCode.Hubs;
@@ -62,6 +63,9 @@ builder.Services.AddScoped<PullRequestWorkflowService>();
 builder.Services.AddScoped<IBeadsService, BeadsService>();
 builder.Services.AddScoped<IBeadsInitializer, BeadsInitializer>();
 builder.Services.AddScoped<IBeadsIssueTransitionService, BeadsIssueTransitionService>();
+
+// Gitgraph services
+builder.Services.AddScoped<IGraphService, GraphService>();
 
 // Issue-PR linking service (must be registered before GitHubService as it depends on it)
 builder.Services.AddScoped<IIssuePrLinkingService, IssuePrLinkingService>();
