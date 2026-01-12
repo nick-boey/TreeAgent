@@ -1,0 +1,53 @@
+# Homespun Docker Compose Configuration
+#
+# This configuration runs Homespun with Watchtower for automatic updates.
+# Pre-built images are pulled from GitHub Container Registry (GHCR).
+#
+# Usage:
+#   ./run.sh                    # Production mode with GHCR image + Watchtower
+#   ./run.sh --local            # Development mode with local image (no Watchtower)
+#
+# Environment variables (set in .env or export before running):
+#   GITHUB_TOKEN        - GitHub personal access token (required for PR sync)
+#   TAILSCALE_AUTH_KEY  - Tailscale auth key (optional, for remote access)
+#   TAILSCALE_HOSTNAME  - Tailscale hostname (default: homespun-vm)
+
+services:
+  homespun:
+    image: ${HOMESPUN_IMAGE:-ghcr.io/nick-boey/homespun:latest}
+    container_name: homespun
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ${DATA_DIR:-~/.homespun-container/data}:/data
+      - ${DATA_DIR:-~/.homespun-container/data}:/home/containeruser
+      - ${SSH_DIR:-~/.ssh}:/home/containeruser/.ssh:ro
+    environment:
+      - HOME=/home/containeruser
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - ASPNETCORE_ENVIRONMENT=Production
+      - TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY:-}
+      - TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME:-homespun-vm}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    profiles:
+      - production
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=${WATCHTOWER_POLL_INTERVAL:-300}
+      - WATCHTOWER_INCLUDE_STOPPED=false
+      - WATCHTOWER_ROLLING_RESTART=true
+    restart: unless-stopped
+    command: homespun

@@ -2,15 +2,40 @@
 set -e
 
 # ============================================================================
-# Homespun Docker Container Runner (Bash)
+# Homespun Docker Compose Runner
 # ============================================================================
+#
+# This script runs Homespun using Docker Compose with optional Watchtower
+# for automatic updates from GHCR.
+#
+# Usage:
+#   ./run.sh                    # Production: GHCR image + Watchtower (detached)
+#   ./run.sh --local            # Development: local image, no Watchtower
+#   ./run.sh --local -it        # Development: interactive mode
+#   ./run.sh --stop             # Stop all containers
+#   ./run.sh --logs             # View container logs
+#
+# Options:
+#   --local                     Use locally built image (homespun:local)
+#   -it, --interactive          Run in interactive mode (foreground)
+#   -d, --detach                Run in detached mode (background) [default]
+#   --stop                      Stop running containers
+#   --logs                      Follow container logs
+#   --pull                      Pull latest image before starting
+#   --tailscale-auth-key KEY    Set Tailscale auth key
+#   --tailscale-hostname NAME   Set Tailscale hostname
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Default values
+USE_LOCAL=false
+DETACHED=true
+ACTION="start"
+PULL_FIRST=false
 TAILSCALE_AUTH_KEY=""
-TAILSCALE_HOSTNAME="homespun-container"
+TAILSCALE_HOSTNAME="homespun-vm"
 USER_SECRETS_ID="2cfc6c57-72da-4b56-944b-08f2c1df76f6"
-IMAGE_NAME="homespun:local"
-CONTAINER_NAME="homespun-local"
 
 # Colors
 CYAN='\033[0;36m'
@@ -25,43 +50,86 @@ log_success() { echo -e "${GREEN}$1${NC}"; }
 log_warn() { echo -e "${YELLOW}$1${NC}"; }
 log_error() { echo -e "${RED}$1${NC}"; }
 
+show_help() {
+    head -25 "$0" | tail -20
+    exit 0
+}
+
 # Parse arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
+        --local) USE_LOCAL=true ;;
+        -it|--interactive) DETACHED=false ;;
+        -d|--detach) DETACHED=true ;;
+        --stop) ACTION="stop" ;;
+        --logs) ACTION="logs" ;;
+        --pull) PULL_FIRST=true ;;
         --tailscale-auth-key) TAILSCALE_AUTH_KEY="$2"; shift ;;
         --tailscale-hostname) TAILSCALE_HOSTNAME="$2"; shift ;;
-        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+        -h|--help) show_help ;;
+        *) log_error "Unknown parameter: $1"; show_help ;;
     esac
     shift
 done
 
+# Change to script directory for docker-compose
+cd "$SCRIPT_DIR"
+
 echo
-log_info "=== Homespun Docker Container Runner ==="
+log_info "=== Homespun Docker Compose Runner ==="
 echo
 
+# Handle stop action
+if [ "$ACTION" = "stop" ]; then
+    log_info "Stopping containers..."
+    docker compose --profile production down 2>/dev/null || docker compose down
+    log_success "Containers stopped."
+    exit 0
+fi
+
+# Handle logs action
+if [ "$ACTION" = "logs" ]; then
+    log_info "Following container logs (Ctrl+C to exit)..."
+    docker compose logs -f homespun
+    exit 0
+fi
+
 # Step 1: Validate Docker is running
-log_info "[1/6] Checking Docker..."
+log_info "[1/5] Checking Docker..."
 if ! docker version >/dev/null 2>&1; then
     log_error "Docker is not running. Please start Docker and try again."
     exit 1
 fi
-log_success "      Docker is running."
-
-# Step 2: Check if image exists
-log_info "[2/6] Checking for homespun:local image..."
-if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${IMAGE_NAME}$"; then
-    log_error "Docker image '${IMAGE_NAME}' not found."
-    echo
-    echo "Please build the image first:"
-    echo "    docker build -t ${IMAGE_NAME} ."
-    echo
-    echo "Then run this script again."
+if ! docker compose version >/dev/null 2>&1; then
+    log_error "Docker Compose is not available. Please install Docker Compose."
     exit 1
 fi
-log_success "      Image found."
+log_success "      Docker and Docker Compose are available."
+
+# Step 2: Check image availability
+log_info "[2/5] Checking container image..."
+if [ "$USE_LOCAL" = true ]; then
+    IMAGE_NAME="homespun:local"
+    if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${IMAGE_NAME}$"; then
+        log_error "Local image '${IMAGE_NAME}' not found."
+        echo
+        echo "Please build the image first:"
+        echo "    docker build -t ${IMAGE_NAME} ."
+        echo
+        exit 1
+    fi
+    log_success "      Local image found: $IMAGE_NAME"
+else
+    IMAGE_NAME="ghcr.io/nick-boey/homespun:latest"
+    if [ "$PULL_FIRST" = true ]; then
+        log_info "      Pulling latest image..."
+        docker pull "$IMAGE_NAME"
+    fi
+    log_success "      Using GHCR image: $IMAGE_NAME"
+fi
 
 # Step 3: Read GitHub token
-log_info "[3/6] Reading GitHub token..."
+log_info "[3/5] Reading GitHub token..."
 
 # First check environment variable
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"
@@ -70,30 +138,34 @@ GITHUB_TOKEN="${GITHUB_TOKEN:-}"
 if [ -z "$GITHUB_TOKEN" ]; then
     SECRETS_PATH="$HOME/.microsoft/usersecrets/$USER_SECRETS_ID/secrets.json"
     if [ -f "$SECRETS_PATH" ]; then
-        # Try to extract token using grep/sed to avoid jq dependency if possible, or python
         if command -v python3 &>/dev/null; then
             GITHUB_TOKEN=$(python3 -c "import json, sys; print(json.load(open('$SECRETS_PATH')).get('GitHub:Token', ''))" 2>/dev/null)
         elif command -v jq &>/dev/null; then
-             GITHUB_TOKEN=$(jq -r '."GitHub:Token" // empty' "$SECRETS_PATH")
+            GITHUB_TOKEN=$(jq -r '."GitHub:Token" // empty' "$SECRETS_PATH")
         fi
     fi
 fi
 
+# Try reading from .env file
+if [ -z "$GITHUB_TOKEN" ] && [ -f "$SCRIPT_DIR/.env" ]; then
+    GITHUB_TOKEN=$(grep -E "^GITHUB_TOKEN=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+fi
+
 if [ -z "$GITHUB_TOKEN" ]; then
-    log_warn "      GitHub token not found in user secrets or environment."
-    log_warn "      Container will run without GitHub integration."
+    log_warn "      GitHub token not found."
+    log_warn "      Set GITHUB_TOKEN environment variable or create .env file."
+    log_warn "      See .env.example for template."
 else
     MASKED_TOKEN="${GITHUB_TOKEN:0:10}..."
     log_success "      GitHub token found: $MASKED_TOKEN"
 fi
 
-# Step 4: Set up paths
-log_info "[4/6] Setting up directories..."
+# Step 4: Set up directories
+log_info "[4/5] Setting up directories..."
 
 DATA_DIR="$HOME/.homespun-container/data"
 SSH_DIR="$HOME/.ssh"
 
-# Create data directory with permissions for container user (UID 1000)
 if [ ! -d "$DATA_DIR" ]; then
     mkdir -p "$DATA_DIR"
     log_success "      Created data directory: $DATA_DIR"
@@ -101,82 +173,72 @@ else
     log_success "      Data directory exists: $DATA_DIR"
 fi
 
-# Ensure container user can write to the data directory
-# The container runs as 'homespun' user (UID 1000)
 chmod 777 "$DATA_DIR" 2>/dev/null || true
-log_success "      Set data directory permissions for container access"
 
 # Check SSH directory
-MOUNT_SSH=false
 if [ ! -d "$SSH_DIR" ]; then
     log_warn "      SSH directory not found: $SSH_DIR"
-    log_warn "      Git operations requiring SSH may not work."
-else
-    log_success "      SSH directory found: $SSH_DIR"
-    MOUNT_SSH=true
+    SSH_DIR=""
 fi
 
-# Step 5: Stop existing container
-log_info "[5/6] Checking for existing container..."
-if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
-    log_warn "Stopping existing container '${CONTAINER_NAME}'..."
-    docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
-    docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
-    log_success "Existing container removed."
-fi
-
-# Step 6: Run container
-log_info "[6/6] Starting container..."
+# Step 5: Start containers
+log_info "[5/5] Starting containers..."
 echo
+
+# Export environment variables for docker-compose
+export HOMESPUN_IMAGE="$IMAGE_NAME"
+export HOST_UID="$(id -u)"
+export HOST_GID="$(id -g)"
+export DATA_DIR="$DATA_DIR"
+export SSH_DIR="${SSH_DIR:-/dev/null}"
+export GITHUB_TOKEN="$GITHUB_TOKEN"
+export TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY"
+export TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME"
+
+# Determine compose profiles
+COMPOSE_PROFILES=""
+if [ "$USE_LOCAL" = false ]; then
+    COMPOSE_PROFILES="--profile production"
+fi
+
 log_info "======================================"
 log_info "  Container Configuration"
 log_info "======================================"
-echo "  Name:        $CONTAINER_NAME"
+echo "  Image:       $IMAGE_NAME"
 echo "  User:        $(id -u):$(id -g)"
 echo "  Port:        8080"
 echo "  URL:         http://localhost:8080"
-echo "  Environment: Production"
 echo "  Data mount:  $DATA_DIR"
-if [ "$MOUNT_SSH" = true ]; then
+if [ -n "$SSH_DIR" ] && [ "$SSH_DIR" != "/dev/null" ]; then
     echo "  SSH mount:   $SSH_DIR (read-only)"
 fi
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
     echo "  Tailscale:   Enabled ($TAILSCALE_HOSTNAME)"
 fi
+if [ "$USE_LOCAL" = false ]; then
+    echo "  Watchtower:  Enabled (auto-updates every 5 min)"
+else
+    echo "  Watchtower:  Disabled (local development mode)"
+fi
 log_info "======================================"
 echo
-log_warn "Starting container in interactive mode..."
-log_warn "Press Ctrl+C to stop the container."
-echo
 
-# Build docker run command
-# Run as host user so files created in mounted volumes have correct ownership
-DOCKER_CMD=(docker run --rm -it)
-DOCKER_CMD+=("--user" "$(id -u):$(id -g)")
-DOCKER_CMD+=("--name" "$CONTAINER_NAME")
-DOCKER_CMD+=("-p" "8080:8080")
-DOCKER_CMD+=("-v" "$DATA_DIR:/data")
-# Set HOME for the container user (needed for SSH and git)
-DOCKER_CMD+=("-e" "HOME=/home/containeruser")
-DOCKER_CMD+=("-v" "$DATA_DIR:/home/containeruser")
-
-if [ "$MOUNT_SSH" = true ]; then
-    DOCKER_CMD+=("-v" "$SSH_DIR:/home/containeruser/.ssh:ro")
+if [ "$DETACHED" = true ]; then
+    log_info "Starting containers in detached mode..."
+    docker compose $COMPOSE_PROFILES up -d
+    echo
+    log_success "Containers started successfully!"
+    echo
+    echo "Useful commands:"
+    echo "  View logs:     $0 --logs"
+    echo "  Stop:          $0 --stop"
+    echo "  Health check:  curl http://localhost:8080/health"
+    echo
+else
+    log_warn "Starting containers in interactive mode..."
+    log_warn "Press Ctrl+C to stop."
+    echo
+    docker compose $COMPOSE_PROFILES up
+    echo
+    log_warn "Containers stopped."
 fi
-
-if [ -n "$GITHUB_TOKEN" ]; then
-    DOCKER_CMD+=("-e" "GITHUB_TOKEN=$GITHUB_TOKEN")
-fi
-
-if [ -n "$TAILSCALE_AUTH_KEY" ]; then
-    DOCKER_CMD+=("-e" "TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY")
-    DOCKER_CMD+=("-e" "TAILSCALE_HOSTNAME=$TAILSCALE_HOSTNAME")
-fi
-
-DOCKER_CMD+=("$IMAGE_NAME")
-
-# Execute
-"${DOCKER_CMD[@]}"
-
-echo
-log_warn "Container stopped."
