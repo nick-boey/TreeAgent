@@ -89,6 +89,7 @@ public class AgentHub(
 
     /// <summary>
     /// Gets all currently running servers with their session information.
+    /// Uses external URLs for UI display when configured.
     /// </summary>
     public IReadOnlyList<RunningServerInfo> GetAllRunningServers()
     {
@@ -97,7 +98,7 @@ public class AgentHub(
             {
                 EntityId = s.EntityId,
                 Port = s.Port,
-                BaseUrl = s.BaseUrl,
+                BaseUrl = s.ExternalBaseUrl, // Use external URL for UI display
                 WorktreePath = s.WorktreePath,
                 StartedAt = s.StartedAt,
                 ActiveSessionId = s.ActiveSessionId,

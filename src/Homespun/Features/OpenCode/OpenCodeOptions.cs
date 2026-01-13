@@ -40,4 +40,12 @@ public class OpenCodeOptions
     /// Format: "provider/model" (e.g., "anthropic/claude-opus-4-5")
     /// </summary>
     public string DefaultModel { get; set; } = "anthropic/claude-opus-4-5";
+
+    /// <summary>
+    /// External hostname for agent URLs when running in container mode with Tailscale.
+    /// When set, agent web view links will use this hostname instead of localhost.
+    /// Format: "hostname.tailnet.ts.net" (without http:// prefix)
+    /// Can be set via HSP_EXTERNAL_HOSTNAME environment variable.
+    /// </summary>
+    public string? ExternalHostname { get; set; }
 }

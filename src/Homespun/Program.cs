@@ -6,6 +6,7 @@ using Homespun.Features.Gitgraph.Services;
 using Homespun.Features.Notifications;
 using Homespun.Features.OpenCode;
 using Homespun.Features.OpenCode.Hubs;
+using Homespun.Features.OpenCode.Models;
 using Homespun.Features.OpenCode.Services;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
@@ -99,6 +100,15 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var app = builder.Build();
+
+// Configure external hostname for agent URLs (for container/Tailscale mode)
+var externalHostname = builder.Configuration["OpenCode:ExternalHostname"]
+    ?? builder.Configuration["HSP_EXTERNAL_HOSTNAME"];
+if (!string.IsNullOrEmpty(externalHostname))
+{
+    OpenCodeServer.ExternalHostname = externalHostname;
+    app.Logger.LogInformation("External hostname configured for agent URLs: {Hostname}", externalHostname);
+}
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

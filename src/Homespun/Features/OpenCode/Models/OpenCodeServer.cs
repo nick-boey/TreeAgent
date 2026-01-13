@@ -7,22 +7,40 @@ namespace Homespun.Features.OpenCode.Models;
 /// </summary>
 public class OpenCodeServer
 {
+    /// <summary>
+    /// External hostname for generating URLs accessible from outside the container.
+    /// Set at application startup from configuration.
+    /// </summary>
+    public static string? ExternalHostname { get; set; }
+
     public string Id { get; init; } = Guid.NewGuid().ToString();
-    
+
     /// <summary>
     /// The entity ID this server is associated with. Can be a PullRequest ID or a FutureChange ID (branch name).
     /// </summary>
     public required string EntityId { get; init; }
     public required string WorktreePath { get; init; }
     public required int Port { get; init; }
+
+    /// <summary>
+    /// Internal base URL for server-to-server communication (always localhost).
+    /// </summary>
     public string BaseUrl => $"http://127.0.0.1:{Port}";
-    
+
+    /// <summary>
+    /// External base URL for UI links. Uses ExternalHostname if configured, otherwise localhost.
+    /// </summary>
+    public string ExternalBaseUrl => !string.IsNullOrEmpty(ExternalHostname)
+        ? $"http://{ExternalHostname}:{Port}"
+        : BaseUrl;
+
     /// <summary>
     /// Gets the full web view URL including encoded path and session.
     /// Returns null if no active session.
+    /// Uses external hostname if configured.
     /// </summary>
-    public string? WebViewUrl => ActiveSessionId != null 
-        ? $"{BaseUrl}/{Base64UrlEncode(WorktreePath)}/session/{ActiveSessionId}"
+    public string? WebViewUrl => ActiveSessionId != null
+        ? $"{ExternalBaseUrl}/{Base64UrlEncode(WorktreePath)}/session/{ActiveSessionId}"
         : null;
 
     /// <summary>

@@ -8,9 +8,10 @@
 #   ./scripts/run.sh --local            # Development mode with local image (no Watchtower)
 #
 # Environment variables (set in .env or export before running):
-#   GITHUB_TOKEN        - GitHub personal access token (required for PR sync)
-#   TAILSCALE_AUTH_KEY  - Tailscale auth key (optional, for remote access via tailnet)
-#   TAILSCALE_HOSTNAME  - Tailscale hostname (default: homespun)
+#   GITHUB_TOKEN           - GitHub personal access token (required for PR sync)
+#   TAILSCALE_AUTH_KEY     - Tailscale auth key (optional, for remote access via tailnet)
+#   TAILSCALE_HOSTNAME     - Tailscale hostname (default: homespun)
+#   HSP_EXTERNAL_HOSTNAME  - Full external hostname for agent links (e.g., homespun.tail1234.ts.net)
 
 services:
   # Tailscale sidecar container - provides tailnet access for Homespun
@@ -93,6 +94,8 @@ services:
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - ASPNETCORE_ENVIRONMENT=Production
       - HSP_HOST_DATA_PATH=${DATA_DIR:-}
+      # External hostname for agent URLs (e.g., homespun.tail1234.ts.net)
+      - HSP_EXTERNAL_HOSTNAME=${HSP_EXTERNAL_HOSTNAME:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]

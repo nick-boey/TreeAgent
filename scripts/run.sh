@@ -26,10 +26,12 @@ set -e
 #   --tailscale                 Enable Tailscale sidecar for tailnet access
 #   --tailscale-auth-key KEY    Set Tailscale auth key (implies --tailscale)
 #   --tailscale-hostname NAME   Set Tailscale hostname (default: homespun)
+#   --external-hostname HOST    Set external hostname for agent URLs (e.g., homespun.tail1234.ts.net)
 #
 # Environment Variables:
 #   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
 #   HSP_TAILSCALE_AUTH          Tailscale auth key (preferred for VM secrets)
+#   HSP_EXTERNAL_HOSTNAME       External hostname for agent URLs
 #   GITHUB_TOKEN                GitHub token (fallback)
 #   TAILSCALE_AUTH_KEY          Tailscale auth key (fallback)
 
@@ -46,6 +48,7 @@ PULL_FIRST=false
 USE_TAILSCALE=false
 TAILSCALE_AUTH_KEY=""
 TAILSCALE_HOSTNAME="homespun"
+EXTERNAL_HOSTNAME=""
 USER_SECRETS_ID="2cfc6c57-72da-4b56-944b-08f2c1df76f6"
 
 # Colors
@@ -79,6 +82,7 @@ while [[ "$#" -gt 0 ]]; do
         --tailscale) USE_TAILSCALE=true ;;
         --tailscale-auth-key) TAILSCALE_AUTH_KEY="$2"; USE_TAILSCALE=true; shift ;;
         --tailscale-hostname) TAILSCALE_HOSTNAME="$2"; shift ;;
+        --external-hostname) EXTERNAL_HOSTNAME="$2"; shift ;;
         -h|--help) show_help ;;
         *) log_error "Unknown parameter: $1"; show_help ;;
     esac
@@ -214,6 +218,11 @@ fi
 log_info "[5/5] Starting containers..."
 echo
 
+# Read external hostname from environment if not passed as argument
+if [ -z "$EXTERNAL_HOSTNAME" ]; then
+    EXTERNAL_HOSTNAME="${HSP_EXTERNAL_HOSTNAME:-}"
+fi
+
 # Export environment variables for docker-compose
 export HOMESPUN_IMAGE="$IMAGE_NAME"
 export DATA_DIR="$DATA_DIR"
@@ -221,6 +230,7 @@ export SSH_DIR="${SSH_DIR:-/dev/null}"
 export GITHUB_TOKEN="$GITHUB_TOKEN"
 export TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY"
 export TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME"
+export HSP_EXTERNAL_HOSTNAME="$EXTERNAL_HOSTNAME"
 
 # Check if Tailscale is available on the host and get the IP
 TAILSCALE_IP=""
@@ -258,6 +268,9 @@ if [ -n "$SSH_DIR" ] && [ "$SSH_DIR" != "/dev/null" ]; then
 fi
 if [ "$USE_TAILSCALE" = true ]; then
     echo "  Tailscale:   Enabled via sidecar ($TAILSCALE_HOSTNAME)"
+fi
+if [ -n "$EXTERNAL_HOSTNAME" ]; then
+    echo "  Agent URLs:  http://$EXTERNAL_HOSTNAME:<port>"
 fi
 if [ "$USE_LOCAL" = false ]; then
     echo "  Watchtower:  Enabled (auto-updates every 5 min)"
