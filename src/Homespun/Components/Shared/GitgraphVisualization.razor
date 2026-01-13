@@ -12,13 +12,13 @@
             <span>Loading graph...</span>
         </div>
     }
-    else if (_error != null)
+    @if (_error != null)
     {
         <div class="gitgraph-error">
             <span>Failed to load graph: @_error</span>
         </div>
     }
-    <div @ref="_containerRef" id="@_containerId" class="gitgraph-container" style="@(_isLoading || _error != null ? "display:none" : "")"></div>
+    <div @ref="_containerRef" id="@_containerId" class="gitgraph-container"></div>
 </div>
 
 <style>
@@ -115,9 +115,6 @@
     {
         try
         {
-            _isLoading = true;
-            // Note: Don't call StateHasChanged() here - it causes race conditions with JS DOM manipulation
-
             _graphData = await GraphService.BuildGraphJsonAsync(ProjectId);
 
             if (_jsModule != null)
