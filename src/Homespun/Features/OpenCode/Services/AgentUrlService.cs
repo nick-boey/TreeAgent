@@ -50,6 +50,14 @@ public class AgentUrlService : IAgentUrlService
 
         var baseUrl = GetExternalBaseUrl(port);
         var encodedPath = OpenCodeServer.Base64UrlEncode(worktreePath);
+
+        if (_isContainerMode)
+        {
+            // Include ?url= parameter so OpenCode uses the correct API base URL
+            // OpenCode checks this query parameter first and uses it directly
+            return $"{baseUrl}/{encodedPath}/session/{sessionId}?url={baseUrl}";
+        }
+
         return $"{baseUrl}/{encodedPath}/session/{sessionId}";
     }
 }

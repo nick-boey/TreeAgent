@@ -80,9 +80,25 @@ public partial class AgentProxyResponseTransform : ITransformProvider
 
     /// <summary>
     /// Rewrites absolute paths in HTML content to include the proxy base path.
+    /// Also injects a script to ensure the ?url= parameter is set for OpenCode API calls.
     /// </summary>
     private static string RewriteAbsolutePaths(string html, string basePath)
     {
+        // Inject a script that redirects if ?url= parameter is missing
+        // This handles cases where users access the URL directly without the parameter
+        // OpenCode uses this parameter to determine the API base URL
+        var urlInjectionScript = $@"<script>
+(function() {{
+  if (!new URLSearchParams(location.search).get('url')) {{
+    var sep = location.search ? '&' : '?';
+    location.replace(location.pathname + location.search + sep + 'url={basePath}' + location.hash);
+  }}
+}})();
+</script>";
+
+        // Inject immediately after <head> tag (runs before other scripts)
+        html = HeadTagPattern().Replace(html, $"$1{urlInjectionScript}");
+
         // Rewrite src="/..." attributes (scripts, images, etc.)
         html = SrcHrefPattern().Replace(html, $"$1=\"{basePath}$2");
 
@@ -107,4 +123,8 @@ public partial class AgentProxyResponseTransform : ITransformProvider
     // Match action="/..."
     [GeneratedRegex(@"action=""(/(?!/)[^""]*)")]
     private static partial Regex ActionPattern();
+
+    // Match <head> or <head ...> tag
+    [GeneratedRegex(@"(<head[^>]*>)", RegexOptions.IgnoreCase)]
+    private static partial Regex HeadTagPattern();
 }
