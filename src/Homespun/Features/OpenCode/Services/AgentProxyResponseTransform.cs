@@ -1,6 +1,5 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Web;
 using Yarp.ReverseProxy.Transforms;
 using Yarp.ReverseProxy.Transforms.Builder;
 
@@ -9,7 +8,6 @@ namespace Homespun.Features.OpenCode.Services;
 /// <summary>
 /// YARP transform provider that rewrites absolute paths in HTML responses from OpenCode.
 /// This ensures assets load correctly when accessed through the /agent/{port}/ proxy path.
-/// Also handles request transforms to ensure the ?url= parameter is an absolute URL.
 /// </summary>
 public partial class AgentProxyResponseTransform : ITransformProvider
 {
@@ -45,60 +43,13 @@ public partial class AgentProxyResponseTransform : ITransformProvider
         }
 
         var basePath = $"/agent/{port}";
-        _logger.LogDebug("Applying transforms for route {RouteId} with basePath {BasePath}",
+        _logger.LogDebug("Applying response transform for route {RouteId} with basePath {BasePath}",
             context.Route.RouteId, basePath);
 
-        // Add request transform to handle ?url= parameter
-        // OpenCode's normalizeServerUrl expects an absolute URL (http://...) or a hostname.
-        // If ?url= is a relative path like /agent/4096, it becomes http:///agent/4096 (malformed).
-        // This transform marks the request for redirect if needed.
-        context.AddRequestTransform(transformContext =>
-        {
-            var request = transformContext.HttpContext.Request;
-            var urlParam = request.Query["url"].FirstOrDefault();
-
-            // Only redirect for HTML page requests (not API calls or assets)
-            // Check if this looks like the initial page load (has session in path, no API prefix)
-            var path = request.Path.Value ?? "";
-            var isPageRequest = path.Contains("/session/") && !path.Contains("/api/");
-
-            // If ?url= is missing or is a relative path, mark for redirect
-            if (isPageRequest && (string.IsNullOrEmpty(urlParam) || urlParam.StartsWith("/")))
-            {
-                var scheme = request.Scheme;
-                var host = request.Host.ToString();
-                var absoluteBaseUrl = $"{scheme}://{host}{basePath}";
-
-                // Build the redirect URL with the absolute ?url= parameter
-                var queryString = HttpUtility.ParseQueryString(request.QueryString.Value ?? "");
-                queryString["url"] = absoluteBaseUrl;
-
-                var redirectUrl = $"{request.Path}?{queryString}";
-
-                _logger.LogDebug("Will redirect to add absolute ?url= parameter: {RedirectUrl}", redirectUrl);
-
-                // Store redirect URL in HttpContext.Items for the response transform to use
-                transformContext.HttpContext.Items["AgentProxyRedirectUrl"] = redirectUrl;
-            }
-
-            return ValueTask.CompletedTask;
-        });
-
+        // Response transform to rewrite HTML asset paths
+        // Note: Redirect logic is handled by AgentUrlRedirectMiddleware which runs before YARP
         context.AddResponseTransform(async transformContext =>
         {
-            var httpContext = transformContext.HttpContext;
-
-            // Check if we need to redirect instead of proxying the response
-            if (httpContext.Items.TryGetValue("AgentProxyRedirectUrl", out var redirectUrlObj) &&
-                redirectUrlObj is string redirectUrl)
-            {
-                // Send redirect response instead of the proxied response
-                httpContext.Response.StatusCode = 302;
-                httpContext.Response.Headers.Location = redirectUrl;
-                transformContext.SuppressResponseBody = true;
-                return;
-            }
-
             var response = transformContext.ProxyResponse;
             if (response == null)
             {

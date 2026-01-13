@@ -143,6 +143,9 @@ app.MapHub<NotificationHub>("/hubs/notifications");
 // Map YARP reverse proxy for agent servers (only in container mode)
 if (isContainerMode)
 {
+    // Redirect middleware must run BEFORE YARP to avoid Content-Length mismatches
+    // when converting relative ?url= to absolute URL
+    app.UseMiddleware<AgentUrlRedirectMiddleware>();
     app.MapReverseProxy();
 }
 
