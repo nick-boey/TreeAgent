@@ -214,36 +214,97 @@ Homespun uses SignalR for real-time updates. Connect to `/hubs/agent` for:
 
 ## Deployment
 
-Homespun can be deployed to Ubuntu virtual machines or Docker containers. All deployment methods support secure access via Tailscale.
+Homespun can be deployed using Docker containers with optional Tailscale for secure remote access.
 
-For detailed deployment instructions, see the [Installation Guide](docs/installation.md).
+### Prerequisites
 
-### Quick start
+- Docker installed on your system
+- Docker Compose V2 (included with Docker Desktop, or install separately)
+- PowerShell 7.0+ (for Windows scripts only)
 
-**Docker (Windows):**
-```powershell
-docker build -t homespun:local .
-.\install\container\run.ps1
-```
+### Quick Start (Linux/VM)
 
-**Docker (Linux/macOS):**
 ```bash
+# Set your GitHub token
+export GITHUB_TOKEN="ghp_your_token_here"
+
 # Make scripts executable (first time only)
-chmod +x ./install/container/run.sh ./install/container/test.sh
+chmod +x ./scripts/run.sh ./scripts/test.sh
 
-# Build and run interactively (for testing)
-./install/container/test.sh
+# Run with pre-built image from GHCR (production mode with auto-updates)
+./scripts/run.sh
 
-# Or build manually and run with more options
+# Or build and run locally (development mode)
+./scripts/run.sh --local -it
+```
+
+### Quick Start (Windows)
+
+```powershell
+# Build the image first
 docker build -t homespun:local .
-./install/container/run.sh --local -it
+
+# Run interactively
+.\scripts\run.ps1
 ```
 
-**Ubuntu VM:**
+### Common Commands
+
 ```bash
-sudo ./install/vm/install.sh
-sudo ./install/vm/run.sh
+# View logs
+./scripts/run.sh --logs
+
+# Stop containers
+./scripts/run.sh --stop
+
+# Pull latest image and restart
+./scripts/run.sh --pull
+
+# Build and run for quick testing
+./scripts/test.sh
 ```
+
+### Tailscale Integration
+
+To access Homespun securely via Tailscale:
+
+```bash
+export GITHUB_TOKEN="ghp_..."
+./scripts/run.sh --tailscale-auth-key "tskey-auth-..." --tailscale-hostname "homespun-vm"
+```
+
+The application will be available at `http://homespun-vm.<your-tailnet>.ts.net:8080`.
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `GITHUB_TOKEN` | GitHub personal access token | (required for PR sync) |
+| `TAILSCALE_AUTH_KEY` | Tailscale auth key | (none) |
+| `TAILSCALE_HOSTNAME` | Tailscale hostname | `homespun` |
+| `HSP_GITHUB_TOKEN` | Alternative GitHub token (VM secrets) | (none) |
+| `HSP_TAILSCALE_AUTH` | Alternative Tailscale key (VM secrets) | (none) |
+
+### Pre-built Images
+
+Pre-built images are available from GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/nick-boey/homespun:latest
+```
+
+Available tags: `latest`, `x.y.z` (specific version), `x.y` (latest patch)
+
+### Watchtower Auto-updates
+
+When running in production mode (default), Watchtower monitors for new releases and automatically updates the container every 5 minutes.
+
+### Data Persistence
+
+Data is stored in `~/.homespun-container/data/` including:
+- JSON data file
+- Tailscale state (for consistent device identity)
+- Data protection keys
 
 ## Documentation
 

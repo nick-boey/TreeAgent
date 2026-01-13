@@ -7,6 +7,9 @@
 # dotenv files
 .env
 
+# Claude Code temp files
+tmpclaude-*
+
 # User-specific files
 *.rsuser
 *.suo

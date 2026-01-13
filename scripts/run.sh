@@ -35,7 +35,7 @@ set -e
 
 # Get script directory and repository root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Default values
 USE_LOCAL=false
@@ -85,8 +85,8 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-# Change to script directory for docker-compose
-cd "$SCRIPT_DIR"
+# Change to repository root for docker-compose
+cd "$REPO_ROOT"
 
 echo
 log_info "=== Homespun Docker Compose Runner ==="
@@ -163,8 +163,8 @@ if [ -z "$GITHUB_TOKEN" ]; then
 fi
 
 # Try reading from .env file
-if [ -z "$GITHUB_TOKEN" ] && [ -f "$SCRIPT_DIR/.env" ]; then
-    GITHUB_TOKEN=$(grep -E "^GITHUB_TOKEN=" "$SCRIPT_DIR/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+if [ -z "$GITHUB_TOKEN" ] && [ -f "$REPO_ROOT/.env" ]; then
+    GITHUB_TOKEN=$(grep -E "^GITHUB_TOKEN=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
 fi
 
 if [ -z "$GITHUB_TOKEN" ]; then

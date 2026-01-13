@@ -4,8 +4,8 @@
 # Pre-built images are pulled from GitHub Container Registry (GHCR).
 #
 # Usage:
-#   ./run.sh                    # Production mode with GHCR image + Watchtower
-#   ./run.sh --local            # Development mode with local image (no Watchtower)
+#   ./scripts/run.sh                    # Production mode with GHCR image + Watchtower
+#   ./scripts/run.sh --local            # Development mode with local image (no Watchtower)
 #
 # Environment variables (set in .env or export before running):
 #   GITHUB_TOKEN        - GitHub personal access token (required for PR sync)
@@ -29,8 +29,11 @@ services:
       - TS_HOSTNAME=${TAILSCALE_HOSTNAME:-homespun}
       - TS_STATE_DIR=/var/lib/tailscale
       - TS_USERSPACE=${TS_USERSPACE:-true}
+      # Serve config to proxy TCP port 8080 to Homespun
+      - TS_SERVE_CONFIG=/etc/tailscale/serve.json
     volumes:
       - ${DATA_DIR:-~/.homespun-container/data}/tailscale:/var/lib/tailscale
+      - ./tailscale-serve.json:/etc/tailscale/serve.json:ro
     cap_add:
       - net_admin
       - sys_module

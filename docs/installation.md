@@ -149,7 +149,7 @@ docker build -t homespun:local .
 Use the PowerShell script which automatically configures everything:
 
 ```powershell
-.\install\container\run.ps1
+.\scripts\run.ps1
 ```
 
 This script will:
@@ -291,7 +291,7 @@ volumes:
   homespun-data:
 ```
 
-See [install/container/README.md](../install/container/README.md#vm-deployment-with-automatic-updates) for detailed Watchtower configuration options.
+See the [main README](../README.md#deployment) for detailed Watchtower configuration options.
 
 ### Tailscale integration for containers
 

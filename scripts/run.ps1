@@ -84,7 +84,7 @@ $ErrorActionPreference = "Stop"
 
 # Get script directory and repository root
 $ScriptDir = $PSScriptRoot
-$RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
+$RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..")).Path
 
 # Constants
 $UserSecretsId = "2cfc6c57-72da-4b56-944b-08f2c1df76f6"
@@ -181,8 +181,8 @@ Write-Host ""
 Write-Host "=== Homespun Docker Compose Runner ===" -ForegroundColor Cyan
 Write-Host ""
 
-# Change to script directory for docker-compose
-Push-Location $ScriptDir
+# Change to repository root for docker-compose
+Push-Location $RepoRoot
 try {
     # Handle Stop action
     if ($Stop) {
