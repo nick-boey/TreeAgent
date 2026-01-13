@@ -1,0 +1,22 @@
+{
+  "TCP": {
+    "443": {
+      "HTTPS": true
+    },
+    "8080": {
+      "HTTPS": false
+    }
+  },
+  "Web": {
+    "homespun.tail1234f.ts.net:443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:8080"
+        }
+      }
+    }
+  },
+  "AllowFunnel": {
+    "homespun.tail1234f.ts.net:443": false
+  }
+}

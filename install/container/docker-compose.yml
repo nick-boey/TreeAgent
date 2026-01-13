@@ -9,29 +9,86 @@
 #
 # Environment variables (set in .env or export before running):
 #   GITHUB_TOKEN        - GitHub personal access token (required for PR sync)
-#   TAILSCALE_AUTH_KEY  - Tailscale auth key (optional, for remote access)
-#   TAILSCALE_HOSTNAME  - Tailscale hostname (default: homespun-vm)
+#   TAILSCALE_AUTH_KEY  - Tailscale auth key (optional, for remote access via tailnet)
+#   TAILSCALE_HOSTNAME  - Tailscale hostname (default: homespun)
 
 services:
+  # Tailscale sidecar container - provides tailnet access for Homespun
+  # When configured, Homespun and OpenCode servers are accessible via:
+  #   - http://<hostname>.<tailnet>.ts.net:8080 (Homespun web UI)
+  #   - http://<hostname>.<tailnet>.ts.net:4096-4105 (OpenCode servers)
+  # Note: Access via port 8080, not 80/443 (no HTTPS termination configured)
+  tailscale-homespun:
+    image: tailscale/tailscale:latest
+    container_name: tailscale-homespun
+    hostname: ${TAILSCALE_HOSTNAME:-homespun}
+    profiles:
+      - tailscale
+    environment:
+      - TS_AUTHKEY=${TAILSCALE_AUTH_KEY:-}
+      - TS_HOSTNAME=${TAILSCALE_HOSTNAME:-homespun}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=${TS_USERSPACE:-true}
+    volumes:
+      - ${DATA_DIR:-~/.homespun-container/data}/tailscale:/var/lib/tailscale
+    cap_add:
+      - net_admin
+      - sys_module
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "tailscale", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Homespun without Tailscale (direct port exposure)
   homespun:
     image: ${HOMESPUN_IMAGE:-ghcr.io/nick-boey/homespun:latest}
     container_name: homespun
-    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    # Note: We don't override user here - container runs as 'homespun' user from Dockerfile.
+    # This avoids UID mismatch issues with mounted volumes, especially on Windows.
+    profiles:
+      - standalone
     ports:
       - "8080:8080"
     volumes:
       - ${DATA_DIR:-~/.homespun-container/data}:/data
-      - ${DATA_DIR:-~/.homespun-container/data}:/home/containeruser
-      - ${SSH_DIR:-~/.ssh}:/home/containeruser/.ssh:ro
+      - ${SSH_DIR:-~/.ssh}:/home/homespun/.ssh:ro
     environment:
-      - HOME=/home/containeruser
+      - HOME=/home/homespun
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - ASPNETCORE_ENVIRONMENT=Production
-      - TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY:-}
-      - TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME:-homespun-vm}
       # Host data path for beads daemon path translation
       # The beads daemon runs on the host and sees the full host path,
       # while the container sees /data. This allows path translation.
+      - HSP_HOST_DATA_PATH=${DATA_DIR:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Homespun with Tailscale networking (uses sidecar's network stack)
+  homespun-tailscale:
+    image: ${HOMESPUN_IMAGE:-ghcr.io/nick-boey/homespun:latest}
+    container_name: homespun
+    # Note: We don't override user here - container runs as 'homespun' user from Dockerfile.
+    profiles:
+      - tailscale
+    depends_on:
+      tailscale-homespun:
+        condition: service_healthy
+    network_mode: service:tailscale-homespun
+    volumes:
+      - ${DATA_DIR:-~/.homespun-container/data}:/data
+      - ${SSH_DIR:-~/.ssh}:/home/homespun/.ssh:ro
+    environment:
+      - HOME=/home/homespun
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - ASPNETCORE_ENVIRONMENT=Production
       - HSP_HOST_DATA_PATH=${DATA_DIR:-}
     restart: unless-stopped
     healthcheck:

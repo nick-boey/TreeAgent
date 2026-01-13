@@ -38,14 +38,13 @@ RUN dotnet publish src/Homespun/Homespun.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Install dependencies: git, gh CLI, Node.js (for beads), iproute2, iptables (for networking)
+# Install dependencies: git, gh CLI, Node.js (for beads)
+# Note: Tailscale networking is handled by a sidecar container
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     ca-certificates \
     gnupg \
-    iproute2 \
-    iptables \
     && rm -rf /var/lib/apt/lists/*
 
 # Install GitHub CLI
@@ -64,15 +63,12 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
 # Install beads (bd) and OpenCode globally
 RUN npm install -g @beads/bd opencode-ai@latest
 
-# Install Tailscale
-RUN curl -fsSL https://tailscale.com/install.sh | sh
-
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash homespun
 
-# Create data directory and tailscale state directories
-RUN mkdir -p /data /var/run/tailscale /var/cache/tailscale /var/lib/tailscale \
-    && chown -R homespun:homespun /data /var/run/tailscale /var/cache/tailscale /var/lib/tailscale
+# Create data directory
+RUN mkdir -p /data \
+    && chown -R homespun:homespun /data
 
 # Copy published application
 COPY --from=build /app/publish .
