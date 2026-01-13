@@ -197,6 +197,12 @@ export async function initializeGraph(containerId, graphData, dotNetRef) {
         const GitgraphJS = await ensureGitgraphLoaded();
         const themeColors = getThemeColors();
 
+        // Build branch color lookup from data (needed for template render functions)
+        const branchColors = {};
+        for (const branchData of graphData.branches) {
+            branchColors[branchData.name] = branchData.color;
+        }
+
         // Create custom template - settings match tested values
         const template = GitgraphJS.templateExtend(GitgraphJS.TemplateName.Metro, {
             colors: [themeColors.main, themeColors.branch1, themeColors.branch2, themeColors.branch3, themeColors.branch4],
@@ -205,7 +211,55 @@ export async function initializeGraph(containerId, graphData, dotNetRef) {
                 spacing: 15,
                 label: {
                     display: true,
-                    font: '12px sans-serif'
+                    font: '12px sans-serif',
+                    borderRadius: 4,
+                    strokeColor: themeColors.main,
+                    bgColor: 'transparent',
+                    // Custom render function for outline-only labels
+                    render: (branchName) => {
+                        const g = document.createElementNS(SVG_NAMESPACE, 'g');
+
+                        // Create text first to measure it
+                        const text = document.createElementNS(SVG_NAMESPACE, 'text');
+                        text.textContent = branchName;
+                        text.setAttribute('font-size', '12');
+                        text.setAttribute('font-family', 'sans-serif');
+                        text.setAttribute('dominant-baseline', 'middle');
+                        text.setAttribute('text-anchor', 'start');
+
+                        // Get color from branch lookup or use default
+                        const color = branchColors[branchName] || themeColors.main;
+                        text.setAttribute('fill', color);
+
+                        // Position text with padding
+                        const paddingX = 6;
+                        const paddingY = 4;
+                        text.setAttribute('x', paddingX.toString());
+                        text.setAttribute('y', '10');
+
+                        g.appendChild(text);
+
+                        // Measure text (approximate)
+                        const textWidth = branchName.length * 7;
+                        const textHeight = 14;
+
+                        // Create outline rectangle
+                        const rect = document.createElementNS(SVG_NAMESPACE, 'rect');
+                        rect.setAttribute('x', '0');
+                        rect.setAttribute('y', '0');
+                        rect.setAttribute('width', (textWidth + paddingX * 2).toString());
+                        rect.setAttribute('height', (textHeight + paddingY * 2).toString());
+                        rect.setAttribute('rx', '4');
+                        rect.setAttribute('ry', '4');
+                        rect.setAttribute('fill', 'transparent');
+                        rect.setAttribute('stroke', color);
+                        rect.setAttribute('stroke-width', '1');
+
+                        // Insert rect before text so text appears on top
+                        g.insertBefore(rect, text);
+
+                        return g;
+                    }
                 }
             },
             commit: {
@@ -234,12 +288,6 @@ export async function initializeGraph(containerId, graphData, dotNetRef) {
         // Create main branch first
         const mainBranch = gitgraph.branch(graphData.mainBranchName);
         branches.set(graphData.mainBranchName, mainBranch);
-
-        // Build branch color lookup from data
-        const branchColors = {};
-        for (const branchData of graphData.branches) {
-            branchColors[branchData.name] = branchData.color;
-        }
 
         // Get text color for messages
         const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#000';

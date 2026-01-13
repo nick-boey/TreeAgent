@@ -65,6 +65,16 @@
     .gitgraph-container text {
         fill: var(--text-primary);
     }
+
+    /* Branch label styles - outline only, no background */
+    .gitgraph-container .branch-label rect {
+        fill: transparent !important;
+        stroke-width: 1px;
+    }
+
+    .gitgraph-container .branch-label text {
+        fill: inherit;
+    }
 </style>
 
 @code {
