@@ -26,11 +26,29 @@ public class OpenCodeServer
     /// <summary>
     /// Gets the full web view URL including encoded path and session.
     /// Uses ExternalBaseUrl if set, otherwise BaseUrl.
+    /// In container mode (when ExternalBaseUrl is a relative path), appends ?url= parameter
+    /// so OpenCode uses the correct API base URL.
     /// Returns null if no active session.
     /// </summary>
-    public string? WebViewUrl => ActiveSessionId != null
-        ? $"{ExternalBaseUrl ?? BaseUrl}/{Base64UrlEncode(WorktreePath)}/session/{ActiveSessionId}"
-        : null;
+    public string? WebViewUrl
+    {
+        get
+        {
+            if (ActiveSessionId == null) return null;
+
+            var baseUrl = ExternalBaseUrl ?? BaseUrl;
+            var url = $"{baseUrl}/{Base64UrlEncode(WorktreePath)}/session/{ActiveSessionId}";
+
+            // In container mode, ExternalBaseUrl is a relative path like "/agent/4096"
+            // Append ?url= parameter so OpenCode uses the correct API base URL
+            if (ExternalBaseUrl?.StartsWith("/") == true)
+            {
+                url += $"?url={ExternalBaseUrl}";
+            }
+
+            return url;
+        }
+    }
 
     /// <summary>
     /// Encodes a string as URL-safe Base64 (matching OpenCode's encoding).
