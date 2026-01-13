@@ -10,24 +10,15 @@ namespace Homespun.Features.Beads.Services;
 /// Service for interacting with the beads CLI (bd).
 /// Executes bd commands and parses their JSON output.
 /// </summary>
-public class BeadsService : IBeadsService
+public class BeadsService(ICommandRunner commandRunner, ILogger<BeadsService> logger) : IBeadsService
 {
-    private readonly ICommandRunner _commandRunner;
-    private readonly ILogger<BeadsService> _logger;
-    
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) }
     };
-    
-    public BeadsService(ICommandRunner commandRunner, ILogger<BeadsService> logger)
-    {
-        _commandRunner = commandRunner;
-        _logger = logger;
-    }
-    
+
     #region Issue CRUD
     
     public async Task<BeadsIssue?> GetIssueAsync(string workingDirectory, string issueId)
@@ -36,7 +27,7 @@ public class BeadsService : IBeadsService
         
         if (!result.Success)
         {
-            _logger.LogWarning("Failed to get issue {IssueId}: {Error}", issueId, result.Error);
+            logger.LogWarning("Failed to get issue {IssueId}: {Error}", issueId, result.Error);
             return null;
         }
         
@@ -48,7 +39,7 @@ public class BeadsService : IBeadsService
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "Failed to parse issue JSON for {IssueId}", issueId);
+            logger.LogError(ex, "Failed to parse issue JSON for {IssueId}", issueId);
             return null;
         }
     }
@@ -60,7 +51,7 @@ public class BeadsService : IBeadsService
         
         if (!result.Success)
         {
-            _logger.LogWarning("Failed to list issues: {Error}", result.Error);
+            logger.LogWarning("Failed to list issues: {Error}", result.Error);
             return [];
         }
         
@@ -70,7 +61,7 @@ public class BeadsService : IBeadsService
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "Failed to parse issues list JSON");
+            logger.LogError(ex, "Failed to parse issues list JSON");
             return [];
         }
     }
@@ -81,7 +72,7 @@ public class BeadsService : IBeadsService
         
         if (!result.Success)
         {
-            _logger.LogWarning("Failed to get ready issues: {Error}", result.Error);
+            logger.LogWarning("Failed to get ready issues: {Error}", result.Error);
             return [];
         }
         
@@ -91,7 +82,7 @@ public class BeadsService : IBeadsService
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "Failed to parse ready issues JSON");
+            logger.LogError(ex, "Failed to parse ready issues JSON");
             return [];
         }
     }
@@ -103,7 +94,7 @@ public class BeadsService : IBeadsService
         
         if (!result.Success)
         {
-            _logger.LogError("Failed to create issue: {Error}", result.Error);
+            logger.LogError("Failed to create issue: {Error}", result.Error);
             throw new InvalidOperationException($"Failed to create beads issue: {result.Error}");
         }
         
@@ -118,7 +109,7 @@ public class BeadsService : IBeadsService
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "Failed to parse created issue JSON");
+            logger.LogError(ex, "Failed to parse created issue JSON");
             throw new InvalidOperationException($"Failed to parse created issue: {ex.Message}", ex);
         }
     }
@@ -135,7 +126,7 @@ public class BeadsService : IBeadsService
             
             if (!result.Success)
             {
-                _logger.LogWarning("Failed to update issue {IssueId}: {Error}", issueId, result.Error);
+                logger.LogWarning("Failed to update issue {IssueId}: {Error}", issueId, result.Error);
                 success = false;
             }
         }
@@ -179,7 +170,7 @@ public class BeadsService : IBeadsService
         
         if (!result.Success)
         {
-            _logger.LogWarning("Failed to close issue {IssueId}: {Error}", issueId, result.Error);
+            logger.LogWarning("Failed to close issue {IssueId}: {Error}", issueId, result.Error);
         }
         
         return result.Success;
@@ -195,7 +186,7 @@ public class BeadsService : IBeadsService
         
         if (!result.Success)
         {
-            _logger.LogWarning("Failed to reopen issue {IssueId}: {Error}", issueId, result.Error);
+            logger.LogWarning("Failed to reopen issue {IssueId}: {Error}", issueId, result.Error);
         }
         
         return result.Success;
@@ -211,7 +202,7 @@ public class BeadsService : IBeadsService
         
         if (!result.Success)
         {
-            _logger.LogWarning("Failed to add dependency {ChildId} -> {ParentId}: {Error}", 
+            logger.LogWarning("Failed to add dependency {ChildId} -> {ParentId}: {Error}", 
                 childId, parentId, result.Error);
         }
         
@@ -224,13 +215,13 @@ public class BeadsService : IBeadsService
         
         if (!result.Success)
         {
-            _logger.LogWarning("Failed to get dependency tree for {IssueId}: {Error}", issueId, result.Error);
+            logger.LogWarning("Failed to get dependency tree for {IssueId}: {Error}", issueId, result.Error);
             return [];
         }
         
         // Note: bd dep tree doesn't have --json output, so we'd need to parse text
         // For now, return empty and implement parsing later if needed
-        _logger.LogDebug("Dependency tree parsing not yet implemented");
+        logger.LogDebug("Dependency tree parsing not yet implemented");
         return [];
     }
     
@@ -244,7 +235,7 @@ public class BeadsService : IBeadsService
         
         if (!result.Success)
         {
-            _logger.LogWarning("Failed to add label {Label} to {IssueId}: {Error}", 
+            logger.LogWarning("Failed to add label {Label} to {IssueId}: {Error}", 
                 label, issueId, result.Error);
         }
         
@@ -257,7 +248,7 @@ public class BeadsService : IBeadsService
         
         if (!result.Success)
         {
-            _logger.LogWarning("Failed to remove label {Label} from {IssueId}: {Error}", 
+            logger.LogWarning("Failed to remove label {Label} from {IssueId}: {Error}", 
                 label, issueId, result.Error);
         }
         
@@ -274,7 +265,7 @@ public class BeadsService : IBeadsService
         
         if (!result.Success)
         {
-            _logger.LogWarning("Failed to sync beads: {Error}", result.Error);
+            logger.LogWarning("Failed to sync beads: {Error}", result.Error);
         }
     }
     
@@ -284,7 +275,7 @@ public class BeadsService : IBeadsService
         
         if (!result.Success)
         {
-            _logger.LogWarning("Failed to get beads info: {Error}", result.Error);
+            logger.LogWarning("Failed to get beads info: {Error}", result.Error);
             return new BeadsInfo();
         }
         
@@ -294,7 +285,7 @@ public class BeadsService : IBeadsService
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "Failed to parse beads info JSON");
+            logger.LogError(ex, "Failed to parse beads info JSON");
             return new BeadsInfo();
         }
     }
@@ -318,7 +309,7 @@ public class BeadsService : IBeadsService
     
     private async Task<CommandResult> RunBdCommandAsync(string workingDirectory, string arguments)
     {
-        return await _commandRunner.RunAsync("bd", arguments, workingDirectory);
+        return await commandRunner.RunAsync("bd", arguments, workingDirectory);
     }
     
     private static string BuildListArguments(BeadsListOptions? options)

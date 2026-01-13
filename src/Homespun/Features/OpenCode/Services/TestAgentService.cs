@@ -22,6 +22,9 @@ public class TestAgentService(
     private const string TestBranchName = "hsp/test";
     private const string TestFileName = "test.txt";
     private const string TestEntityPrefix = "test-agent-";
+
+    // Use GLM-4.7 for test agents as it's free and doesn't require an API key
+    private const string TestAgentModel = "opencode/glm-4.7-free";
     
     private readonly ConcurrentDictionary<string, TestAgentStatus> _activeTestAgents = new();
 
@@ -78,8 +81,8 @@ public class TestAgentService(
                 logger.LogInformation("Deleted existing {TestFile}", testFilePath);
             }
             
-            // 5. Generate opencode.json config
-            var config = configGenerator.CreateDefaultConfig(project.DefaultModel);
+            // 5. Generate opencode.json config with GLM-4.7 (free, no API key required)
+            var config = configGenerator.CreateDefaultConfig(TestAgentModel);
             await configGenerator.GenerateConfigAsync(worktreePath, config, ct);
             
             // 6. Start OpenCode server

@@ -4,7 +4,7 @@ set -e
 # Start Tailscale if configured
 if [ ! -z "$TAILSCALE_AUTH_KEY" ]; then
     echo "Starting Tailscale..."
-    
+
     # Use persistent storage for Tailscale state
     # This ensures the device ID remains consistent across container restarts
     TS_STATE_DIR="/data/tailscale"
@@ -35,7 +35,7 @@ if [ ! -z "$TAILSCALE_AUTH_KEY" ]; then
     # Authenticate
     # Use provided hostname or default
     TS_HOSTNAME=${TAILSCALE_HOSTNAME:-homespun-prod}
-    
+
     echo "Authenticating with Tailscale as $TS_HOSTNAME..."
     tailscale --socket=/tmp/tailscale/tailscaled.sock up \
         --authkey="${TAILSCALE_AUTH_KEY}" \
@@ -47,7 +47,7 @@ if [ ! -z "$TAILSCALE_AUTH_KEY" ]; then
     # This enables access via http://hostname on the tailnet
     echo "Configuring Tailscale Serve..."
     tailscale --socket=/tmp/tailscale/tailscaled.sock serve --bg --http=80 http://localhost:8080
-        
+
     echo "Tailscale started."
 fi
 

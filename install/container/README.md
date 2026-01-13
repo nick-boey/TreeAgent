@@ -92,6 +92,9 @@ docker build -t homespun:local .
 For local development without Watchtower, use the `--local` flag:
 
 ```bash
+# Make scripts executable (first time only)
+chmod +x ./install/container/run.sh ./install/container/test.sh
+
 # Build the local image first
 docker build -t homespun:local .
 
@@ -101,6 +104,24 @@ docker build -t homespun:local .
 # Run interactively for debugging
 ./install/container/run.sh --local -it
 ```
+
+### Quick Test Script
+
+For quick build-and-run testing, use the test script which combines both steps:
+
+```bash
+# Build and run interactively in one command
+./install/container/test.sh
+
+# Run without rebuilding (if image already built)
+./install/container/test.sh --no-build
+```
+
+The test script:
+- Builds the container as `homespun:local`
+- Runs in interactive mode (foreground)
+- Disables Watchtower (local development mode)
+- Uses `HSP_GITHUB_TOKEN` and `HSP_TAILSCALE_AUTH` environment variables
 
 ## Pre-built Container Images
 

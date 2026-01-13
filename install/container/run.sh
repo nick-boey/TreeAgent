@@ -214,6 +214,16 @@ export GITHUB_TOKEN="$GITHUB_TOKEN"
 export TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY"
 export TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME"
 
+# Check if Tailscale is available on the host and get the IP
+TAILSCALE_IP=""
+TAILSCALE_URL=""
+if command -v tailscale &>/dev/null; then
+    TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || true)
+    if [ -n "$TAILSCALE_IP" ]; then
+        TAILSCALE_URL="http://${TAILSCALE_IP}:8080"
+    fi
+fi
+
 # Determine compose profiles
 COMPOSE_PROFILES=""
 if [ "$USE_LOCAL" = false ]; then
@@ -227,6 +237,9 @@ echo "  Image:       $IMAGE_NAME"
 echo "  User:        $(id -u):$(id -g)"
 echo "  Port:        8080"
 echo "  URL:         http://localhost:8080"
+if [ -n "$TAILSCALE_URL" ]; then
+    echo "  Tailnet URL: $TAILSCALE_URL"
+fi
 echo "  Data mount:  $DATA_DIR"
 if [ -n "$SSH_DIR" ] && [ "$SSH_DIR" != "/dev/null" ]; then
     echo "  SSH mount:   $SSH_DIR (read-only)"
@@ -247,6 +260,12 @@ if [ "$DETACHED" = true ]; then
     docker compose $COMPOSE_PROFILES up -d
     echo
     log_success "Containers started successfully!"
+    echo
+    echo "Access URLs:"
+    echo "  Local:       http://localhost:8080"
+    if [ -n "$TAILSCALE_URL" ]; then
+        echo "  Tailnet:     $TAILSCALE_URL"
+    fi
     echo
     echo "Useful commands:"
     echo "  View logs:     $0 --logs"

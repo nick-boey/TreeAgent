@@ -6,18 +6,12 @@ namespace Homespun.Features.Notifications;
 /// Thread-safe service for managing application notifications.
 /// Registered as a singleton to persist notifications across requests.
 /// </summary>
-public class NotificationService : INotificationService
+public class NotificationService(ILogger<NotificationService> logger) : INotificationService
 {
     private readonly ConcurrentDictionary<string, Notification> _notifications = new();
-    private readonly ILogger<NotificationService> _logger;
 
     public event Action<Notification>? OnNotificationAdded;
     public event Action<string>? OnNotificationDismissed;
-
-    public NotificationService(ILogger<NotificationService> logger)
-    {
-        _logger = logger;
-    }
 
     public void AddNotification(Notification notification)
     {
@@ -31,7 +25,7 @@ public class NotificationService : INotificationService
             if (existingNotification != null)
             {
                 _notifications.TryRemove(existingNotification.Id, out _);
-                _logger.LogDebug(
+                logger.LogDebug(
                     "Replaced existing notification with deduplication key {Key}",
                     notification.DeduplicationKey);
             }
@@ -39,7 +33,7 @@ public class NotificationService : INotificationService
 
         if (_notifications.TryAdd(notification.Id, notification))
         {
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Added notification {NotificationId}: {Title}",
                 notification.Id, notification.Title);
             
@@ -51,7 +45,7 @@ public class NotificationService : INotificationService
     {
         if (_notifications.TryRemove(notificationId, out var notification))
         {
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Dismissed notification {NotificationId}: {Title}",
                 notificationId, notification.Title);
             

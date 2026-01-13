@@ -14,28 +14,18 @@ namespace Homespun.Features.GitHub;
 /// 2. Polls for review status updates
 /// 3. Closes linked issues when PRs are merged/closed
 /// </summary>
-public class GitHubSyncPollingService : BackgroundService
+public class GitHubSyncPollingService(
+    IServiceScopeFactory scopeFactory,
+    IHubContext<AgentHub> hubContext,
+    IOptions<GitHubSyncPollingOptions> options,
+    ILogger<GitHubSyncPollingService> logger)
+    : BackgroundService
 {
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IHubContext<AgentHub> _hubContext;
-    private readonly GitHubSyncPollingOptions _options;
-    private readonly ILogger<GitHubSyncPollingService> _logger;
-
-    public GitHubSyncPollingService(
-        IServiceScopeFactory scopeFactory,
-        IHubContext<AgentHub> hubContext,
-        IOptions<GitHubSyncPollingOptions> options,
-        ILogger<GitHubSyncPollingService> logger)
-    {
-        _scopeFactory = scopeFactory;
-        _hubContext = hubContext;
-        _options = options.Value;
-        _logger = logger;
-    }
+    private readonly GitHubSyncPollingOptions _options = options.Value;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("GitHub sync polling service started with {IntervalSeconds}s interval", _options.PollingIntervalSeconds);
+        logger.LogInformation("GitHub sync polling service started with {IntervalSeconds}s interval", _options.PollingIntervalSeconds);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -45,18 +35,18 @@ public class GitHubSyncPollingService : BackgroundService
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                _logger.LogError(ex, "Error during GitHub sync polling");
+                logger.LogError(ex, "Error during GitHub sync polling");
             }
 
             await Task.Delay(TimeSpan.FromSeconds(_options.PollingIntervalSeconds), stoppingToken);
         }
 
-        _logger.LogInformation("GitHub sync polling service stopped");
+        logger.LogInformation("GitHub sync polling service stopped");
     }
 
     private async Task PollAllAsync(CancellationToken ct)
     {
-        using var scope = _scopeFactory.CreateScope();
+        using var scope = scopeFactory.CreateScope();
         var dataStore = scope.ServiceProvider.GetRequiredService<IDataStore>();
         var gitHubService = scope.ServiceProvider.GetRequiredService<IGitHubService>();
         var linkingService = scope.ServiceProvider.GetRequiredService<IIssuePrLinkingService>();
@@ -77,7 +67,7 @@ public class GitHubSyncPollingService : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during GitHub sync for project {ProjectId}", project.Id);
+                logger.LogError(ex, "Error during GitHub sync for project {ProjectId}", project.Id);
             }
         }
     }
@@ -102,20 +92,20 @@ public class GitHubSyncPollingService : BackgroundService
             return;
         }
 
-        _logger.LogDebug("Syncing PRs for project {ProjectId} ({Owner}/{Repo})", project.Id, project.GitHubOwner, project.GitHubRepo);
+        logger.LogDebug("Syncing PRs for project {ProjectId} ({Owner}/{Repo})", project.Id, project.GitHubOwner, project.GitHubRepo);
 
         // SyncPullRequestsAsync now includes issue linking logic and returns info about closed PRs
         var syncResult = await gitHubService.SyncPullRequestsAsync(project.Id);
 
         if (syncResult.Imported > 0 || syncResult.Updated > 0 || syncResult.Removed > 0)
         {
-            _logger.LogInformation(
+            logger.LogInformation(
                 "PR sync for {Owner}/{Repo}: {Imported} imported, {Updated} updated, {Removed} removed",
                 project.GitHubOwner, project.GitHubRepo, syncResult.Imported, syncResult.Updated, syncResult.Removed);
 
             // Close linked beads issues for removed (merged/closed) PRs
             // We use BeadsService directly since the PR has already been removed from the data store
-            using var closeScope = _scopeFactory.CreateScope();
+            using var closeScope = scopeFactory.CreateScope();
             var beadsService = closeScope.ServiceProvider.GetRequiredService<IBeadsService>();
             
             foreach (var removedPr in syncResult.RemovedPrs)
@@ -132,20 +122,20 @@ public class GitHubSyncPollingService : BackgroundService
                         
                         if (closed)
                         {
-                            _logger.LogInformation(
+                            logger.LogInformation(
                                 "Closed beads issue {IssueId} linked to merged/closed PR #{PrNumber}",
                                 removedPr.BeadsIssueId, removedPr.GitHubPrNumber);
                         }
                         else
                         {
-                            _logger.LogWarning(
+                            logger.LogWarning(
                                 "Failed to close beads issue {IssueId} linked to merged/closed PR #{PrNumber}",
                                 removedPr.BeadsIssueId, removedPr.GitHubPrNumber);
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex,
+                        logger.LogError(ex,
                             "Error closing beads issue {IssueId} linked to merged/closed PR #{PrNumber}",
                             removedPr.BeadsIssueId, removedPr.GitHubPrNumber);
                     }
@@ -153,7 +143,7 @@ public class GitHubSyncPollingService : BackgroundService
             }
 
             // Broadcast sync completed event
-            await _hubContext.Clients.All.SendAsync("PullRequestsSynced", project.Id, syncResult, ct);
+            await hubContext.Clients.All.SendAsync("PullRequestsSynced", project.Id, syncResult, ct);
         }
     }
 
@@ -191,7 +181,7 @@ public class GitHubSyncPollingService : BackgroundService
                 else if (reviews.IsApproved && pr.Status == OpenPullRequestStatus.ReadyForReview)
                 {
                     // PR is approved - could auto-merge or notify
-                    _logger.LogInformation("PR #{PrNumber} is approved", pr.GitHubPRNumber);
+                    logger.LogInformation("PR #{PrNumber} is approved", pr.GitHubPRNumber);
                 }
 
                 if (needsUpdate)
@@ -200,7 +190,7 @@ public class GitHubSyncPollingService : BackgroundService
                     await dataStore.UpdatePullRequestAsync(pr);
 
                     // Broadcast status change
-                    await _hubContext.Clients.All.SendAsync(
+                    await hubContext.Clients.All.SendAsync(
                         "PullRequestReviewsUpdated",
                         project.Id,
                         pr.Id,
@@ -208,14 +198,14 @@ public class GitHubSyncPollingService : BackgroundService
                         reviews,
                         ct);
 
-                    _logger.LogInformation(
+                    logger.LogInformation(
                         "PR #{PrNumber} status changed from {PreviousStatus} to {NewStatus} due to reviews",
                         pr.GitHubPRNumber, previousStatus, pr.Status);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error polling reviews for PR #{PrNumber}", pr.GitHubPRNumber);
+                logger.LogError(ex, "Error polling reviews for PR #{PrNumber}", pr.GitHubPRNumber);
             }
         }
     }

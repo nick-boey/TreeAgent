@@ -6,20 +6,28 @@
 .DESCRIPTION
     This script:
     - Validates Docker is running and the homespun:local image exists
-    - Reads GitHub token from .NET user secrets
+    - Reads GitHub token from environment variables or .NET user secrets
     - Creates the ~/.homespun-container/data directory
     - Mounts SSH keys for git operations
     - Runs the container in interactive mode on port 8080
 
 .EXAMPLE
-    .\run-homespun-container.ps1
+    .\run.ps1
     Runs the Homespun container with default settings.
+
+.EXAMPLE
+    .\run.ps1 -TailscaleAuthKey "tskey-auth-..."
+    Runs with Tailscale enabled.
 
 .NOTES
     Container name: homespun-local
     Port: 8080
     Data directory: ~/.homespun-container/data
-    Environment: Development
+    Environment: Production
+
+    Environment Variables (checked in order):
+    - HSP_GITHUB_TOKEN / GITHUB_TOKEN - GitHub personal access token
+    - HSP_TAILSCALE_AUTH / TAILSCALE_AUTH_KEY - Tailscale auth key
 #>
 
 #Requires -Version 7.0
@@ -60,44 +68,85 @@ function Test-DockerImageExists {
         [Parameter(Mandatory)]
         [string]$ImageName
     )
-    
+
     $images = docker images --format "{{.Repository}}:{{.Tag}}" 2>$null
     return $images -contains $ImageName
 }
 
-function Get-GitHubTokenFromSecrets {
+function Get-GitHubToken {
     <#
     .SYNOPSIS
-        Reads the GitHub token from .NET user secrets.
+        Gets the GitHub token from environment variables or .NET user secrets.
     #>
     param(
         [Parameter(Mandatory)]
         [string]$UserSecretsId
     )
-    
+
+    # Check environment variables first (HSP_GITHUB_TOKEN takes precedence)
+    $token = $env:HSP_GITHUB_TOKEN
+    if (-not [string]::IsNullOrWhiteSpace($token)) {
+        return $token
+    }
+
+    $token = $env:GITHUB_TOKEN
+    if (-not [string]::IsNullOrWhiteSpace($token)) {
+        return $token
+    }
+
+    # Fall back to .NET user secrets
     $secretsPath = Join-Path $env:APPDATA "Microsoft\UserSecrets\$UserSecretsId\secrets.json"
-    
+
     if (-not (Test-Path $secretsPath)) {
-        Write-Warning "User secrets file not found at: $secretsPath"
-        Write-Warning "Please configure GitHub token with: dotnet user-secrets set 'GitHub:Token' 'your_token_here' --project src/Homespun"
+        Write-Warning "GitHub token not found in environment or user secrets."
+        Write-Warning "Set HSP_GITHUB_TOKEN or GITHUB_TOKEN environment variable,"
+        Write-Warning "or configure with: dotnet user-secrets set 'GitHub:Token' 'your_token_here' --project src/Homespun"
         return $null
     }
-    
+
     try {
         $secrets = Get-Content $secretsPath -Raw | ConvertFrom-Json
         $token = $secrets.'GitHub:Token'
-        
+
         if ([string]::IsNullOrWhiteSpace($token)) {
             Write-Warning "GitHub:Token not found in user secrets"
             return $null
         }
-        
+
         return $token
     }
     catch {
         Write-Warning "Failed to read user secrets: $_"
         return $null
     }
+}
+
+function Get-TailscaleAuthKey {
+    <#
+    .SYNOPSIS
+        Gets the Tailscale auth key from parameter or environment variables.
+    #>
+    param(
+        [string]$ParamValue
+    )
+
+    # Parameter takes precedence
+    if (-not [string]::IsNullOrWhiteSpace($ParamValue)) {
+        return $ParamValue
+    }
+
+    # Check environment variables (HSP_TAILSCALE_AUTH takes precedence)
+    $key = $env:HSP_TAILSCALE_AUTH
+    if (-not [string]::IsNullOrWhiteSpace($key)) {
+        return $key
+    }
+
+    $key = $env:TAILSCALE_AUTH_KEY
+    if (-not [string]::IsNullOrWhiteSpace($key)) {
+        return $key
+    }
+
+    return $null
 }
 
 function Stop-ExistingContainer {
@@ -109,9 +158,9 @@ function Stop-ExistingContainer {
         [Parameter(Mandatory)]
         [string]$ContainerName
     )
-    
+
     $existing = docker ps -a --filter "name=$ContainerName" --format "{{.Names}}" 2>$null
-    
+
     if ($existing -eq $ContainerName) {
         Write-Host "Stopping existing container '$ContainerName'..." -ForegroundColor Yellow
         docker stop $ContainerName 2>&1 | Out-Null
@@ -150,10 +199,10 @@ Then run this script again.
 }
 Write-Host "      Image found." -ForegroundColor Green
 
-# Step 3: Read GitHub token from user secrets
-Write-Host "[3/6] Reading GitHub token from user secrets..." -ForegroundColor Cyan
+# Step 3: Read GitHub token
+Write-Host "[3/6] Reading GitHub token..." -ForegroundColor Cyan
 $userSecretsId = "2cfc6c57-72da-4b56-944b-08f2c1df76f6"
-$githubToken = Get-GitHubTokenFromSecrets -UserSecretsId $userSecretsId
+$githubToken = Get-GitHubToken -UserSecretsId $userSecretsId
 
 if ([string]::IsNullOrWhiteSpace($githubToken)) {
     Write-Warning "      GitHub token not found. Container will run without GitHub integration."
@@ -164,15 +213,21 @@ else {
     Write-Host "      GitHub token found: $maskedToken" -ForegroundColor Green
 }
 
+# Read Tailscale auth key
+$tailscaleKey = Get-TailscaleAuthKey -ParamValue $TailscaleAuthKey
+if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
+    $maskedTsKey = $tailscaleKey.Substring(0, [Math]::Min(15, $tailscaleKey.Length)) + "..."
+    Write-Host "      Tailscale auth key found: $maskedTsKey" -ForegroundColor Green
+}
+
 # Step 4: Set up paths
 Write-Host "[4/6] Setting up directories..." -ForegroundColor Cyan
 
 # Expand ~ to full path
 $homeDir = [Environment]::GetFolderPath('UserProfile')
 
-# Construct paths in a cross-platform way
-$dataDir = Join-Path $homeDir ".homespun-container"
-$dataDir = Join-Path $dataDir "data"
+# Construct paths
+$dataDir = Join-Path $homeDir ".homespun-container" "data"
 $sshDir = Join-Path $homeDir ".ssh"
 
 # Create data directory if it doesn't exist
@@ -205,16 +260,16 @@ Write-Host ""
 Write-Host "======================================" -ForegroundColor Cyan
 Write-Host "  Container Configuration" -ForegroundColor Cyan
 Write-Host "======================================" -ForegroundColor Cyan
-Write-Host "  Name:        homespun-local" -ForegroundColor White
-Write-Host "  Port:        8080" -ForegroundColor White
-Write-Host "  URL:         http://localhost:8080" -ForegroundColor White
-Write-Host "  Environment: Production" -ForegroundColor White
-Write-Host "  Data mount:  $dataDir" -ForegroundColor White
+Write-Host "  Name:        homespun-local"
+Write-Host "  Port:        8080"
+Write-Host "  URL:         http://localhost:8080"
+Write-Host "  Environment: Production"
+Write-Host "  Data mount:  $dataDir"
 if ($mountSsh) {
-    Write-Host "  SSH mount:   $sshDir (read-only)" -ForegroundColor White
+    Write-Host "  SSH mount:   $sshDir (read-only)"
 }
-if (-not [string]::IsNullOrWhiteSpace($TailscaleAuthKey)) {
-    Write-Host "  Tailscale:   Enabled ($TailscaleHostname)" -ForegroundColor White
+if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
+    Write-Host "  Tailscale:   Enabled ($TailscaleHostname)"
 }
 Write-Host "======================================" -ForegroundColor Cyan
 Write-Host ""
@@ -223,7 +278,6 @@ Write-Host "Press Ctrl+C to stop the container." -ForegroundColor Yellow
 Write-Host ""
 
 # Convert Windows paths to Unix-style for Docker (use forward slashes)
-# On Linux, path separators are already forward slashes, but this replace is safe
 $dataDirUnix = $dataDir -replace '\\', '/'
 $sshDirUnix = $sshDir -replace '\\', '/'
 
@@ -235,12 +289,15 @@ $dockerArgs = @(
     "--name", "homespun-local"
     "-p", "8080:8080"
     "-v", "${dataDirUnix}:/data"
+    "-v", "${dataDirUnix}:/home/containeruser"
+    "-e", "HOME=/home/containeruser"
+    "-e", "ASPNETCORE_ENVIRONMENT=Production"
 )
 
 # Add SSH mount if directory exists
 if ($mountSsh) {
     $dockerArgs += "-v"
-    $dockerArgs += "${sshDirUnix}:/home/homespun/.ssh:ro"
+    $dockerArgs += "${sshDirUnix}:/home/containeruser/.ssh:ro"
 }
 
 # Add GitHub token if available
@@ -250,12 +307,17 @@ if (-not [string]::IsNullOrWhiteSpace($githubToken)) {
 }
 
 # Add Tailscale config if available
-if (-not [string]::IsNullOrWhiteSpace($TailscaleAuthKey)) {
+if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
     $dockerArgs += "-e"
-    $dockerArgs += "TAILSCALE_AUTH_KEY=$TailscaleAuthKey"
+    $dockerArgs += "TAILSCALE_AUTH_KEY=$tailscaleKey"
     $dockerArgs += "-e"
     $dockerArgs += "TAILSCALE_HOSTNAME=$TailscaleHostname"
 }
+
+# Add HSP_HOST_DATA_PATH for beads daemon path translation
+# (May not be needed on Windows if beads daemon isn't running on host)
+$dockerArgs += "-e"
+$dockerArgs += "HSP_HOST_DATA_PATH=$dataDirUnix"
 
 # Add image name
 $dockerArgs += "homespun:local"

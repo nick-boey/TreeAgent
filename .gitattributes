@@ -1,3 +1,5 @@
-
 # Use bd merge for beads JSONL files
 .beads/issues.jsonl merge=beads
+
+# Ensure shell scripts always have LF line endings
+*.sh text eol=lf

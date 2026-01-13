@@ -1,29 +1,25 @@
 using System.Diagnostics;
-using Microsoft.Extensions.Logging;
 
 namespace Homespun.Features.Commands;
 
-public class CommandRunner : ICommandRunner
+public class CommandRunner(ILogger<CommandRunner> logger) : ICommandRunner
 {
-    private readonly ILogger<CommandRunner> _logger;
-
-    public CommandRunner(ILogger<CommandRunner> logger)
-    {
-        _logger = logger;
-    }
-
     public async Task<CommandResult> RunAsync(string command, string arguments, string workingDirectory)
     {
         var stopwatch = Stopwatch.StartNew();
-        
-        _logger.LogInformation(
+
+        // Add --no-daemon flag for beads commands to bypass daemon socket communication.
+        // TODO: Make --no-daemon configurable via BeadsService options
+        var effectiveArguments = AddBeadsFlags(command, arguments);
+
+        logger.LogInformation(
             "Executing command: {Command} {Arguments} in {WorkingDirectory}",
-            command, arguments, workingDirectory);
+            command, effectiveArguments, workingDirectory);
 
         var startInfo = new ProcessStartInfo
         {
             FileName = command,
-            Arguments = arguments,
+            Arguments = effectiveArguments,
             WorkingDirectory = workingDirectory,
             UseShellExecute = false,
             RedirectStandardOutput = true,
@@ -53,19 +49,19 @@ public class CommandRunner : ICommandRunner
 
             if (result.Success)
             {
-                _logger.LogInformation(
+                logger.LogInformation(
                     "Command completed: {Command} {Arguments} | ExitCode={ExitCode} | Duration={Duration}ms",
                     command, arguments, result.ExitCode, stopwatch.ElapsedMilliseconds);
                 
                 // Log output at debug level for successful commands
                 if (!string.IsNullOrWhiteSpace(output))
                 {
-                    _logger.LogDebug("Command output: {Output}", TruncateOutput(output));
+                    logger.LogDebug("Command output: {Output}", TruncateOutput(output));
                 }
             }
             else
             {
-                _logger.LogWarning(
+                logger.LogWarning(
                     "Command failed: {Command} {Arguments} | ExitCode={ExitCode} | Duration={Duration}ms | Error={Error}",
                     command, arguments, result.ExitCode, stopwatch.ElapsedMilliseconds, 
                     TruncateOutput(error));
@@ -77,7 +73,7 @@ public class CommandRunner : ICommandRunner
         {
             stopwatch.Stop();
             
-            _logger.LogError(
+            logger.LogError(
                 ex,
                 "Command exception: {Command} {Arguments} in {WorkingDirectory} | Duration={Duration}ms",
                 command, arguments, workingDirectory, stopwatch.ElapsedMilliseconds);
@@ -99,11 +95,26 @@ public class CommandRunner : ICommandRunner
     {
         if (string.IsNullOrEmpty(output))
             return string.Empty;
-        
+
         var trimmed = output.Trim();
         if (trimmed.Length <= maxLength)
             return trimmed;
-        
+
         return trimmed[..maxLength] + "... [truncated]";
+    }
+
+    /// <summary>
+    /// Adds flags to beads (bd) commands.
+    /// Currently adds --no-daemon to bypass socket communication with the host daemon.
+    /// </summary>
+    private static string AddBeadsFlags(string command, string arguments)
+    {
+        if (!command.Equals("bd", StringComparison.OrdinalIgnoreCase))
+            return arguments;
+
+        // Prepend --no-daemon to bypass daemon socket communication
+        return string.IsNullOrEmpty(arguments)
+            ? "--no-daemon"
+            : $"--no-daemon {arguments}";
     }
 }

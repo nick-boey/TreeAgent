@@ -29,6 +29,10 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - TAILSCALE_AUTH_KEY=${TAILSCALE_AUTH_KEY:-}
       - TAILSCALE_HOSTNAME=${TAILSCALE_HOSTNAME:-homespun-vm}
+      # Host data path for beads daemon path translation
+      # The beads daemon runs on the host and sees the full host path,
+      # while the container sees /data. This allows path translation.
+      - HSP_HOST_DATA_PATH=${DATA_DIR:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]

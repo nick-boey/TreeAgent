@@ -228,8 +228,15 @@ docker build -t homespun:local .
 
 **Docker (Linux/macOS):**
 ```bash
+# Make scripts executable (first time only)
+chmod +x ./install/container/run.sh ./install/container/test.sh
+
+# Build and run interactively (for testing)
+./install/container/test.sh
+
+# Or build manually and run with more options
 docker build -t homespun:local .
-docker run --rm -it -p 8080:8080 -v ~/.homespun-container/data:/data -v ~/.ssh:/home/homespun/.ssh:ro -e GITHUB_TOKEN=ghp_xxx homespun:local
+./install/container/run.sh --local -it
 ```
 
 **Ubuntu VM:**
