@@ -30,9 +30,18 @@ public class OpenCodeServer
     /// <summary>
     /// External base URL for UI links. Uses ExternalHostname if configured, otherwise localhost.
     /// </summary>
-    public string ExternalBaseUrl => !string.IsNullOrEmpty(ExternalHostname)
-        ? $"http://{ExternalHostname}:{Port}"
-        : BaseUrl;
+    public string ExternalBaseUrl
+    {
+        get
+        {
+            var url = !string.IsNullOrEmpty(ExternalHostname)
+                ? $"http://{ExternalHostname}:{Port}"
+                : BaseUrl;
+            // Debug logging - can be removed once issue is resolved
+            System.Diagnostics.Debug.WriteLine($"[OpenCodeServer] ExternalBaseUrl computed: ExternalHostname='{ExternalHostname ?? "(null)"}', Port={Port}, Result='{url}'");
+            return url;
+        }
+    }
 
     /// <summary>
     /// Gets the full web view URL including encoded path and session.

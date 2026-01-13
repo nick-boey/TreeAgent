@@ -215,6 +215,15 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             ContinueSession = continueSession
         };
 
+        // Log URL configuration for debugging
+        _logger.LogInformation(
+            "Creating server for entity {EntityId}: Port={Port}, ExternalHostname={ExternalHostname}, BaseUrl={BaseUrl}, ExternalBaseUrl={ExternalBaseUrl}",
+            entityId,
+            port,
+            OpenCodeServer.ExternalHostname ?? "(null)",
+            server.BaseUrl,
+            server.ExternalBaseUrl);
+
         try
         {
             var process = StartServerProcess(port, worktreePath, continueSession);

@@ -102,12 +102,53 @@ builder.Services.AddRazorComponents()
 var app = builder.Build();
 
 // Configure external hostname for agent URLs (for container/Tailscale mode)
-var externalHostname = builder.Configuration["OpenCode:ExternalHostname"]
-    ?? builder.Configuration["HSP_EXTERNAL_HOSTNAME"];
+// Check multiple sources in priority order with detailed logging
+var configExternalHostname = app.Configuration["OpenCode:ExternalHostname"];
+var configHspHostname = app.Configuration["HSP_EXTERNAL_HOSTNAME"];
+var envHspHostname = Environment.GetEnvironmentVariable("HSP_EXTERNAL_HOSTNAME");
+
+// Log all hostname-related environment variables for debugging
+var envVars = Environment.GetEnvironmentVariables();
+var hostnameEnvVars = new List<string>();
+foreach (var key in envVars.Keys)
+{
+    var keyStr = key.ToString() ?? "";
+    if (keyStr.Contains("HOSTNAME", StringComparison.OrdinalIgnoreCase) ||
+        keyStr.StartsWith("HSP_", StringComparison.OrdinalIgnoreCase) ||
+        keyStr.Contains("OPENCODE", StringComparison.OrdinalIgnoreCase))
+    {
+        hostnameEnvVars.Add($"{keyStr}={envVars[key]}");
+    }
+}
+app.Logger.LogInformation(
+    "Environment variables (hostname/HSP/OpenCode related): {EnvVars}",
+    hostnameEnvVars.Count > 0 ? string.Join(", ", hostnameEnvVars) : "(none found)");
+
+app.Logger.LogInformation(
+    "External hostname resolution - OpenCode:ExternalHostname={ConfigHostname}, HSP_EXTERNAL_HOSTNAME(config)={ConfigHsp}, HSP_EXTERNAL_HOSTNAME(env)={EnvHsp}",
+    configExternalHostname ?? "(null)",
+    configHspHostname ?? "(null)",
+    envHspHostname ?? "(null)");
+
+// Priority: OpenCode:ExternalHostname > HSP_EXTERNAL_HOSTNAME (config) > HSP_EXTERNAL_HOSTNAME (env)
+var externalHostname = configExternalHostname;
+if (string.IsNullOrEmpty(externalHostname))
+{
+    externalHostname = configHspHostname;
+    if (string.IsNullOrEmpty(externalHostname))
+    {
+        externalHostname = envHspHostname;
+    }
+}
+
 if (!string.IsNullOrEmpty(externalHostname))
 {
     OpenCodeServer.ExternalHostname = externalHostname;
     app.Logger.LogInformation("External hostname configured for agent URLs: {Hostname}", externalHostname);
+}
+else
+{
+    app.Logger.LogWarning("No external hostname configured - agent URLs will use localhost. Set HSP_EXTERNAL_HOSTNAME or OpenCode:ExternalHostname to configure.");
 }
 
 // Configure the HTTP request pipeline.
