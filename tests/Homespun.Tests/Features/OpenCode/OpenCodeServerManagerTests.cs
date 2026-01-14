@@ -1,3 +1,4 @@
+using Homespun.Features.GitHub;
 using Homespun.Features.OpenCode;
 using Homespun.Features.OpenCode.Hubs;
 using Homespun.Features.OpenCode.Models;
@@ -14,6 +15,7 @@ public class OpenCodeServerManagerTests
 {
     private Mock<IOpenCodeClient> _mockClient = null!;
     private Mock<IPortAllocationService> _mockPortAllocationService = null!;
+    private Mock<IGitHubEnvironmentService> _mockGitHubEnvironmentService = null!;
     private Mock<ILogger<OpenCodeServerManager>> _mockLogger = null!;
     private IOptions<OpenCodeOptions> _options = null!;
     private OpenCodeServerManager _manager = null!;
@@ -23,6 +25,7 @@ public class OpenCodeServerManagerTests
     {
         _mockClient = new Mock<IOpenCodeClient>();
         _mockPortAllocationService = new Mock<IPortAllocationService>();
+        _mockGitHubEnvironmentService = new Mock<IGitHubEnvironmentService>();
         _mockLogger = new Mock<ILogger<OpenCodeServerManager>>();
         _options = Options.Create(new OpenCodeOptions
         {
@@ -31,16 +34,21 @@ public class OpenCodeServerManagerTests
             ServerStartTimeoutMs = 1000,
             ExecutablePath = "opencode"
         });
-        
+
         // Default port allocation behavior
         var nextPort = 5000;
         _mockPortAllocationService.Setup(p => p.AllocatePort()).Returns(() => nextPort++);
-        
+
+        // Default GitHub environment (empty)
+        _mockGitHubEnvironmentService.Setup(g => g.GetGitHubEnvironment())
+            .Returns(new Dictionary<string, string>());
+
         _manager = new OpenCodeServerManager(
-            _options, 
-            _mockClient.Object, 
+            _options,
+            _mockClient.Object,
             _mockPortAllocationService.Object,
             Mock.Of<IHubContext<AgentHub>>(),
+            _mockGitHubEnvironmentService.Object,
             _mockLogger.Object);
     }
 

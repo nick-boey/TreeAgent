@@ -1,3 +1,4 @@
+using Homespun.Features.GitHub;
 using Homespun.Features.OpenCode;
 using Homespun.Features.OpenCode.Hubs;
 using Homespun.Features.OpenCode.Models;
@@ -48,6 +49,7 @@ public class OpenCodeIntegrationTests
             _client,
             portAllocationService,
             Mock.Of<IHubContext<AgentHub>>(),
+            CreateMockGitHubEnvironmentService(),
             Mock.Of<ILogger<OpenCodeServerManager>>());
 
         _configGenerator = new OpenCodeConfigGenerator(
@@ -355,6 +357,7 @@ public class OpenCodeIntegrationTests
             testClient,
             testPortAllocationService,
             Mock.Of<IHubContext<AgentHub>>(),
+            CreateMockGitHubEnvironmentService(),
             Mock.Of<ILogger<OpenCodeServerManager>>());
         var testConfigGenerator = new OpenCodeConfigGenerator(
             testOptions,
@@ -738,5 +741,12 @@ public class OpenCodeIntegrationTests
             await _serverManager.StopServerAsync("test-pr-full");
             Console.WriteLine("Server stopped.");
         }
+    }
+
+    private static IGitHubEnvironmentService CreateMockGitHubEnvironmentService()
+    {
+        var mock = new Mock<IGitHubEnvironmentService>();
+        mock.Setup(g => g.GetGitHubEnvironment()).Returns(new Dictionary<string, string>());
+        return mock.Object;
     }
 }

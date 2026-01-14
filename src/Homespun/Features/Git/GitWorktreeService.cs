@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Homespun.Features.Commands;
+using Homespun.Features.GitHub;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -8,9 +9,24 @@ namespace Homespun.Features.Git;
 public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktreeService> logger) : IGitWorktreeService
 {
     public GitWorktreeService() : this(
-        new CommandRunner(NullLogger<CommandRunner>.Instance), 
+        new CommandRunner(
+            new NullGitHubEnvironmentService(),
+            NullLogger<CommandRunner>.Instance),
         NullLogger<GitWorktreeService>.Instance)
     {
+    }
+
+    /// <summary>
+    /// A no-op implementation of IGitHubEnvironmentService for testing scenarios
+    /// where GitHub authentication is not needed.
+    /// </summary>
+    private class NullGitHubEnvironmentService : IGitHubEnvironmentService
+    {
+        public bool IsConfigured => false;
+        public IDictionary<string, string> GetGitHubEnvironment() => new Dictionary<string, string>();
+        public string? GetMaskedToken() => null;
+        public Task<GitHubAuthStatus> CheckGhAuthStatusAsync(CancellationToken ct = default) =>
+            Task.FromResult(new GitHubAuthStatus { IsAuthenticated = false, AuthMethod = GitHubAuthMethod.None });
     }
 
     public async Task<string?> CreateWorktreeAsync(string repoPath, string branchName, bool createBranch = false, string? baseBranch = null)

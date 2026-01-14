@@ -53,6 +53,7 @@ builder.Services.AddDataProtection()
 
 // Core services
 builder.Services.AddScoped<ProjectService>();
+builder.Services.AddSingleton<IGitHubEnvironmentService, GitHubEnvironmentService>();
 builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
 builder.Services.AddSingleton<IGitWorktreeService, GitWorktreeService>();
 builder.Services.AddScoped<PullRequestDataService>();

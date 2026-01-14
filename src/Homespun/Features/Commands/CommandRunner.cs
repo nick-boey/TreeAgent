@@ -1,8 +1,11 @@
 using System.Diagnostics;
+using Homespun.Features.GitHub;
 
 namespace Homespun.Features.Commands;
 
-public class CommandRunner(ILogger<CommandRunner> logger) : ICommandRunner
+public class CommandRunner(
+    IGitHubEnvironmentService gitHubEnvironmentService,
+    ILogger<CommandRunner> logger) : ICommandRunner
 {
     public async Task<CommandResult> RunAsync(string command, string arguments, string workingDirectory)
     {
@@ -26,6 +29,12 @@ public class CommandRunner(ILogger<CommandRunner> logger) : ICommandRunner
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+
+        // Inject GitHub environment variables for git/gh commands
+        foreach (var (key, value) in gitHubEnvironmentService.GetGitHubEnvironment())
+        {
+            startInfo.Environment[key] = value;
+        }
 
         using var process = new Process { StartInfo = startInfo };
 
