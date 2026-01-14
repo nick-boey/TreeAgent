@@ -80,14 +80,6 @@ public partial class GitHubEnvironmentService : IGitHubEnvironmentService, IDisp
             env["GIT_ASKPASS"] = _askPassScriptPath;
             env["GIT_TERMINAL_PROMPT"] = "0"; // Disable interactive prompts
 
-            // Disable any existing credential helpers so GIT_ASKPASS is used
-            // This prevents cached credentials from interfering with token auth
-            env["GIT_CONFIG_COUNT"] = "2";
-            env["GIT_CONFIG_KEY_0"] = "credential.helper";
-            env["GIT_CONFIG_VALUE_0"] = ""; // Empty disables credential helper
-            env["GIT_CONFIG_KEY_1"] = "credential.useHttpPath";
-            env["GIT_CONFIG_VALUE_1"] = "true";
-
             _logger.LogDebug(
                 "GitHub environment configured with token and GIT_ASKPASS at {Path}",
                 _askPassScriptPath);
@@ -258,28 +250,14 @@ public partial class GitHubEnvironmentService : IGitHubEnvironmentService, IDisp
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             scriptPath = Path.Combine(_homespunDir, "git-askpass.cmd");
-            // Windows batch script - return "x-access-token" for username prompts, token for password
-            // Git passes the prompt (e.g., "Username for...") as the first argument
-            scriptContent = "@echo off\r\n" +
-                "setlocal enabledelayedexpansion\r\n" +
-                "set \"prompt=%~1\"\r\n" +
-                "echo !prompt! | findstr /i \"user\" >nul\r\n" +
-                "if !errorlevel!==0 (\r\n" +
-                "    echo x-access-token\r\n" +
-                ") else (\r\n" +
-                "    echo %GITHUB_TOKEN%\r\n" +
-                ")\r\n";
+            // Windows batch script - echo the GITHUB_TOKEN environment variable
+            scriptContent = "@echo off\r\necho %GITHUB_TOKEN%\r\n";
         }
         else
         {
             scriptPath = Path.Combine(_homespunDir, "git-askpass.sh");
-            // Unix shell script - return "x-access-token" for username prompts, token for password
-            // Git passes the prompt (e.g., "Username for...") as the first argument
-            scriptContent = "#!/bin/sh\n" +
-                "case \"$1\" in\n" +
-                "  *[Uu]ser*) echo \"x-access-token\" ;;\n" +
-                "  *) echo \"$GITHUB_TOKEN\" ;;\n" +
-                "esac\n";
+            // Unix shell script - echo the GITHUB_TOKEN environment variable
+            scriptContent = "#!/bin/sh\necho \"$GITHUB_TOKEN\"\n";
         }
 
         // Write the script (overwrite if exists to ensure correct content)
