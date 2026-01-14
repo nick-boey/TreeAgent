@@ -61,10 +61,17 @@ builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<PullRequestWorkflowService>();
 
-// Beads services
+// Beads services (CLI-based - kept as fallback)
 builder.Services.AddScoped<IBeadsService, BeadsService>();
 builder.Services.AddScoped<IBeadsInitializer, BeadsInitializer>();
 builder.Services.AddScoped<IBeadsIssueTransitionService, BeadsIssueTransitionService>();
+
+// Beads direct database access services (high-performance)
+builder.Services.Configure<BeadsDatabaseOptions>(
+    builder.Configuration.GetSection(BeadsDatabaseOptions.SectionName));
+builder.Services.AddSingleton<IBeadsQueueService, BeadsQueueService>();
+builder.Services.AddSingleton<IBeadsDatabaseService, BeadsDatabaseService>();
+builder.Services.AddHostedService<BeadsQueueProcessorService>();
 
 // Gitgraph services
 builder.Services.AddScoped<IGraphService, GraphService>();
