@@ -1,0 +1,84 @@
+.models-page {
+    padding: 20px;
+}
+
+.models-header {
+    background-color: var(--bs-gray-100);
+    padding: 16px;
+    border-radius: 8px;
+}
+
+.models-header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.models-section {
+    background-color: white;
+    border-radius: 8px;
+    padding: 16px;
+}
+
+.models-section-title {
+    font-size: 1.25rem;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--bs-primary);
+}
+
+.models-section-title .star-icon {
+    color: #f59e0b;
+    margin-right: 8px;
+}
+
+.model-card {
+    border: 1px solid var(--bs-border-color);
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.model-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.model-name {
+    font-weight: 600;
+    margin: 0 0 8px 0;
+    color: var(--bs-primary);
+}
+
+.provider-badge {
+    font-size: 0.75rem;
+    opacity: 0.75;
+}
+
+.model-specs {
+    font-size: 0.875rem;
+    color: var(--bs-gray-700);
+}
+
+.spec-item {
+    margin-bottom: 4px;
+}
+
+.model-capabilities {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.capability-badge {
+    font-size: 0.75rem;
+    padding: 4px 8px;
+}
+
+.star-btn {
+    padding: 4px 8px;
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.model-id {
+    font-family: monospace;
+    opacity: 0.6;
+}

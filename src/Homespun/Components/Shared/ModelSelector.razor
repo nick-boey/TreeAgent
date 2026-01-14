@@ -1,0 +1,200 @@
+@using Homespun.Features.OpenCode.Data.Models
+@using Homespun.Features.OpenCode.Services
+@inject IOpenCodeModelsService ModelsService
+
+<div class="model-selector">
+    @if (_models == null)
+    {
+        <select class="form-select form-select-sm" style="width: auto;" disabled>
+            <option>Loading models...</option>
+        </select>
+    }
+    else if (_models.Count == 0)
+    {
+        <select class="form-select form-select-sm" style="width: auto;" disabled>
+            <option>No models available</option>
+        </select>
+    }
+    else
+    {
+        <div class="dropdown">
+            <button class="btn btn-sm dropdown-toggle form-control d-flex align-items-center justify-content-between"
+                    type="button"
+                    id="@($"model-selector-{Id}")"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false">
+                <span class="selected-model">@GetModelDisplayName(SelectedModel)</span>
+            </button>
+            <ul class="dropdown-menu model-dropdown-menu" aria-labelledby="@($"model-selector-{Id}")">
+                @if (!string.IsNullOrEmpty(_searchTerm) || _selectedProvider != null)
+                {
+                    <li class="dropdown-header px-2">
+                        <div class="filter-controls mb-2">
+                            <input type="text"
+                                   class="form-control form-control-sm mb-1"
+                                   placeholder="Search models..."
+                                   @bind="_searchTerm"
+                                   @oninput="OnSearchChanged" />
+                            <select class="form-select form-select-sm"
+                                    @bind="_selectedProvider"
+                                    @onchange="OnProviderChanged">
+                                <option value="">All providers</option>
+                                @foreach (var provider in _providers)
+                                {
+                                    <option value="@provider">@provider</option>
+                                }
+                            </select>
+                        </div>
+                    </li>
+                }
+
+                @if (_favoriteModels.Count > 0)
+                {
+                    <li class="dropdown-header">
+                        <span class="star-icon">★</span> Favorites
+                    </li>
+                    @foreach (var model in _favoriteModels)
+                    {
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center justify-content-between"
+                               href="#"
+                               @onclick="() => SelectModel(model)">
+                                <span>@model.Name</span>
+                                <span class="model-capabilities">
+                                    @if (model.Capabilities?.Reasoning ?? false)
+                                    {
+                                        <span class="badge bg-info me-1" title="Reasoning">R</span>
+                                    }
+                                    @if (model.Capabilities?.Toolcall ?? false)
+                                    {
+                                        <span class="badge bg-primary me-1" title="Tool calls">T</span>
+                                    }
+                                    @if (model.Capabilities?.Input?.Image ?? false)
+                                    {
+                                        <span class="badge bg-success me-1" title="Vision">V</span>
+                                    }
+                                </span>
+                            </a>
+                        </li>
+                    }
+                }
+
+                @foreach (var group in _groupedModels)
+                {
+                    <li class="dropdown-header">@group.Key</li>
+                    @foreach (var model in group)
+                    {
+                        <li>
+                            <a class="dropdown-item d-flex align-items-center justify-content-between"
+                               href="#"
+                               @onclick="() => SelectModel(model)">
+                                <span>@model.Name</span>
+                                <span class="model-capabilities">
+                                    @if (model.Capabilities?.Reasoning ?? false)
+                                    {
+                                        <span class="badge bg-info me-1" title="Reasoning">R</span>
+                                    }
+                                    @if (model.Capabilities?.Toolcall ?? false)
+                                    {
+                                        <span class="badge bg-primary me-1" title="Tool calls">T</span>
+                                    }
+                                    @if (model.Capabilities?.Input?.Image ?? false)
+                                    {
+                                        <span class="badge bg-success me-1" title="Vision">V</span>
+                                    }
+                                </span>
+                            </a>
+                        </li>
+                    }
+                }
+            </ul>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string SelectedModel { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> SelectedModelChanged { get; set; }
+
+    [Parameter]
+    public string Id { get; set; } = "default";
+
+    private IReadOnlyList<ModelInfo>? _models;
+    private List<ModelInfo> _favoriteModels = [];
+    private IOrderedEnumerable<IGrouping<string, ModelInfo>> _groupedModels = [];
+    private List<string> _providers = [];
+    private string _searchTerm = "";
+    private string? _selectedProvider = null;
+    private IReadOnlyList<string> _favoriteModelIds = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _models = await ModelsService.GetModelsAsync();
+        _favoriteModelIds = await ModelsService.GetFavoriteModelIdsAsync();
+        _providers = _models.Select(m => m.ProviderId).Distinct().OrderBy(p => p).ToList();
+        ApplyFilters();
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        _searchTerm = e.Value?.ToString() ?? "";
+        ApplyFilters();
+    }
+
+    private void OnProviderChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        _selectedProvider = string.IsNullOrEmpty(value) ? null : value;
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        var filteredModels = _models!.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+        {
+            var lowerSearchTerm = _searchTerm.ToLower();
+            filteredModels = filteredModels.Where(m =>
+                m.Name.ToLower().Contains(lowerSearchTerm) ||
+                m.FullId.ToLower().Contains(lowerSearchTerm));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_selectedProvider))
+        {
+            filteredModels = filteredModels.Where(m =>
+                m.ProviderId.Equals(_selectedProvider, StringComparison.OrdinalIgnoreCase));
+        }
+
+        _favoriteModels = filteredModels
+            .Where(m => _favoriteModelIds.Contains(m.FullId))
+            .OrderBy(m => m.Name)
+            .ToList();
+
+        _groupedModels = filteredModels
+            .Where(m => !_favoriteModelIds.Contains(m.FullId))
+            .GroupBy(m => m.ProviderId)
+            .OrderBy(g => g.Key)
+            .SelectMany(g => g.OrderBy(m => m.Name))
+            .GroupBy(m => m.ProviderId)
+            .OrderBy(g => g.Key);
+    }
+
+    private void SelectModel(ModelInfo model)
+    {
+        SelectedModel = model.FullId;
+        await SelectedModelChanged.InvokeAsync(model.FullId);
+    }
+
+    private static string GetModelDisplayName(string modelId)
+    {
+        if (string.IsNullOrEmpty(modelId))
+            return "Select model";
+
+        var parts = modelId.Split('/');
+        return parts.Length > 1 ? parts[1] : modelId;
+    }
+}

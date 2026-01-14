@@ -1,0 +1,108 @@
+@using Homespun.Features.OpenCode.Data.Models
+
+<div class="model-card card">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+                <h5 class="model-name">@Model.Name</h5>
+                <span class="badge bg-secondary provider-badge">@Model.ProviderId</span>
+            </div>
+            <button class="btn btn-sm star-btn @starClass"
+                    @onclick="OnToggleFavorite"
+                    title="@starTitle">
+                @if (IsFavorite)
+                {
+                    <span>★</span>
+                }
+                else
+                {
+                    <span>☆</span>
+                }
+            </button>
+        </div>
+
+        <div class="model-specs mb-2">
+            <div class="spec-item">
+                <strong>Context:</strong> @FormatContext(Model.Limit?.Context)
+            </div>
+            <div class="spec-item">
+                <strong>Output:</strong> @FormatOutput(Model.Limit?.Output)
+            </div>
+            @if (!string.IsNullOrEmpty(Model.ReleaseDate))
+            {
+                <div class="spec-item">
+                    <strong>Released:</strong> @Model.ReleaseDate
+                </div>
+            }
+        </div>
+
+        <div class="model-capabilities mb-2">
+            @if (Model.Capabilities?.Reasoning ?? false)
+            {
+                <span class="badge bg-info capability-badge" title="Reasoning">Reasoning</span>
+            }
+            @if (Model.Capabilities?.Toolcall ?? false)
+            {
+                <span class="badge bg-primary capability-badge" title="Tool calls">Tools</span>
+            }
+            @if (Model.Capabilities?.Input?.Image ?? false)
+            {
+                <span class="badge bg-success capability-badge" title="Image input">Vision</span>
+            }
+            @if (Model.Capabilities?.Input?.Audio ?? false)
+            {
+                <span class="badge bg-warning capability-badge" title="Audio input">Audio</span>
+            }
+            @if (Model.Capabilities?.Input?.Video ?? false)
+            {
+                <span class="badge bg-danger capability-badge" title="Video input">Video</span>
+            }
+        </div>
+
+        <div class="model-id text-muted small">
+            @Model.FullId
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public ModelInfo Model { get; set; } = null!;
+
+    [Parameter]
+    public bool IsFavorite { get; set; }
+
+    [Parameter]
+    public EventCallback OnToggleFavorite { get; set; }
+
+    private string starClass => IsFavorite ? "btn-warning" : "btn-outline-secondary";
+    private string starTitle => IsFavorite ? "Remove from favorites" : "Add to favorites";
+
+    private static string FormatContext(int? context)
+    {
+        if (!context.HasValue)
+            return "N/A";
+
+        var value = context.Value;
+        if (value >= 1000000)
+            return $"{value / 1000000}M";
+        if (value >= 1000)
+            return $"{value / 1000}K";
+
+        return value.ToString();
+    }
+
+    private static string FormatOutput(int? output)
+    {
+        if (!output.HasValue)
+            return "N/A";
+
+        var value = output.Value;
+        if (value >= 1000000)
+            return $"{value / 1000000}M";
+        if (value >= 1000)
+            return $"{value / 1000}K";
+
+        return value.ToString();
+    }
+}

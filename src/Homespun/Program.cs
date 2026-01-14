@@ -83,6 +83,8 @@ builder.Services.AddHttpClient<IOpenCodeClient, OpenCodeClient>();
 builder.Services.AddSingleton<IPortAllocationService, PortAllocationService>();
 builder.Services.AddSingleton<IOpenCodeServerManager, OpenCodeServerManager>();
 builder.Services.AddSingleton<IOpenCodeConfigGenerator, OpenCodeConfigGenerator>();
+builder.Services.AddSingleton<IOpencodeCommandRunner, OpencodeCommandRunner>();
+builder.Services.AddSingleton<IOpenCodeModelsService, OpenCodeModelsService>();
 builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
 builder.Services.AddHostedService<AgentStartupBroadcaster>();
 builder.Services.AddScoped<IAgentCompletionMonitor, AgentCompletionMonitor>();
