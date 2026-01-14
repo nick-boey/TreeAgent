@@ -147,7 +147,14 @@
                 {
                     <span class="badge @GetPriorityBadgeClass() ms-1">P@Issue.Priority</span>
                 }
-                @if (_agentStatus != null)
+                @if (StartupTracker.IsStarting(Issue.Id))
+                {
+                    <span class="badge bg-warning text-dark ms-1">
+                        <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                        Starting...
+                    </span>
+                }
+                else if (_agentStatus != null)
                 {
                     <span class="badge bg-success ms-1">Agent Running</span>
                 }
@@ -253,8 +260,26 @@
             }
         </div>
         <div class="card-footer">
+            @if (_branchInfo != null && _agentStatus == null && !StartupTracker.IsStarting(Issue.Id))
+            {
+                <div class="mb-2">
+                    <label class="form-label small mb-1">Model</label>
+                    <select class="form-select form-select-sm" style="width: auto;" @bind="_selectedModel">
+                        <option value="anthropic/claude-opus-4">Claude Opus 4</option>
+                        <option value="anthropic/claude-sonnet-4">Claude Sonnet 4</option>
+                    </select>
+                </div>
+            }
+
             <div class="d-flex flex-wrap gap-2">
-                @if (_agentStatus != null)
+                @if (StartupTracker.IsStarting(Issue.Id))
+                {
+                    <button class="btn btn-sm btn-secondary" disabled>
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        Starting Agent...
+                    </button>
+                }
+                else if (_agentStatus != null)
                 {
                     <button class="btn btn-sm btn-outline-danger" @onclick="StopAgent" disabled="@_isLoading">
                         @if (_isLoading)
@@ -266,12 +291,11 @@
                 }
                 else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo != null)
                 {
-                    <button class="btn btn-sm btn-success" @onclick="StartDevelopment" disabled="@_isLoading">
-                        @if (_isLoading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
-                        Start Development
+                    <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning">
+                        Start Planning
+                    </button>
+                    <button class="btn btn-sm btn-success" @onclick="StartBuilding">
+                        Start Building
                     </button>
                 }
                 else if (Issue.Status == BeadsIssueStatus.Open && _branchInfo == null)
@@ -280,23 +304,11 @@
                         Start Development
                     </button>
                 }
-                else if (Issue.Status == BeadsIssueStatus.InProgress && _agentStatus == null && _branchInfo != null)
+                else if ((Issue.Status == BeadsIssueStatus.InProgress ||
+                         (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr")))
+                         && _agentStatus == null && _branchInfo != null)
                 {
-                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
-                        @if (_isLoading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
-                        Resume Agent
-                    </button>
-                }
-                else if (Issue.Status == BeadsIssueStatus.Blocked && Issue.Labels.Contains("awaiting-pr") && _branchInfo != null)
-                {
-                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent" disabled="@_isLoading">
-                        @if (_isLoading)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
+                    <button class="btn btn-sm btn-success" @onclick="ResumeAgent">
                         Resume Agent
                     </button>
                 }
@@ -366,6 +378,7 @@
     private EditModel _editModel = new();
     private List<string> _existingGroups = [];
     private string? _projectLocalPath;
+    private string _selectedModel = "anthropic/claude-opus-4";
 
     protected override async Task OnInitializedAsync()
     {
@@ -624,41 +637,75 @@
         }
     }
 
-    private async Task StartDevelopment()
+    private void StartPlanning()
     {
-        _isLoading = true;
-        _errorMessage = null;
+        StartupTracker.MarkAsStarting(Issue.Id);
+        _ = StartPlanningInBackgroundAsync();
+    }
+
+    private void StartBuilding()
+    {
+        StartupTracker.MarkAsStarting(Issue.Id);
+        _ = StartBuildingInBackgroundAsync();
+    }
+
+    private void ResumeAgent()
+    {
+        StartupTracker.MarkAsStarting(Issue.Id);
+        _ = StartAgentInBackgroundAsync();
+    }
+
+    private async Task StartPlanningInBackgroundAsync()
+    {
         try
         {
-            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id);
-            await OnActionCompleted.InvokeAsync();
+            var status = await AgentWorkflowService.StartAgentForBeadsIssueAsync(
+                ProjectId, Issue.Id, AgentMode.Planning, _selectedModel);
+            StartupTracker.MarkAsStarted(Issue.Id);
+            _agentStatus = status;
+            await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
+            StartupTracker.MarkAsFailed(Issue.Id, ex.Message);
             _errorMessage = ex.Message;
-        }
-        finally
-        {
-            _isLoading = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
-    private async Task ResumeAgent()
+    private async Task StartBuildingInBackgroundAsync()
     {
-        _isLoading = true;
-        _errorMessage = null;
         try
         {
-            _agentStatus = await AgentWorkflowService.StartAgentForBeadsIssueAsync(ProjectId, Issue.Id);
-            await OnActionCompleted.InvokeAsync();
+            var status = await AgentWorkflowService.StartAgentForBeadsIssueAsync(
+                ProjectId, Issue.Id, AgentMode.Building, _selectedModel);
+            StartupTracker.MarkAsStarted(Issue.Id);
+            _agentStatus = status;
+            await InvokeAsync(StateHasChanged);
         }
         catch (Exception ex)
         {
+            StartupTracker.MarkAsFailed(Issue.Id, ex.Message);
             _errorMessage = ex.Message;
+            await InvokeAsync(StateHasChanged);
         }
-        finally
+    }
+
+    private async Task StartAgentInBackgroundAsync()
+    {
+        try
         {
-            _isLoading = false;
+            var status = await AgentWorkflowService.StartAgentForBeadsIssueAsync(
+                ProjectId, Issue.Id, AgentMode.Building, _selectedModel);
+            StartupTracker.MarkAsStarted(Issue.Id);
+            _agentStatus = status;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            StartupTracker.MarkAsFailed(Issue.Id, ex.Message);
+            _errorMessage = ex.Message;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
