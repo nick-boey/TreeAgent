@@ -192,6 +192,18 @@ public class BeadsService(ICommandRunner commandRunner, ILogger<BeadsService> lo
         return result.Success;
     }
     
+    public async Task<bool> DeleteIssueAsync(string workingDirectory, string issueId)
+    {
+        var result = await RunBdCommandAsync(workingDirectory, $"delete {issueId} --json");
+        
+        if (!result.Success)
+        {
+            logger.LogWarning("Failed to delete issue {IssueId}: {Error}", issueId, result.Error);
+        }
+        
+        return result.Success;
+    }
+    
     #endregion
     
     #region Dependencies
