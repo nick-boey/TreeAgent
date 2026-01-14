@@ -106,10 +106,10 @@ public class GitHubEnvironmentServiceTests
         // Act
         var masked = service.GetMaskedToken();
 
-        // Assert
+        // Assert - Token "ghp_abc123xyz789" -> first 4 "ghp_" + "***" + last 4 "z789"
         Assert.That(masked, Is.Not.Null);
         Assert.That(masked, Does.StartWith("ghp_"));
-        Assert.That(masked, Does.EndWith("9789"));
+        Assert.That(masked, Does.EndWith("z789"));
         Assert.That(masked, Does.Contain("***"));
     }
 
