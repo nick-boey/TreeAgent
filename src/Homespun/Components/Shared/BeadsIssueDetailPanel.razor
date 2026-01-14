@@ -300,6 +300,17 @@
                         Resume Agent
                     </button>
                 }
+                
+                @if (Issue.Status == BeadsIssueStatus.Open || Issue.Status == BeadsIssueStatus.InProgress || Issue.Status == BeadsIssueStatus.Blocked || Issue.Status == BeadsIssueStatus.Deferred)
+                {
+                    <button class="btn btn-sm btn-outline-primary" @onclick="CloseIssue" disabled="@_isLoading" title="Mark issue as completed">
+                        Close Issue
+                    </button>
+                }
+                
+                <button class="btn btn-sm btn-outline-danger" @onclick="ShowDeleteConfirmation" disabled="@_isLoading" title="Delete issue permanently">
+                    Delete
+                </button>
             </div>
 
             @if (!string.IsNullOrEmpty(_errorMessage))
@@ -307,6 +318,35 @@
                 <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
             }
         </div>
+        
+        @if (_showDeleteConfirmation)
+        {
+            <div class="modal-backdrop fade show" style="background-color: rgba(0,0,0,0.5);"></div>
+            <div class="modal fade show d-block" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Delete Issue</h5>
+                            <button type="button" class="btn-close" @onclick="HideDeleteConfirmation"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Are you sure you want to delete issue <strong>@Issue.Id</strong>?</p>
+                            <p class="mb-0">This action will mark the issue as tombstone and cannot be undone.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="HideDeleteConfirmation">Cancel</button>
+                            <button type="button" class="btn btn-danger" @onclick="DeleteIssue" disabled="@_isLoading">
+                                @if (_isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                }
+                                Delete Issue
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
     }
 </div>
 
@@ -360,6 +400,7 @@
 
     private bool _isLoading;
     private bool _isEditMode;
+    private bool _showDeleteConfirmation;
     private string? _errorMessage;
     private AgentStatus? _agentStatus;
     private (string Group, string BranchId)? _branchInfo;
@@ -677,6 +718,88 @@
         catch (Exception ex)
         {
             _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CloseIssue()
+    {
+        if (_projectLocalPath == null)
+        {
+            _errorMessage = "Project path not available.";
+            return;
+        }
+
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            var success = await BeadsService.CloseIssueAsync(_projectLocalPath, Issue.Id);
+            
+            if (!success)
+            {
+                _errorMessage = "Failed to close issue.";
+                return;
+            }
+
+            await BeadsService.SyncAsync(_projectLocalPath);
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to close issue: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        _showDeleteConfirmation = true;
+    }
+
+    private void HideDeleteConfirmation()
+    {
+        _showDeleteConfirmation = false;
+    }
+
+    private async Task DeleteIssue()
+    {
+        if (_projectLocalPath == null)
+        {
+            _errorMessage = "Project path not available.";
+            return;
+        }
+
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            var success = await BeadsService.DeleteIssueAsync(_projectLocalPath, Issue.Id);
+            
+            if (!success)
+            {
+                _errorMessage = "Failed to delete issue.";
+                _showDeleteConfirmation = false;
+                return;
+            }
+
+            await BeadsService.SyncAsync(_projectLocalPath);
+            _showDeleteConfirmation = false;
+            await OnActionCompleted.InvokeAsync();
+            await OnClose.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to delete issue: {ex.Message}";
+            _showDeleteConfirmation = false;
         }
         finally
         {
