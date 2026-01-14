@@ -40,6 +40,11 @@ public class GitHubEnvironmentServiceTests
         Assert.That(env, Does.ContainKey("GIT_ASKPASS"));
         Assert.That(env, Does.ContainKey("GIT_TERMINAL_PROMPT"));
         Assert.That(env["GIT_TERMINAL_PROMPT"], Is.EqualTo("0"));
+
+        // Credential helper should be disabled to ensure GIT_ASKPASS is used
+        Assert.That(env, Does.ContainKey("GIT_CONFIG_COUNT"));
+        Assert.That(env["GIT_CONFIG_KEY_0"], Is.EqualTo("credential.helper"));
+        Assert.That(env["GIT_CONFIG_VALUE_0"], Is.EqualTo("")); // Empty disables it
     }
 
     [Test]
@@ -60,6 +65,7 @@ public class GitHubEnvironmentServiceTests
         Assert.That(env, Does.Not.ContainKey("GH_TOKEN"));
         Assert.That(env, Does.Not.ContainKey("GIT_ASKPASS"));
         Assert.That(env, Does.Not.ContainKey("GIT_TERMINAL_PROMPT"));
+        Assert.That(env, Does.Not.ContainKey("GIT_CONFIG_COUNT"));
 
         // Git identity should always be present for git operations
         Assert.That(env, Does.ContainKey("GIT_AUTHOR_NAME"));
