@@ -43,7 +43,7 @@ public class GitHubEnvironmentServiceTests
     }
 
     [Test]
-    public void GetGitHubEnvironment_WithoutToken_ReturnsEmptyDictionary()
+    public void GetGitHubEnvironment_WithoutToken_DoesNotIncludeTokenVars()
     {
         // Arrange
         var config = new ConfigurationBuilder()
@@ -55,8 +55,17 @@ public class GitHubEnvironmentServiceTests
         // Act
         var env = service.GetGitHubEnvironment();
 
-        // Assert
-        Assert.That(env, Is.Empty);
+        // Assert - Git identity is always present, but token-related vars should not be
+        Assert.That(env, Does.Not.ContainKey("GITHUB_TOKEN"));
+        Assert.That(env, Does.Not.ContainKey("GH_TOKEN"));
+        Assert.That(env, Does.Not.ContainKey("GIT_ASKPASS"));
+        Assert.That(env, Does.Not.ContainKey("GIT_TERMINAL_PROMPT"));
+
+        // Git identity should always be present for git operations
+        Assert.That(env, Does.ContainKey("GIT_AUTHOR_NAME"));
+        Assert.That(env, Does.ContainKey("GIT_AUTHOR_EMAIL"));
+        Assert.That(env, Does.ContainKey("GIT_COMMITTER_NAME"));
+        Assert.That(env, Does.ContainKey("GIT_COMMITTER_EMAIL"));
     }
 
     [Test]

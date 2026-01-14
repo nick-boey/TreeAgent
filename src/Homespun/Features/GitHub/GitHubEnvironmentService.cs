@@ -70,8 +70,9 @@ public partial class GitHubEnvironmentService : IGitHubEnvironmentService, IDisp
     public IDictionary<string, string> GetGitHubEnvironment()
     {
         var env = new Dictionary<string, string>();
-        var token = GetGitHubToken();
 
+        // GitHub token for authentication
+        var token = GetGitHubToken();
         if (!string.IsNullOrEmpty(token))
         {
             env["GITHUB_TOKEN"] = token;
@@ -88,7 +89,40 @@ public partial class GitHubEnvironmentService : IGitHubEnvironmentService, IDisp
             _logger.LogWarning("No GitHub token configured - environment will not include authentication");
         }
 
+        // Git identity for commits (required for bd sync and other git operations)
+        var gitName = GetGitIdentityName();
+        var gitEmail = GetGitIdentityEmail();
+
+        env["GIT_AUTHOR_NAME"] = gitName;
+        env["GIT_AUTHOR_EMAIL"] = gitEmail;
+        env["GIT_COMMITTER_NAME"] = gitName;
+        env["GIT_COMMITTER_EMAIL"] = gitEmail;
+
+        _logger.LogDebug("Git identity configured: {Name} <{Email}>", gitName, gitEmail);
+
         return env;
+    }
+
+    /// <summary>
+    /// Gets the git author/committer name from configuration or defaults to "Homespun Bot".
+    /// </summary>
+    private string GetGitIdentityName()
+    {
+        return _configuration["Git:AuthorName"]
+            ?? _configuration["GIT_AUTHOR_NAME"]
+            ?? Environment.GetEnvironmentVariable("GIT_AUTHOR_NAME")
+            ?? "Homespun Bot";
+    }
+
+    /// <summary>
+    /// Gets the git author/committer email from configuration or defaults to "homespun@localhost".
+    /// </summary>
+    private string GetGitIdentityEmail()
+    {
+        return _configuration["Git:AuthorEmail"]
+            ?? _configuration["GIT_AUTHOR_EMAIL"]
+            ?? Environment.GetEnvironmentVariable("GIT_AUTHOR_EMAIL")
+            ?? "homespun@localhost";
     }
 
     public string? GetMaskedToken()
