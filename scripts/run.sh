@@ -246,6 +246,11 @@ export TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY"
 export TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME"
 export HSP_EXTERNAL_HOSTNAME="$EXTERNAL_HOSTNAME"
 
+# Export host user UID/GID so container runs as the same user
+# This ensures files created in mounted volumes are accessible to the host user
+export HOST_UID="$(id -u)"
+export HOST_GID="$(id -g)"
+
 # Check if Tailscale is available on the host and get the IP
 TAILSCALE_IP=""
 TAILSCALE_URL=""
@@ -271,6 +276,7 @@ log_info "======================================"
 log_info "  Container Configuration"
 log_info "======================================"
 echo "  Image:       $IMAGE_NAME"
+echo "  User:        $HOST_UID:$HOST_GID (host user)"
 echo "  Port:        8080"
 echo "  URL:         http://localhost:8080"
 if [ -n "$TAILSCALE_URL" ]; then

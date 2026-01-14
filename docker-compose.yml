@@ -50,8 +50,9 @@ services:
   homespun:
     image: ${HOMESPUN_IMAGE:-ghcr.io/nick-boey/homespun:latest}
     container_name: homespun
-    # Note: We don't override user here - container runs as 'homespun' user from Dockerfile.
-    # This avoids UID mismatch issues with mounted volumes, especially on Windows.
+    # Run as the host user to ensure files created in mounted volumes have correct ownership.
+    # HOST_UID and HOST_GID are set by run.sh to the current user's UID/GID.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     profiles:
       - standalone
     ports:
@@ -81,7 +82,9 @@ services:
   homespun-tailscale:
     image: ${HOMESPUN_IMAGE:-ghcr.io/nick-boey/homespun:latest}
     container_name: homespun
-    # Note: We don't override user here - container runs as 'homespun' user from Dockerfile.
+    # Run as the host user to ensure files created in mounted volumes have correct ownership.
+    # HOST_UID and HOST_GID are set by run.sh to the current user's UID/GID.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     profiles:
       - tailscale
     depends_on:
