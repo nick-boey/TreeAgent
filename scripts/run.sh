@@ -290,7 +290,7 @@ if [ "$USE_TAILSCALE" = true ]; then
     echo "  Tailscale:   Enabled via sidecar ($TAILSCALE_HOSTNAME)"
 fi
 if [ -n "$EXTERNAL_HOSTNAME" ]; then
-    echo "  Agent URLs:  http://$EXTERNAL_HOSTNAME:<port>"
+    echo "  Agent URLs:  https://$EXTERNAL_HOSTNAME:<port>"
 fi
 if [ "$USE_LOCAL" = false ]; then
     echo "  Watchtower:  Enabled (auto-updates every 5 min)"
@@ -308,8 +308,8 @@ if [ "$DETACHED" = true ]; then
     echo
     echo "Access URLs:"
     if [ "$USE_TAILSCALE" = true ]; then
-        echo "  Tailnet:     http://${TAILSCALE_HOSTNAME}.<your-tailnet>.ts.net:8080"
-        echo "  OpenCode:    http://${TAILSCALE_HOSTNAME}.<your-tailnet>.ts.net:4096-4105"
+        echo "  Tailnet:     https://${TAILSCALE_HOSTNAME}.<your-tailnet>.ts.net"
+        echo "  OpenCode:    https://${TAILSCALE_HOSTNAME}.<your-tailnet>.ts.net:4096-4105"
     else
         echo "  Local:       http://localhost:8080"
         if [ -n "$TAILSCALE_URL" ]; then

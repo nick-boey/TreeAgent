@@ -70,6 +70,13 @@ RUN useradd --create-home --shell /bin/bash homespun
 RUN mkdir -p /data \
     && chown -R homespun:homespun /data
 
+# Make home directory accessible to any runtime user
+# This is needed because docker-compose may override the runtime user (HOST_UID/HOST_GID)
+# for proper file ownership on mounted volumes, but HOME still points to /home/homespun
+RUN chmod 777 /home/homespun \
+    && mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
+    && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache
+
 # Copy published application
 COPY --from=build /app/publish .
 

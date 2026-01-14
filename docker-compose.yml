@@ -16,9 +16,9 @@
 services:
   # Tailscale sidecar container - provides tailnet access for Homespun
   # When configured, Homespun and OpenCode servers are accessible via:
-  #   - http://<hostname>.<tailnet>.ts.net:8080 (Homespun web UI)
-  #   - http://<hostname>.<tailnet>.ts.net:4096-4105 (OpenCode servers)
-  # Note: Access via port 8080, not 80/443 (no HTTPS termination configured)
+  #   - https://<hostname>.<tailnet>.ts.net (Homespun web UI on port 443)
+  #   - https://<hostname>.<tailnet>.ts.net:4096-4105 (OpenCode servers)
+  # Note: Requires HTTPS certificates enabled in Tailscale admin console
   tailscale-homespun:
     image: tailscale/tailscale:latest
     container_name: tailscale-homespun

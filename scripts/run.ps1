@@ -403,7 +403,7 @@ try {
         Write-Host "  Tailscale:   Enabled via sidecar ($TailscaleHostname)"
     }
     if (-not [string]::IsNullOrWhiteSpace($externalHostnameValue)) {
-        Write-Host "  Agent URLs:  http://$($externalHostnameValue):<port>"
+        Write-Host "  Agent URLs:  https://$($externalHostnameValue):<port>"
     }
     if (-not $Local) {
         Write-Host "  Watchtower:  Enabled (auto-updates every 5 min)"
@@ -427,8 +427,8 @@ try {
         Write-Host ""
         Write-Host "Access URLs:"
         if ($Tailscale) {
-            Write-Host "  Tailnet:     http://$TailscaleHostname.<your-tailnet>.ts.net:8080"
-            Write-Host "  OpenCode:    http://$TailscaleHostname.<your-tailnet>.ts.net:4096-4105"
+            Write-Host "  Tailnet:     https://$TailscaleHostname.<your-tailnet>.ts.net"
+            Write-Host "  OpenCode:    https://$TailscaleHostname.<your-tailnet>.ts.net:4096-4105"
         }
         else {
             Write-Host "  Local:       http://localhost:8080"

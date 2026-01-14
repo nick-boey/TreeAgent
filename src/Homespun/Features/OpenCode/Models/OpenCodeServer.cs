@@ -35,7 +35,7 @@ public class OpenCodeServer
         get
         {
             var url = !string.IsNullOrEmpty(ExternalHostname)
-                ? $"http://{ExternalHostname}:{Port}"
+                ? $"https://{ExternalHostname}:{Port}"
                 : BaseUrl;
             // Debug logging - can be removed once issue is resolved
             System.Diagnostics.Debug.WriteLine($"[OpenCodeServer] ExternalBaseUrl computed: ExternalHostname='{ExternalHostname ?? "(null)"}', Port={Port}, Result='{url}'");
