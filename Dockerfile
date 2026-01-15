@@ -89,6 +89,9 @@ RUN chmod 777 /home/homespun \
     && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig \
     && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude
 
+# Configure git to trust mounted directories (avoids "dubious ownership" errors)
+RUN git config --global --add safe.directory '*'
+
 # Copy published application
 COPY --from=build /app/publish .
 
