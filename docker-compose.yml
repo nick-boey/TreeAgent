@@ -9,10 +9,12 @@
 #
 # Environment variables (set in .env or export before running):
 #   GITHUB_TOKEN           - GitHub personal access token (required for PR sync)
-#   ANTHROPIC_API_KEY      - Anthropic API key (required for Claude agents)
 #   TAILSCALE_AUTH_KEY     - Tailscale auth key (optional, for remote access via tailnet)
 #   TAILSCALE_HOSTNAME     - Tailscale hostname (default: homespun)
 #   HSP_EXTERNAL_HOSTNAME  - Full external hostname for agent links (e.g., homespun.tail1234.ts.net)
+#
+# Volume mounts:
+#   CLAUDE_CONFIG_DIR      - Claude Code config directory with OAuth tokens (default: ~/.claude)
 
 services:
   # Tailscale sidecar container - provides tailnet access for Homespun
@@ -61,10 +63,10 @@ services:
     volumes:
       - ${DATA_DIR:-~/.homespun-container/data}:/data
       - ${SSH_DIR:-~/.ssh}:/home/homespun/.ssh:ro
+      - ${CLAUDE_CONFIG_DIR:-~/.claude}:/home/homespun/.claude:ro
     environment:
       - HOME=/home/homespun
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ASPNETCORE_ENVIRONMENT=Production
       # Host data path for beads daemon path translation
       # The beads daemon runs on the host and sees the full host path,
@@ -96,10 +98,10 @@ services:
     volumes:
       - ${DATA_DIR:-~/.homespun-container/data}:/data
       - ${SSH_DIR:-~/.ssh}:/home/homespun/.ssh:ro
+      - ${CLAUDE_CONFIG_DIR:-~/.claude}:/home/homespun/.claude:ro
     environment:
       - HOME=/home/homespun
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ASPNETCORE_ENVIRONMENT=Production
       - HSP_HOST_DATA_PATH=${DATA_DIR:-}
       # External hostname for agent URLs (e.g., homespun.tail1234.ts.net)

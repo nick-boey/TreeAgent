@@ -45,9 +45,11 @@
 
     Environment Variables (checked in order, with .env file fallback):
     - HSP_GITHUB_TOKEN / GITHUB_TOKEN - GitHub personal access token
-    - HSP_ANTHROPIC_API_KEY / ANTHROPIC_API_KEY - Anthropic API key for Claude agents
     - HSP_TAILSCALE_AUTH_KEY / TAILSCALE_AUTH_KEY - Tailscale auth key
     - HSP_EXTERNAL_HOSTNAME - External hostname for agent URLs
+
+    Volume Mounts:
+    - Claude Code config (~/.claude) is automatically mounted for OAuth authentication
 #>
 
 #Requires -Version 7.0
@@ -199,31 +201,6 @@ function Get-GitHubToken {
     return $null
 }
 
-function Get-AnthropicApiKey {
-    param(
-        [string]$EnvFilePath
-    )
-
-    # Check environment variables first (HSP_ANTHROPIC_API_KEY takes precedence)
-    $key = $env:HSP_ANTHROPIC_API_KEY
-    if (-not [string]::IsNullOrWhiteSpace($key)) {
-        return $key
-    }
-
-    $key = $env:ANTHROPIC_API_KEY
-    if (-not [string]::IsNullOrWhiteSpace($key)) {
-        return $key
-    }
-
-    # Fall back to .env file
-    $key = Get-EnvFileValue -Key "ANTHROPIC_API_KEY" -EnvFilePath $EnvFilePath
-    if (-not [string]::IsNullOrWhiteSpace($key)) {
-        return $key
-    }
-
-    return $null
-}
-
 function Get-TailscaleAuthKey {
     param(
         [string]$ParamValue,
@@ -350,17 +327,6 @@ try {
         Write-Host "      GitHub token found: $maskedToken" -ForegroundColor Green
     }
 
-    # Read Anthropic API key
-    $anthropicApiKey = Get-AnthropicApiKey -EnvFilePath $EnvFilePath
-    if ([string]::IsNullOrWhiteSpace($anthropicApiKey)) {
-        Write-Warning "      Anthropic API key not found."
-        Write-Warning "      Set HSP_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY for Claude agents."
-    }
-    else {
-        $maskedAnthropicKey = $anthropicApiKey.Substring(0, [Math]::Min(10, $anthropicApiKey.Length)) + "..."
-        Write-Host "      Anthropic API key found: $maskedAnthropicKey" -ForegroundColor Green
-    }
-
     # Read Tailscale auth key
     $tailscaleKey = Get-TailscaleAuthKey -ParamValue $TailscaleAuthKey -EnvFilePath $EnvFilePath
     if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
@@ -380,6 +346,7 @@ try {
     $homeDir = [Environment]::GetFolderPath('UserProfile')
     $dataDir = Join-Path $homeDir ".homespun-container" "data"
     $sshDir = Join-Path $homeDir ".ssh"
+    $claudeConfigDir = Join-Path $homeDir ".claude"
 
     if (-not (Test-Path $dataDir)) {
         New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
@@ -394,6 +361,16 @@ try {
         $sshDir = ""
     }
 
+    # Check Claude Code config directory (for OAuth authentication)
+    if (-not (Test-Path $claudeConfigDir)) {
+        Write-Warning "      Claude config not found: $claudeConfigDir"
+        Write-Warning "      Run 'claude login' on host to authenticate Claude Code."
+        $claudeConfigDir = ""
+    }
+    else {
+        Write-Host "      Claude config found: $claudeConfigDir" -ForegroundColor Green
+    }
+
     # Step 5: Start containers
     Write-Host "[5/5] Starting containers..." -ForegroundColor Cyan
     Write-Host ""
@@ -401,13 +378,14 @@ try {
     # Convert paths for Docker
     $dataDirUnix = $dataDir -replace '\\', '/'
     $sshDirUnix = if ($sshDir) { $sshDir -replace '\\', '/' } else { "/dev/null" }
+    $claudeConfigDirUnix = if ($claudeConfigDir) { $claudeConfigDir -replace '\\', '/' } else { "/dev/null" }
 
     # Set environment variables for docker-compose
     $env:HOMESPUN_IMAGE = $ImageName
     $env:DATA_DIR = $dataDirUnix
     $env:SSH_DIR = $sshDirUnix
+    $env:CLAUDE_CONFIG_DIR = $claudeConfigDirUnix
     $env:GITHUB_TOKEN = $githubToken
-    $env:ANTHROPIC_API_KEY = $anthropicApiKey
     $env:TAILSCALE_AUTH_KEY = $tailscaleKey
     $env:TAILSCALE_HOSTNAME = $TailscaleHostname
     $env:HSP_EXTERNAL_HOSTNAME = $externalHostnameValue
@@ -436,6 +414,9 @@ try {
     Write-Host "  Data mount:  $dataDir"
     if ($sshDir) {
         Write-Host "  SSH mount:   $sshDir (read-only)"
+    }
+    if ($claudeConfigDir) {
+        Write-Host "  Claude auth: $claudeConfigDir (read-only)"
     }
     if ($Tailscale) {
         Write-Host "  Tailscale:   Enabled via sidecar ($TailscaleHostname)"

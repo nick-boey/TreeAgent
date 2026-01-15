@@ -30,12 +30,13 @@ set -e
 #
 # Environment Variables:
 #   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
-#   HSP_ANTHROPIC_API_KEY       Anthropic API key (preferred for VM secrets)
 #   HSP_TAILSCALE_AUTH_KEY      Tailscale auth key (preferred for VM secrets)
 #   HSP_EXTERNAL_HOSTNAME       External hostname for agent URLs
 #   GITHUB_TOKEN                GitHub token (fallback)
-#   ANTHROPIC_API_KEY           Anthropic API key (fallback)
 #   TAILSCALE_AUTH_KEY          Tailscale auth key (fallback)
+#
+# Volume Mounts:
+#   Claude Code config (~/.claude) is automatically mounted for OAuth authentication
 
 # Get script directory and repository root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -182,25 +183,6 @@ else
     log_success "      GitHub token found: $MASKED_TOKEN"
 fi
 
-# Read Anthropic API key
-# Check environment variables in order of preference:
-# 1. HSP_ANTHROPIC_API_KEY (for VM secrets)
-# 2. ANTHROPIC_API_KEY (standard)
-ANTHROPIC_API_KEY="${HSP_ANTHROPIC_API_KEY:-${ANTHROPIC_API_KEY:-}}"
-
-# Try reading from .env file if not in environment
-if [ -z "$ANTHROPIC_API_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
-    ANTHROPIC_API_KEY=$(grep -E "^ANTHROPIC_API_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
-fi
-
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    log_warn "      Anthropic API key not found."
-    log_warn "      Set HSP_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY for Claude agents."
-else
-    MASKED_ANTHROPIC="${ANTHROPIC_API_KEY:0:10}..."
-    log_success "      Anthropic API key found: $MASKED_ANTHROPIC"
-fi
-
 # Read Tailscale auth key from environment if not passed as argument
 if [ -z "$TAILSCALE_AUTH_KEY" ]; then
     # Check HSP_TAILSCALE_AUTH_KEY first (for VM secrets), then TAILSCALE_AUTH_KEY
@@ -224,6 +206,7 @@ log_info "[4/5] Setting up directories..."
 
 DATA_DIR="$HOME/.homespun-container/data"
 SSH_DIR="$HOME/.ssh"
+CLAUDE_CONFIG_DIR="$HOME/.claude"
 
 if [ ! -d "$DATA_DIR" ]; then
     mkdir -p "$DATA_DIR"
@@ -238,6 +221,15 @@ chmod 777 "$DATA_DIR" 2>/dev/null || true
 if [ ! -d "$SSH_DIR" ]; then
     log_warn "      SSH directory not found: $SSH_DIR"
     SSH_DIR=""
+fi
+
+# Check Claude Code config directory (for OAuth authentication)
+if [ ! -d "$CLAUDE_CONFIG_DIR" ]; then
+    log_warn "      Claude config not found: $CLAUDE_CONFIG_DIR"
+    log_warn "      Run 'claude login' on host to authenticate Claude Code."
+    CLAUDE_CONFIG_DIR=""
+else
+    log_success "      Claude config found: $CLAUDE_CONFIG_DIR"
 fi
 
 # Step 5: Start containers
@@ -262,8 +254,8 @@ fi
 export HOMESPUN_IMAGE="$IMAGE_NAME"
 export DATA_DIR="$DATA_DIR"
 export SSH_DIR="${SSH_DIR:-/dev/null}"
+export CLAUDE_CONFIG_DIR="${CLAUDE_CONFIG_DIR:-/dev/null}"
 export GITHUB_TOKEN="$GITHUB_TOKEN"
-export ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
 export TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY"
 export TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME"
 export HSP_EXTERNAL_HOSTNAME="$EXTERNAL_HOSTNAME"
@@ -307,6 +299,9 @@ fi
 echo "  Data mount:  $DATA_DIR"
 if [ -n "$SSH_DIR" ] && [ "$SSH_DIR" != "/dev/null" ]; then
     echo "  SSH mount:   $SSH_DIR (read-only)"
+fi
+if [ -n "$CLAUDE_CONFIG_DIR" ] && [ "$CLAUDE_CONFIG_DIR" != "/dev/null" ]; then
+    echo "  Claude auth: $CLAUDE_CONFIG_DIR (read-only)"
 fi
 if [ "$USE_TAILSCALE" = true ]; then
     echo "  Tailscale:   Enabled via sidecar ($TAILSCALE_HOSTNAME)"
