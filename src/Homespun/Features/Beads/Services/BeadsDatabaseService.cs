@@ -475,7 +475,7 @@ public partial class BeadsDatabaseService : IBeadsDatabaseService, IDisposable
         await using (var cmd = connection.CreateCommand())
         {
             cmd.CommandText = """
-                SELECT id, title, description, status, priority, issue_type, assignee, parent_id,
+                SELECT id, title, description, status, priority, issue_type, assignee,
                        created_at, updated_at, closed_at
                 FROM issues
                 WHERE status != 'tombstone' AND deleted_at IS NULL
@@ -493,10 +493,10 @@ public partial class BeadsDatabaseService : IBeadsDatabaseService, IDisposable
                     Priority = reader.IsDBNull(4) ? null : reader.GetInt32(4),
                     Type = ParseType(reader.IsDBNull(5) ? "task" : reader.GetString(5)),
                     Assignee = reader.IsDBNull(6) ? null : reader.GetString(6),
-                    ParentId = reader.IsDBNull(7) ? null : reader.GetString(7),
-                    CreatedAt = DateTime.Parse(reader.GetString(8)),
-                    UpdatedAt = DateTime.Parse(reader.GetString(9)),
-                    ClosedAt = reader.IsDBNull(10) ? null : DateTime.Parse(reader.GetString(10)),
+                    ParentId = null, // Not stored in beads SQLite schema
+                    CreatedAt = DateTime.Parse(reader.GetString(7)),
+                    UpdatedAt = DateTime.Parse(reader.GetString(8)),
+                    ClosedAt = reader.IsDBNull(9) ? null : DateTime.Parse(reader.GetString(9)),
                     Labels = []
                 };
                 issues[issue.Id] = issue;
