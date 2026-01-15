@@ -137,7 +137,7 @@ public class ClaudeCodeUIIntegrationTests
             portOptions,
             Mock.Of<ILogger<PortAllocationService>>());
 
-        using var testServerManager = new ClaudeCodeUIServerManager(
+        var testServerManager = new ClaudeCodeUIServerManager(
             testOptions,
             testClient,
             testPortAllocationService,
@@ -154,13 +154,41 @@ public class ClaudeCodeUIIntegrationTests
 
             // Step 1: Verify cloudcli installation
             Console.WriteLine("=== Step 1: Verify cloudcli Installation ===");
+            var cloudcliPath = FindCloudcliPath();
+            if (cloudcliPath == null)
+            {
+                Console.WriteLine("ERROR: Could not find cloudcli in PATH or npm global directory");
+                Console.WriteLine("Please install @siteboon/claude-code-ui: npm install -g @siteboon/claude-code-ui");
+                throw new InconclusiveException("cloudcli not installed");
+            }
+
+            Console.WriteLine($"Found cloudcli at: {cloudcliPath}");
+
+            // Update options to use the found path
+            testOptions = Options.Create(new ClaudeCodeUIOptions
+            {
+                ExecutablePath = cloudcliPath,
+                BasePort = testPort,
+                MaxConcurrentServers = 1,
+                ServerStartTimeoutMs = 60000,
+                HealthCheckIntervalMs = 500
+            });
+
+            // Recreate server manager with updated options
+            testServerManager.Dispose();
+            testServerManager = new ClaudeCodeUIServerManager(
+                testOptions,
+                testClient,
+                testPortAllocationService,
+                Mock.Of<ILogger<ClaudeCodeUIServerManager>>());
+
             try
             {
                 using var versionProcess = new System.Diagnostics.Process
                 {
                     StartInfo = new System.Diagnostics.ProcessStartInfo
                     {
-                        FileName = "cloudcli",
+                        FileName = cloudcliPath,
                         Arguments = "--version",
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
@@ -180,9 +208,8 @@ public class ClaudeCodeUIIntegrationTests
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"ERROR: Could not find cloudcli: {ex.Message}");
-                Console.WriteLine("Please install @siteboon/claude-code-ui: npm install -g @siteboon/claude-code-ui");
-                throw new InconclusiveException("cloudcli not installed");
+                Console.WriteLine($"ERROR: Could not run cloudcli: {ex.Message}");
+                throw new InconclusiveException("cloudcli not runnable");
             }
             Console.WriteLine();
 
@@ -327,6 +354,9 @@ public class ClaudeCodeUIIntegrationTests
             // Note: Don't delete temp directory immediately so user can inspect files
             Console.WriteLine($"Temp directory (you can inspect created files): {testTempDir}");
 
+            // Dispose server manager
+            testServerManager.Dispose();
+
             // Schedule cleanup after a delay
             _ = Task.Run(async () =>
             {
@@ -354,6 +384,12 @@ public class ClaudeCodeUIIntegrationTests
     [Explicit("Requires cloudcli to be installed. Run manually.")]
     public async Task QuickStartup_HealthCheck_NoPrompt()
     {
+        var cloudcliPath = FindCloudcliPath();
+        if (cloudcliPath == null)
+        {
+            throw new InconclusiveException("cloudcli not installed");
+        }
+
         var random = new Random();
         var testPort = random.Next(13000, 14000);
         var testTempDir = Path.Combine(Path.GetTempPath(), $"claudeui-quick-test-{Guid.NewGuid()}");
@@ -361,7 +397,7 @@ public class ClaudeCodeUIIntegrationTests
 
         var testOptions = Options.Create(new ClaudeCodeUIOptions
         {
-            ExecutablePath = "cloudcli",
+            ExecutablePath = cloudcliPath,
             BasePort = testPort,
             MaxConcurrentServers = 1,
             ServerStartTimeoutMs = 30000,
@@ -412,5 +448,65 @@ public class ClaudeCodeUIIntegrationTests
                 try { Directory.Delete(testTempDir, true); } catch { }
             }
         }
+    }
+
+    /// <summary>
+    /// Finds the cloudcli executable in PATH or common installation locations.
+    /// </summary>
+    private static string? FindCloudcliPath()
+    {
+        const string executableName = "cloudcli";
+
+        // Check PATH
+        var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var paths = pathEnv.Split(Path.PathSeparator);
+
+        foreach (var path in paths)
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                // On Windows, prefer .cmd and .exe over plain files
+                var cmdPath = Path.Combine(path, executableName + ".cmd");
+                if (File.Exists(cmdPath))
+                    return cmdPath;
+
+                var exePath = Path.Combine(path, executableName + ".exe");
+                if (File.Exists(exePath))
+                    return exePath;
+            }
+
+            var fullPath = Path.Combine(path, executableName);
+            if (File.Exists(fullPath))
+                return fullPath;
+        }
+
+        // Check npm global directory on Windows
+        if (OperatingSystem.IsWindows())
+        {
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var npmPath = Path.Combine(appData, "npm", $"{executableName}.cmd");
+            if (File.Exists(npmPath))
+                return npmPath;
+        }
+
+        // Check npm global directory on Unix
+        if (!OperatingSystem.IsWindows())
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var npmPaths = new[]
+            {
+                Path.Combine(home, ".npm-global", "bin", executableName),
+                $"/usr/local/bin/{executableName}",
+                $"/usr/bin/{executableName}"
+            };
+
+            foreach (var npmPath in npmPaths)
+            {
+                if (File.Exists(npmPath))
+                    return npmPath;
+            }
+        }
+
+        return null;
     }
 }
