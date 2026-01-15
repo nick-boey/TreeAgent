@@ -295,7 +295,7 @@ public class BeadsQueueProcessorService : BackgroundService
 
         cmd.Parameters.AddWithValue("$id", item.IssueId);
         cmd.Parameters.AddWithValue("$title", options.Title);
-        cmd.Parameters.AddWithValue("$description", options.Description ?? (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("$description", options.Description ?? "");
         cmd.Parameters.AddWithValue("$priority", options.Priority ?? 2);
         cmd.Parameters.AddWithValue("$issueType", options.Type.ToString().ToLowerInvariant());
         cmd.Parameters.AddWithValue("$createdAt", DateTime.UtcNow.ToString("O"));
