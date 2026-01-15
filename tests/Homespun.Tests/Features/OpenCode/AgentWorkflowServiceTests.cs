@@ -1,6 +1,6 @@
+using Homespun.Features.Agents.Abstractions.Models;
+using Homespun.Features.Agents.Services;
 using Homespun.Features.Beads.Data;
-using Homespun.Features.OpenCode.Models;
-using Homespun.Features.OpenCode.Services;
 using Homespun.Features.PullRequests.Data;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -11,21 +11,6 @@ namespace Homespun.Tests.Features.OpenCode;
 [TestFixture]
 public class AgentWorkflowServiceTests
 {
-    private Mock<IOpenCodeServerManager> _mockServerManager = null!;
-    private Mock<IOpenCodeClient> _mockClient = null!;
-    private Mock<IOpenCodeConfigGenerator> _mockConfigGenerator = null!;
-    private Mock<PullRequestDataService> _mockPullRequestService = null!;
-    private Mock<ILogger<AgentWorkflowService>> _mockLogger = null!;
-
-    [SetUp]
-    public void SetUp()
-    {
-        _mockServerManager = new Mock<IOpenCodeServerManager>();
-        _mockClient = new Mock<IOpenCodeClient>();
-        _mockConfigGenerator = new Mock<IOpenCodeConfigGenerator>();
-        _mockPullRequestService = new Mock<PullRequestDataService>(MockBehavior.Loose, null!);
-        _mockLogger = new Mock<ILogger<AgentWorkflowService>>();
-    }
 
     #region BuildInitialPromptForBeadsIssue Tests
 

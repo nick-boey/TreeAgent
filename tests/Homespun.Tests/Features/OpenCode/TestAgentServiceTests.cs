@@ -1,7 +1,7 @@
+using Homespun.Features.Agents.Abstractions;
+using Homespun.Features.Agents.Abstractions.Models;
 using Homespun.Features.Commands;
 using Homespun.Features.Git;
-using Homespun.Features.OpenCode;
-using Homespun.Features.OpenCode.Models;
 using Homespun.Features.OpenCode.Services;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
@@ -13,30 +13,29 @@ namespace Homespun.Tests.Features.OpenCode;
 [TestFixture]
 public class TestAgentServiceTests
 {
-    private Mock<IOpenCodeServerManager> _mockServerManager = null!;
-    private Mock<IOpenCodeClient> _mockClient = null!;
+    private Mock<IAgentHarnessFactory> _mockHarnessFactory = null!;
+    private Mock<IAgentHarness> _mockHarness = null!;
     private Mock<IGitWorktreeService> _mockWorktreeService = null!;
     private Mock<IDataStore> _mockDataStore = null!;
-    private Mock<IOpenCodeConfigGenerator> _mockConfigGenerator = null!;
     private Mock<ICommandRunner> _mockCommandRunner = null!;
     private TestAgentService _service = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _mockServerManager = new Mock<IOpenCodeServerManager>();
-        _mockClient = new Mock<IOpenCodeClient>();
+        _mockHarnessFactory = new Mock<IAgentHarnessFactory>();
+        _mockHarness = new Mock<IAgentHarness>();
         _mockWorktreeService = new Mock<IGitWorktreeService>();
         _mockDataStore = new Mock<IDataStore>();
-        _mockConfigGenerator = new Mock<IOpenCodeConfigGenerator>();
         _mockCommandRunner = new Mock<ICommandRunner>();
 
+        // Default harness factory behavior
+        _mockHarnessFactory.Setup(f => f.GetHarness("claudeui")).Returns(_mockHarness.Object);
+
         _service = new TestAgentService(
-            _mockServerManager.Object,
-            _mockClient.Object,
+            _mockHarnessFactory.Object,
             _mockWorktreeService.Object,
             _mockDataStore.Object,
-            _mockConfigGenerator.Object,
             _mockCommandRunner.Object,
             Mock.Of<ILogger<TestAgentService>>());
     }
@@ -54,14 +53,17 @@ public class TestAgentServiceTests
         };
     }
 
-    private static OpenCodeServer CreateTestServer(string entityId = "test-agent-proj-123", int port = 4099)
+    private static AgentInstance CreateTestAgentInstance(string entityId = "test-agent-proj-123")
     {
-        return new OpenCodeServer
+        return new AgentInstance
         {
+            AgentId = "agent-123",
             EntityId = entityId,
-            WorktreePath = "/path/to/hsp/test",
-            Port = port,
-            Status = OpenCodeServerStatus.Running
+            HarnessType = "claudeui",
+            WorkingDirectory = "/path/to/hsp/test",
+            Status = AgentInstanceStatus.Running,
+            WebViewUrl = "http://localhost:5000",
+            ActiveSessionId = "ses_test123"
         };
     }
 
@@ -70,10 +72,10 @@ public class TestAgentServiceTests
     {
         // Arrange
         _mockDataStore.Setup(d => d.GetProject("proj-123")).Returns((Project?)null);
-        
+
         // Act
         var result = await _service.StartTestAgentAsync("proj-123");
-        
+
         // Assert
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Does.Contain("not found"));
@@ -88,48 +90,36 @@ public class TestAgentServiceTests
         _mockWorktreeService
             .Setup(w => w.CreateWorktreeAsync("/path/to/project", "hsp/test", true, "main"))
             .ReturnsAsync((string?)null);
-        
+
         // Act
         var result = await _service.StartTestAgentAsync("proj-123");
-        
+
         // Assert
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Does.Contain("worktree"));
     }
 
     [Test]
-    public async Task StartTestAgentAsync_Success_CreatesWorktreeAndStartsServer()
+    public async Task StartTestAgentAsync_Success_CreatesWorktreeAndStartsAgent()
     {
         // Arrange
         var project = CreateTestProject();
         _mockDataStore.Setup(d => d.GetProject("proj-123")).Returns(project);
-        
+
         _mockWorktreeService
             .Setup(w => w.CreateWorktreeAsync("/path/to/project", "hsp/test", true, "main"))
             .ReturnsAsync("/path/to/hsp/test");
-        
-        _mockServerManager
-            .Setup(s => s.StartServerAsync("test-agent-proj-123", It.IsAny<string>(), false, default))
-            .ReturnsAsync(CreateTestServer());
-        
-        _mockClient
-            .Setup(c => c.CreateSessionAsync("http://127.0.0.1:4099", "Test Agent Session", default))
-            .ReturnsAsync(new OpenCodeSession { Id = "ses_test123", Title = "Test Agent Session" });
-        
+
+        _mockHarness
+            .Setup(h => h.StartAgentAsync(It.IsAny<AgentStartOptions>(), default))
+            .ReturnsAsync(CreateTestAgentInstance());
+
         // Act
         var result = await _service.StartTestAgentAsync("proj-123");
-        
+
         // Assert
         Assert.That(result.Success, Is.True);
-        Assert.That(result.ServerUrl, Is.EqualTo("http://127.0.0.1:4099"));
-        Assert.That(result.SessionId, Is.EqualTo("ses_test123"));
-        
-        // Verify prompt was sent containing test.txt
-        _mockClient.Verify(c => c.SendPromptAsyncNoWait(
-            "http://127.0.0.1:4099",
-            "ses_test123",
-            It.Is<PromptRequest>(r => r.Parts[0].Text!.Contains("test.txt")),
-            default), Times.Once);
+        Assert.That(result.WorktreePath, Is.Not.Null);
     }
 
     [Test]
@@ -138,34 +128,27 @@ public class TestAgentServiceTests
         // Arrange
         var project = CreateTestProject();
         _mockDataStore.Setup(d => d.GetProject("proj-123")).Returns(project);
-        
+
         _mockWorktreeService
             .Setup(w => w.CreateWorktreeAsync(It.IsAny<string>(), "hsp/test", true, "main"))
             .ReturnsAsync("/path/to/hsp/test");
-        
-        _mockServerManager
-            .Setup(s => s.StartServerAsync(It.IsAny<string>(), It.IsAny<string>(), false, default))
-            .ReturnsAsync(CreateTestServer());
-        
-        _mockClient
-            .Setup(c => c.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new OpenCodeSession { Id = "ses_test123", Title = "Test" });
-        
+
+        _mockHarness
+            .Setup(h => h.StartAgentAsync(It.IsAny<AgentStartOptions>(), default))
+            .ReturnsAsync(CreateTestAgentInstance());
+
         // Act
         await _service.StartTestAgentAsync("proj-123");
         var status = _service.GetTestAgentStatus("proj-123");
-        
+
         // Assert
         Assert.That(status, Is.Not.Null);
         Assert.That(status!.ProjectId, Is.EqualTo("proj-123"));
-        Assert.That(status.ServerUrl, Is.EqualTo("http://127.0.0.1:4099"));
-        Assert.That(status.SessionId, Is.EqualTo("ses_test123"));
         Assert.That(status.WebViewUrl, Is.Not.Null);
-        Assert.That(status.WebViewUrl, Does.Contain("ses_test123"));
     }
 
     [Test]
-    public async Task StopTestAgentAsync_StopsServerAndCleansUpWorktree()
+    public async Task StopTestAgentAsync_StopsAgentAndCleansUpWorktree()
     {
         // Arrange
         var project = CreateTestProject();
@@ -174,12 +157,12 @@ public class TestAgentServiceTests
         _mockCommandRunner
             .Setup(c => c.RunAsync("git", "branch -D \"hsp/test\"", "/path/to/project"))
             .ReturnsAsync(new CommandResult { Success = true });
-        
+
         // Act
         await _service.StopTestAgentAsync("proj-123");
-        
+
         // Assert
-        _mockServerManager.Verify(s => s.StopServerAsync("test-agent-proj-123", default), Times.Once);
+        _mockHarness.Verify(h => h.StopAgentAsync("test-agent-proj-123", default), Times.Once);
         _mockWorktreeService.Verify(w => w.RemoveWorktreeAsync("/path/to/project", "hsp/test"), Times.Once);
         _mockCommandRunner.Verify(c => c.RunAsync("git", "branch -D \"hsp/test\"", "/path/to/project"), Times.Once);
     }
@@ -190,30 +173,26 @@ public class TestAgentServiceTests
         // Arrange - First start an agent
         var project = CreateTestProject();
         _mockDataStore.Setup(d => d.GetProject("proj-123")).Returns(project);
-        
+
         _mockWorktreeService
             .Setup(w => w.CreateWorktreeAsync(It.IsAny<string>(), "hsp/test", true, "main"))
             .ReturnsAsync("/path/to/hsp/test");
-        
-        _mockServerManager
-            .Setup(s => s.StartServerAsync(It.IsAny<string>(), It.IsAny<string>(), false, default))
-            .ReturnsAsync(CreateTestServer());
-        
-        _mockClient
-            .Setup(c => c.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new OpenCodeSession { Id = "ses_test123", Title = "Test" });
-        
+
+        _mockHarness
+            .Setup(h => h.StartAgentAsync(It.IsAny<AgentStartOptions>(), default))
+            .ReturnsAsync(CreateTestAgentInstance());
+
         await _service.StartTestAgentAsync("proj-123");
         Assert.That(_service.GetTestAgentStatus("proj-123"), Is.Not.Null);
-        
+
         // Setup for stop
         _mockWorktreeService.Setup(w => w.RemoveWorktreeAsync(It.IsAny<string>(), "hsp/test")).ReturnsAsync(true);
         _mockCommandRunner.Setup(c => c.RunAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync(new CommandResult { Success = true });
-        
+
         // Act
         await _service.StopTestAgentAsync("proj-123");
-        
+
         // Assert
         Assert.That(_service.GetTestAgentStatus("proj-123"), Is.Null);
     }
@@ -223,75 +202,60 @@ public class TestAgentServiceTests
     {
         // Act
         var result = await _service.VerifySessionVisibilityAsync("proj-123");
-        
+
         // Assert
         Assert.That(result.SessionFound, Is.False);
         Assert.That(result.Error, Does.Contain("No active test agent"));
     }
 
     [Test]
-    public async Task VerifySessionVisibilityAsync_SessionFound_ReturnsTrue()
+    public async Task VerifySessionVisibilityAsync_AgentFound_ReturnsTrue()
     {
         // Arrange - First start a test agent
         var project = CreateTestProject();
         _mockDataStore.Setup(d => d.GetProject("proj-123")).Returns(project);
         _mockWorktreeService.Setup(w => w.CreateWorktreeAsync(It.IsAny<string>(), It.IsAny<string>(), true, "main"))
             .ReturnsAsync("/path/to/worktree");
-        _mockServerManager.Setup(s => s.StartServerAsync(It.IsAny<string>(), It.IsAny<string>(), false, default))
-            .ReturnsAsync(CreateTestServer());
-        _mockClient.Setup(c => c.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new OpenCodeSession { Id = "ses_test123", Title = "Test" });
-        
+        _mockHarness.Setup(h => h.StartAgentAsync(It.IsAny<AgentStartOptions>(), default))
+            .ReturnsAsync(CreateTestAgentInstance());
+
         await _service.StartTestAgentAsync("proj-123");
-        
-        // Setup session list
-        _mockClient
-            .Setup(c => c.ListSessionsAsync("http://127.0.0.1:4099", default))
-            .ReturnsAsync([
-                new OpenCodeSession { Id = "ses_test123", Title = "Test Agent Session" },
-                new OpenCodeSession { Id = "ses_other", Title = "Other Session" }
-            ]);
-        
+
+        // Setup agent lookup
+        _mockHarness.Setup(h => h.GetAgentForEntity("test-agent-proj-123"))
+            .Returns(CreateTestAgentInstance());
+
         // Act
         var result = await _service.VerifySessionVisibilityAsync("proj-123");
-        
+
         // Assert
         Assert.That(result.SessionFound, Is.True);
-        Assert.That(result.TotalSessions, Is.EqualTo(2));
         Assert.That(result.SessionId, Is.EqualTo("ses_test123"));
-        Assert.That(result.SessionTitle, Is.EqualTo("Test Agent Session"));
-        Assert.That(result.AllSessionIds, Contains.Item("ses_test123"));
-        Assert.That(result.AllSessionIds, Contains.Item("ses_other"));
     }
 
     [Test]
-    public async Task VerifySessionVisibilityAsync_SessionNotFound_ReturnsFalse()
+    public async Task VerifySessionVisibilityAsync_AgentNotFoundInHarness_ReturnsFalse()
     {
         // Arrange - First start a test agent
         var project = CreateTestProject();
         _mockDataStore.Setup(d => d.GetProject("proj-123")).Returns(project);
         _mockWorktreeService.Setup(w => w.CreateWorktreeAsync(It.IsAny<string>(), It.IsAny<string>(), true, "main"))
             .ReturnsAsync("/path/to/worktree");
-        _mockServerManager.Setup(s => s.StartServerAsync(It.IsAny<string>(), It.IsAny<string>(), false, default))
-            .ReturnsAsync(CreateTestServer());
-        _mockClient.Setup(c => c.CreateSessionAsync(It.IsAny<string>(), It.IsAny<string>(), default))
-            .ReturnsAsync(new OpenCodeSession { Id = "ses_test123", Title = "Test" });
-        
+        _mockHarness.Setup(h => h.StartAgentAsync(It.IsAny<AgentStartOptions>(), default))
+            .ReturnsAsync(CreateTestAgentInstance());
+
         await _service.StartTestAgentAsync("proj-123");
-        
-        // Setup session list - doesn't contain our session
-        _mockClient
-            .Setup(c => c.ListSessionsAsync("http://127.0.0.1:4099", default))
-            .ReturnsAsync([
-                new OpenCodeSession { Id = "ses_different", Title = "Different Session" }
-            ]);
-        
+
+        // Setup - agent not found in harness
+        _mockHarness.Setup(h => h.GetAgentForEntity("test-agent-proj-123"))
+            .Returns((AgentInstance?)null);
+
         // Act
         var result = await _service.VerifySessionVisibilityAsync("proj-123");
-        
+
         // Assert
         Assert.That(result.SessionFound, Is.False);
-        Assert.That(result.TotalSessions, Is.EqualTo(1));
+        Assert.That(result.Error, Does.Contain("Agent not found"));
     }
 
     [Test]
@@ -299,7 +263,7 @@ public class TestAgentServiceTests
     {
         // Act
         var status = _service.GetTestAgentStatus("proj-123");
-        
+
         // Assert
         Assert.That(status, Is.Null);
     }
