@@ -21,13 +21,27 @@ public class Graph
     /// </summary>
     public string MainBranchName { get; }
 
+    /// <summary>
+    /// Indicates whether there are more past PRs available to load.
+    /// </summary>
+    public bool HasMorePastPRs { get; }
+
+    /// <summary>
+    /// The number of past PRs currently shown in the graph.
+    /// </summary>
+    public int TotalPastPRsShown { get; }
+
     public Graph(
         IReadOnlyList<IGraphNode> nodes,
         IReadOnlyDictionary<string, GraphBranch> branches,
-        string mainBranchName = "main")
+        string mainBranchName = "main",
+        bool hasMorePastPRs = false,
+        int totalPastPRsShown = 0)
     {
         Nodes = nodes;
         Branches = branches;
         MainBranchName = mainBranchName;
+        HasMorePastPRs = hasMorePastPRs;
+        TotalPastPRsShown = totalPastPRsShown;
     }
 }

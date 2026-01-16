@@ -70,7 +70,9 @@ public class GitgraphApiMapper
         {
             MainBranchName = graph.MainBranchName,
             Branches = branches,
-            Commits = commits
+            Commits = commits,
+            HasMorePastPRs = graph.HasMorePastPRs,
+            TotalPastPRsShown = graph.TotalPastPRsShown
         };
     }
 
@@ -92,6 +94,8 @@ public class GitgraphJsonData
     public string MainBranchName { get; set; } = "main";
     public List<GitgraphBranchData> Branches { get; set; } = [];
     public List<GitgraphCommitData> Commits { get; set; } = [];
+    public bool HasMorePastPRs { get; set; }
+    public int TotalPastPRsShown { get; set; }
 }
 
 /// <summary>

@@ -421,6 +421,126 @@ public class GraphBuilderTests
 
     #endregion
 
+    #region MaxPastPRs Filtering
+
+    [Test]
+    public void Build_WithMaxPastPRs_LimitsClosedPRs()
+    {
+        // Arrange - Create 10 merged PRs
+        var prs = Enumerable.Range(1, 10)
+            .Select(i => CreateMergedPR(i, DateTime.UtcNow.AddDays(-10 + i)))
+            .ToList();
+
+        // Act - Request only 5 most recent
+        var graph = _builder.Build(prs, [], [], maxPastPRs: 5);
+
+        // Assert - Should only have 5 PRs (the most recent ones: 6, 7, 8, 9, 10)
+        var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
+        Assert.That(prNodes, Has.Count.EqualTo(5));
+        Assert.That(prNodes[0].PullRequest.Number, Is.EqualTo(6)); // 6th oldest = oldest of the 5 most recent
+        Assert.That(prNodes[4].PullRequest.Number, Is.EqualTo(10)); // Most recent
+    }
+
+    [Test]
+    public void Build_WithMaxPastPRs_SetsHasMorePastPRsTrue()
+    {
+        // Arrange - Create 10 merged PRs
+        var prs = Enumerable.Range(1, 10)
+            .Select(i => CreateMergedPR(i, DateTime.UtcNow.AddDays(-10 + i)))
+            .ToList();
+
+        // Act - Request only 5
+        var graph = _builder.Build(prs, [], [], maxPastPRs: 5);
+
+        // Assert
+        Assert.That(graph.HasMorePastPRs, Is.True);
+        Assert.That(graph.TotalPastPRsShown, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void Build_WithMaxPastPRs_SetsHasMorePastPRsFalse_WhenAllShown()
+    {
+        // Arrange - Create 3 merged PRs
+        var prs = Enumerable.Range(1, 3)
+            .Select(i => CreateMergedPR(i, DateTime.UtcNow.AddDays(-3 + i)))
+            .ToList();
+
+        // Act - Request 5 but only 3 exist
+        var graph = _builder.Build(prs, [], [], maxPastPRs: 5);
+
+        // Assert
+        Assert.That(graph.HasMorePastPRs, Is.False);
+        Assert.That(graph.TotalPastPRsShown, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Build_WithMaxPastPRsNull_ShowsAllPRs()
+    {
+        // Arrange - Create 10 merged PRs
+        var prs = Enumerable.Range(1, 10)
+            .Select(i => CreateMergedPR(i, DateTime.UtcNow.AddDays(-10 + i)))
+            .ToList();
+
+        // Act - No limit
+        var graph = _builder.Build(prs, [], [], maxPastPRs: null);
+
+        // Assert - Should show all 10
+        var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
+        Assert.That(prNodes, Has.Count.EqualTo(10));
+        Assert.That(graph.HasMorePastPRs, Is.False);
+    }
+
+    [Test]
+    public void Build_WithMaxPastPRs_DoesNotAffectOpenPRs()
+    {
+        // Arrange - Create 10 merged and 3 open PRs
+        var mergedPrs = Enumerable.Range(1, 10)
+            .Select(i => CreateMergedPR(i, DateTime.UtcNow.AddDays(-10 + i)))
+            .ToList();
+        var openPrs = Enumerable.Range(11, 3)
+            .Select(i => CreateOpenPR(i, PullRequestStatus.InProgress))
+            .ToList();
+        var allPrs = mergedPrs.Concat(openPrs).ToList();
+
+        // Act - Limit to 5 past PRs
+        var graph = _builder.Build(allPrs, [], [], maxPastPRs: 5);
+
+        // Assert - Should have 5 merged + 3 open = 8 total PRs
+        var prNodes = graph.Nodes.OfType<PullRequestNode>().ToList();
+        Assert.That(prNodes, Has.Count.EqualTo(8));
+
+        var mergedNodes = prNodes.Where(n => n.NodeType == GraphNodeType.MergedPullRequest).ToList();
+        var openNodes = prNodes.Where(n => n.NodeType == GraphNodeType.OpenPullRequest).ToList();
+
+        Assert.That(mergedNodes, Has.Count.EqualTo(5));
+        Assert.That(openNodes, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public void Build_WithMaxPastPRs_IncludesBothMergedAndClosedInLimit()
+    {
+        // Arrange - Create 5 merged and 5 closed PRs
+        var mergedPrs = Enumerable.Range(1, 5)
+            .Select(i => CreateMergedPR(i, DateTime.UtcNow.AddDays(-10 + i)))
+            .ToList();
+        var closedPrs = Enumerable.Range(6, 5)
+            .Select(i => CreateClosedPR(i, DateTime.UtcNow.AddDays(-5 + i)))
+            .ToList();
+        var allPrs = mergedPrs.Concat(closedPrs).ToList();
+
+        // Act - Limit to 5 past PRs
+        var graph = _builder.Build(allPrs, [], [], maxPastPRs: 5);
+
+        // Assert - Should have 5 most recent (which includes both merged and closed)
+        var prNodes = graph.Nodes.OfType<PullRequestNode>()
+            .Where(n => n.NodeType == GraphNodeType.MergedPullRequest || n.NodeType == GraphNodeType.ClosedPullRequest)
+            .ToList();
+        Assert.That(prNodes, Has.Count.EqualTo(5));
+        Assert.That(graph.HasMorePastPRs, Is.True);
+    }
+
+    #endregion
+
     #region Branch Creation
 
     [Test]

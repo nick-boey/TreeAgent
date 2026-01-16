@@ -90,6 +90,7 @@
     private bool _isLoading = true;
     private string? _error;
     private GitgraphJsonData? _graphData;
+    private int _currentMaxPastPRs = 5;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -125,7 +126,7 @@
     {
         try
         {
-            _graphData = await GraphService.BuildGraphJsonAsync(ProjectId);
+            _graphData = await GraphService.BuildGraphJsonAsync(ProjectId, _currentMaxPastPRs);
 
             if (_jsModule != null)
             {
@@ -150,6 +151,14 @@
         }
 
         StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task LoadMorePastPRs()
+    {
+        // Increase the limit by 5
+        _currentMaxPastPRs += 5;
+        await LoadAndRenderGraph();
     }
 
     [JSInvokable]

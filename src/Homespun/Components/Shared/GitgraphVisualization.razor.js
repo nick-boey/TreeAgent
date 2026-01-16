@@ -292,6 +292,44 @@ export async function initializeGraph(containerId, graphData, dotNetRef) {
         // Get text color for messages
         const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#000';
 
+        // Helper to create "Load More" button render function
+        function createLoadMoreRenderDot(commit, dotNetRef) {
+            const size = commit.style.dot.size;
+            const g = document.createElementNS(SVG_NAMESPACE, 'g');
+            g.classList.add('node-load-more');
+            g.setAttribute('data-node-id', 'load-more-past-prs');
+
+            // Create a clickable circle with "+" symbol
+            const circle = document.createElementNS(SVG_NAMESPACE, 'circle');
+            circle.setAttribute('cx', size.toString());
+            circle.setAttribute('cy', size.toString());
+            circle.setAttribute('r', (size * 1.2).toString());
+            circle.setAttribute('fill', themeColors.branch1);
+            circle.setAttribute('stroke', '#fff');
+            circle.setAttribute('stroke-width', '2');
+            g.appendChild(circle);
+
+            // Add "+" text
+            const text = document.createElementNS(SVG_NAMESPACE, 'text');
+            text.setAttribute('x', size.toString());
+            text.setAttribute('y', size.toString());
+            text.setAttribute('font-size', '12');
+            text.setAttribute('font-weight', 'bold');
+            text.setAttribute('fill', '#fff');
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'middle');
+            text.textContent = '+';
+            g.appendChild(text);
+
+            // Add click handler
+            g.style.cursor = 'pointer';
+            g.addEventListener('click', () => {
+                dotNetRef.invokeMethodAsync('LoadMorePastPRs');
+            });
+
+            return g;
+        }
+
         // Helper to create commit options
         function createCommitOptions(commitData) {
             const isIssue = commitData.nodeType.includes('Issue');
@@ -327,6 +365,35 @@ export async function initializeGraph(containerId, graphData, dotNetRef) {
                     return text;
                 }
             };
+        }
+
+        // Add "Load More" button at the top if there are more past PRs
+        if (graphData.hasMorePastPRs) {
+            mainBranch.commit({
+                subject: '▼ Load more past PRs',
+                hash: 'load-more-past-prs',
+                style: {
+                    dot: {
+                        color: themeColors.branch1
+                    }
+                },
+                renderDot: (commit) => createLoadMoreRenderDot(commit, dotNetRef),
+                renderMessage: (commit) => {
+                    const text = document.createElementNS(SVG_NAMESPACE, 'text');
+                    text.setAttribute('dominant-baseline', 'middle');
+                    text.setAttribute('dy', '0.35em');
+                    text.setAttribute('fill', themeColors.branch1);
+                    text.setAttribute('font-weight', 'bold');
+                    text.style.cursor = 'pointer';
+                    text.textContent = commit.subject;
+
+                    text.addEventListener('click', () => {
+                        dotNetRef.invokeMethodAsync('LoadMorePastPRs');
+                    });
+
+                    return text;
+                }
+            });
         }
 
         // Process commits - create branches lazily when first needed

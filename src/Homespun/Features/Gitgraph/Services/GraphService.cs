@@ -21,7 +21,7 @@ public class GraphService(
     private readonly GitgraphApiMapper _mapper = new();
 
     /// <inheritdoc />
-    public async Task<Graph> BuildGraphAsync(string projectId)
+    public async Task<Graph> BuildGraphAsync(string projectId, int? maxPastPRs = 5)
     {
         var project = await projectService.GetByIdAsync(projectId);
         if (project == null)
@@ -42,16 +42,16 @@ public class GraphService(
         var dependencies = await GetDependenciesSafe(project.LocalPath, issues);
 
         logger.LogDebug(
-            "Building graph for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues, {DepCount} dependencies",
-            projectId, openPrs.Count, closedPrs.Count, issues.Count, dependencies.Count);
+            "Building graph for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues, {DepCount} dependencies, maxPastPRs: {MaxPastPRs}",
+            projectId, openPrs.Count, closedPrs.Count, issues.Count, dependencies.Count, maxPastPRs);
 
-        return _graphBuilder.Build(allPrs, issues, dependencies);
+        return _graphBuilder.Build(allPrs, issues, dependencies, maxPastPRs);
     }
 
     /// <inheritdoc />
-    public async Task<GitgraphJsonData> BuildGraphJsonAsync(string projectId)
+    public async Task<GitgraphJsonData> BuildGraphJsonAsync(string projectId, int? maxPastPRs = 5)
     {
-        var graph = await BuildGraphAsync(projectId);
+        var graph = await BuildGraphAsync(projectId, maxPastPRs);
         return _mapper.ToJson(graph);
     }
 

@@ -23,10 +23,15 @@ public class GraphBuilder
     /// <summary>
     /// Builds a graph from PRs and issues following the ordering rules.
     /// </summary>
+    /// <param name="pullRequests">All pull requests to include in the graph.</param>
+    /// <param name="issues">All issues to include in the graph.</param>
+    /// <param name="dependencies">All dependencies between issues.</param>
+    /// <param name="maxPastPRs">Maximum number of past (closed/merged) PRs to show. If null, shows all.</param>
     public Graph Build(
         IEnumerable<PullRequestInfo> pullRequests,
         IEnumerable<BeadsIssue> issues,
-        IEnumerable<BeadsDependency> dependencies)
+        IEnumerable<BeadsDependency> dependencies,
+        int? maxPastPRs = null)
     {
         var nodes = new List<IGraphNode>();
         var branches = new Dictionary<string, GraphBranch>();
@@ -46,7 +51,7 @@ public class GraphBuilder
         };
 
         // Phase 1: Add closed/merged PRs (oldest first by merge/close date)
-        var closedPrNodes = AddClosedPullRequests(prList, nodes, branches);
+        var (closedPrNodes, totalPastPRs, hasMorePastPRs) = AddClosedPullRequests(prList, nodes, branches, maxPastPRs);
 
         // Phase 2: Add open PRs (ordered by created date)
         AddOpenPullRequests(prList, nodes, branches, closedPrNodes.LastOrDefault());
@@ -58,7 +63,7 @@ public class GraphBuilder
         // Phase 4: Add orphan issues in a chain
         AddOrphanIssues(orphanIssues, nodes, branches, closedPrNodes.LastOrDefault());
 
-        return new Graph(nodes, branches, _mainBranchName);
+        return new Graph(nodes, branches, _mainBranchName, hasMorePastPRs, closedPrNodes.Count);
     }
 
     /// <summary>
@@ -85,15 +90,26 @@ public class GraphBuilder
     /// <summary>
     /// Adds closed/merged PRs to the graph in chronological order.
     /// </summary>
-    private List<PullRequestNode> AddClosedPullRequests(
+    /// <returns>Tuple of (nodes added, total past PRs available, has more PRs to load)</returns>
+    private (List<PullRequestNode> nodes, int totalPastPRs, bool hasMorePastPRs) AddClosedPullRequests(
         List<PullRequestInfo> prs,
         List<IGraphNode> nodes,
-        Dictionary<string, GraphBranch> branches)
+        Dictionary<string, GraphBranch> branches,
+        int? maxPastPRs)
     {
-        var closedPrs = prs
+        var allClosedPrs = prs
             .Where(pr => pr.Status == PullRequestStatus.Merged || pr.Status == PullRequestStatus.Closed)
             .OrderBy(pr => GetCloseDate(pr))
             .ToList();
+
+        var totalPastPRs = allClosedPrs.Count;
+
+        // Apply limit if specified, taking the most recent ones (from the end of the ordered list)
+        var closedPrs = maxPastPRs.HasValue && maxPastPRs.Value < allClosedPrs.Count
+            ? allClosedPrs.Skip(allClosedPrs.Count - maxPastPRs.Value).ToList()
+            : allClosedPrs;
+
+        var hasMorePastPRs = maxPastPRs.HasValue && allClosedPrs.Count > maxPastPRs.Value;
 
         var resultNodes = new List<PullRequestNode>();
 
@@ -107,7 +123,7 @@ public class GraphBuilder
             resultNodes.Add(node);
         }
 
-        return resultNodes;
+        return (resultNodes, totalPastPRs, hasMorePastPRs);
     }
 
     /// <summary>
