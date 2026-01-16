@@ -1,6 +1,6 @@
 using Homespun.Features.GitHub;
 using Homespun.Features.OpenCode;
-using Homespun.Features.OpenCode.Hubs;
+using Homespun.Features.Agents.Hubs;
 using Homespun.Features.OpenCode.Models;
 using Homespun.Features.OpenCode.Services;
 using Microsoft.AspNetCore.SignalR;

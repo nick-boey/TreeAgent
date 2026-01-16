@@ -30,10 +30,13 @@ set -e
 #
 # Environment Variables:
 #   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
-#   HSP_TAILSCALE_AUTH_KEY          Tailscale auth key (preferred for VM secrets)
+#   HSP_TAILSCALE_AUTH_KEY      Tailscale auth key (preferred for VM secrets)
 #   HSP_EXTERNAL_HOSTNAME       External hostname for agent URLs
 #   GITHUB_TOKEN                GitHub token (fallback)
 #   TAILSCALE_AUTH_KEY          Tailscale auth key (fallback)
+#
+# Volume Mounts:
+#   Claude Code config (~/.claude) is automatically mounted for OAuth authentication
 
 # Get script directory and repository root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -203,6 +206,7 @@ log_info "[4/5] Setting up directories..."
 
 DATA_DIR="$HOME/.homespun-container/data"
 SSH_DIR="$HOME/.ssh"
+CLAUDE_CREDENTIALS_FILE="$HOME/.claude/.credentials.json"
 
 if [ ! -d "$DATA_DIR" ]; then
     mkdir -p "$DATA_DIR"
@@ -217,6 +221,15 @@ chmod 777 "$DATA_DIR" 2>/dev/null || true
 if [ ! -d "$SSH_DIR" ]; then
     log_warn "      SSH directory not found: $SSH_DIR"
     SSH_DIR=""
+fi
+
+# Check Claude Code credentials file (for OAuth authentication)
+if [ ! -f "$CLAUDE_CREDENTIALS_FILE" ]; then
+    log_warn "      Claude credentials not found: $CLAUDE_CREDENTIALS_FILE"
+    log_warn "      Run 'claude login' on host to authenticate Claude Code."
+    CLAUDE_CREDENTIALS_FILE=""
+else
+    log_success "      Claude credentials found: $CLAUDE_CREDENTIALS_FILE"
 fi
 
 # Step 5: Start containers
@@ -241,6 +254,7 @@ fi
 export HOMESPUN_IMAGE="$IMAGE_NAME"
 export DATA_DIR="$DATA_DIR"
 export SSH_DIR="${SSH_DIR:-/dev/null}"
+export CLAUDE_CREDENTIALS_FILE="${CLAUDE_CREDENTIALS_FILE:-/dev/null}"
 export GITHUB_TOKEN="$GITHUB_TOKEN"
 export TAILSCALE_AUTH_KEY="$TAILSCALE_AUTH_KEY"
 export TAILSCALE_HOSTNAME="$TAILSCALE_HOSTNAME"
@@ -285,6 +299,9 @@ fi
 echo "  Data mount:  $DATA_DIR"
 if [ -n "$SSH_DIR" ] && [ "$SSH_DIR" != "/dev/null" ]; then
     echo "  SSH mount:   $SSH_DIR (read-only)"
+fi
+if [ -n "$CLAUDE_CREDENTIALS_FILE" ] && [ "$CLAUDE_CREDENTIALS_FILE" != "/dev/null" ]; then
+    echo "  Claude auth: $CLAUDE_CREDENTIALS_FILE (read-only)"
 fi
 if [ "$USE_TAILSCALE" = true ]; then
     echo "  Tailscale:   Enabled via sidecar ($TAILSCALE_HOSTNAME)"

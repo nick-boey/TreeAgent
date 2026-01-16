@@ -1,5 +1,5 @@
+using Homespun.Features.Agents.Hubs;
 using Homespun.Features.Beads.Data;
-using Homespun.Features.OpenCode.Hubs;
 using Homespun.Features.PullRequests.Data;
 using Microsoft.AspNetCore.SignalR;
 
