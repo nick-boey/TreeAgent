@@ -140,6 +140,16 @@ public class PullRequestDataService(
             "Creating worktree for PR {PullRequestId} branch {BranchName} in {LocalPath}",
             id, pullRequest.BranchName, project.LocalPath);
 
+        // Ensure the base branch is up-to-date before creating a new branch from it
+        var baseBranch = project.DefaultBranch;
+        var fetchSuccess = await worktreeService.FetchAndUpdateBranchAsync(project.LocalPath, baseBranch);
+        if (!fetchSuccess)
+        {
+            logger.LogWarning(
+                "Failed to fetch latest changes for base branch {BaseBranch}, continuing with local version",
+                baseBranch);
+        }
+
         // Create worktree for the pull request
         var worktreePath = await worktreeService.CreateWorktreeAsync(
             project.LocalPath,

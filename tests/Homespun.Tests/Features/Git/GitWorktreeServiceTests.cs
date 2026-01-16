@@ -214,4 +214,64 @@ public class GitWorktreeServiceTests
         // Assert
         Assert.That(result, Is.Not.Null);
     }
+
+    [Test]
+    public async Task FetchAndUpdateBranchAsync_Success_ReturnsTrue()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "repo");
+        var branchName = "main";
+
+        _mockRunner.Setup(r => r.RunAsync("git", $"fetch origin {branchName}:{branchName}", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Act
+        var result = await _service.FetchAndUpdateBranchAsync(repoPath, branchName);
+
+        // Assert
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public async Task FetchAndUpdateBranchAsync_FetchFails_FallsBackToSimpleFetch()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "repo");
+        var branchName = "main";
+
+        // First fetch command fails (branch might be checked out)
+        _mockRunner.Setup(r => r.RunAsync("git", $"fetch origin {branchName}:{branchName}", repoPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "cannot lock ref" });
+
+        // Simple fetch succeeds
+        _mockRunner.Setup(r => r.RunAsync("git", "fetch origin", repoPath))
+            .ReturnsAsync(new CommandResult { Success = true });
+
+        // Act
+        var result = await _service.FetchAndUpdateBranchAsync(repoPath, branchName);
+
+        // Assert
+        Assert.That(result, Is.True);
+        _mockRunner.Verify(r => r.RunAsync("git", "fetch origin", repoPath), Times.Once);
+    }
+
+    [Test]
+    public async Task FetchAndUpdateBranchAsync_BothFetchesFail_ReturnsFalse()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "repo");
+        var branchName = "main";
+
+        _mockRunner.Setup(r => r.RunAsync("git", $"fetch origin {branchName}:{branchName}", repoPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "some error" });
+
+        _mockRunner.Setup(r => r.RunAsync("git", "fetch origin", repoPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "network error" });
+
+        // Act
+        var result = await _service.FetchAndUpdateBranchAsync(repoPath, branchName);
+
+        // Assert
+        Assert.That(result, Is.False);
+    }
 }

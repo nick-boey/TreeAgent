@@ -190,6 +190,16 @@ public class AgentWorkflowService : IAgentWorkflowService
                 branchName = BeadsBranchHelper.GenerateBranchName(
                     group, issue.Type.ToString().ToLowerInvariant(), branchId, issueId);
 
+                // Ensure the base branch is up-to-date before creating a new branch from it
+                var baseBranch = project.DefaultBranch;
+                var fetchSuccess = await _worktreeService.FetchAndUpdateBranchAsync(project.LocalPath, baseBranch);
+                if (!fetchSuccess)
+                {
+                    _logger.LogWarning(
+                        "Failed to fetch latest changes for base branch {BaseBranch}, continuing with local version",
+                        baseBranch);
+                }
+
                 // Create worktree
                 _logger.LogInformation("Creating worktree for beads issue {IssueId} on branch {BranchName}",
                     issueId, branchName);
