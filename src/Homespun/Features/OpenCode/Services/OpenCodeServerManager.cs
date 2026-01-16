@@ -1,8 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Homespun.Features.Agents.Abstractions.Models;
+using Homespun.Features.Agents.Hubs;
 using Homespun.Features.GitHub;
-using Homespun.Features.OpenCode.Hubs;
 using Homespun.Features.OpenCode.Models;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
@@ -366,19 +367,21 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
     /// </summary>
     private async Task BroadcastServerListAsync()
     {
-        var servers = GetRunningServers()
-            .Select(s => new RunningServerInfo
+        var agents = GetRunningServers()
+            .Select(s => new RunningAgentInfo
             {
                 EntityId = s.EntityId,
+                HarnessType = "opencode",
                 Port = s.Port,
                 BaseUrl = s.ExternalBaseUrl, // Use external URL for UI display
-                WorktreePath = s.WorktreePath,
+                WorkingDirectory = s.WorktreePath,
                 StartedAt = s.StartedAt,
                 ActiveSessionId = s.ActiveSessionId,
-                WebViewUrl = s.WebViewUrl
+                WebViewUrl = s.WebViewUrl,
+                Status = s.Status == OpenCodeServerStatus.Running ? AgentInstanceStatus.Running : AgentInstanceStatus.Starting
             }).ToList();
 
-        await _hubContext.BroadcastServerListChanged(servers);
+        await _hubContext.BroadcastAgentListChanged(agents);
     }
 
     public async Task<bool> IsHealthyAsync(OpenCodeServer server, CancellationToken ct = default)

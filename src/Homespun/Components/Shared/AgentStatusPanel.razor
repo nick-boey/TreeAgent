@@ -1,4 +1,5 @@
-@using Homespun.Features.OpenCode.Hubs
+@using Homespun.Features.Agents.Services
+@using Homespun.Features.Agents.Hubs
 @using Homespun.Features.OpenCode.Services
 @using Microsoft.AspNetCore.SignalR.Client
 @implements IAsyncDisposable
@@ -24,17 +25,17 @@
             </div>
         </div>
     }
-    else if (AgentStatus != null)
+    else if (_agentStatus != null)
     {
         <div class="panel-body">
             <div class="status-info">
                 <small class="text-muted">
-                    Server: <code>localhost:@AgentStatus.Server.Port</code>
+                    Harness: <code>@_agentStatus.HarnessType</code>
                 </small>
-                @if (AgentStatus.ActiveSession != null)
+                @if (!string.IsNullOrEmpty(_agentStatus.Agent.ActiveSessionId))
                 {
                     <small class="text-muted d-block">
-                        Session: <code>@AgentStatus.ActiveSession.Id[..8]...</code>
+                        Session: <code>@_agentStatus.Agent.ActiveSessionId[..Math.Min(8, _agentStatus.Agent.ActiveSessionId.Length)]...</code>
                     </small>
                 }
             </div>
@@ -148,15 +149,15 @@
     [Parameter] public string PullRequestId { get; set; } = "";
     [Parameter] public bool CanStart { get; set; } = true;
     [Parameter] public EventCallback OnStatusChanged { get; set; }
-    
-    private AgentStatus? AgentStatus { get; set; }
+
+    private WorkflowAgentStatus? _agentStatus;
     private bool IsLoading { get; set; }
     private string? ErrorMessage { get; set; }
     private string? LastMessage { get; set; }
     private HubConnection? _hubConnection;
     private string _selectedModel = "anthropic/claude-opus-4";
-    
-    private bool IsRunning => AgentStatus != null;
+
+    private bool IsRunning => _agentStatus != null;
     
     protected override async Task OnInitializedAsync()
     {
@@ -183,11 +184,11 @@
                 }
             });
             
-            _hubConnection.On<string, AgentStatus>("AgentStarted", (pullRequestId, status) =>
+            _hubConnection.On<string, WorkflowAgentStatus>("AgentStarted", (pullRequestId, status) =>
             {
                 if (pullRequestId == PullRequestId)
                 {
-                    AgentStatus = status;
+                    _agentStatus = status;
                     InvokeAsync(async () =>
                     {
                         StateHasChanged();
@@ -195,12 +196,12 @@
                     });
                 }
             });
-            
+
             _hubConnection.On<string>("AgentStopped", pullRequestId =>
             {
                 if (pullRequestId == PullRequestId)
                 {
-                    AgentStatus = null;
+                    _agentStatus = null;
                     InvokeAsync(async () =>
                     {
                         StateHasChanged();
@@ -222,21 +223,21 @@
     {
         try
         {
-            AgentStatus = await AgentWorkflowService.GetAgentStatusAsync(PullRequestId);
+            _agentStatus = await AgentWorkflowService.GetAgentStatusAsync(PullRequestId);
         }
         catch
         {
-            AgentStatus = null;
+            _agentStatus = null;
         }
     }
-    
+
     private async Task StartAgent()
     {
         IsLoading = true;
         ErrorMessage = null;
         try
         {
-            AgentStatus = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequestId, _selectedModel);
+            _agentStatus = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequestId, _selectedModel);
             await OnStatusChanged.InvokeAsync();
         }
         catch (Exception ex)
@@ -248,7 +249,7 @@
             IsLoading = false;
         }
     }
-    
+
     private async Task StopAgent()
     {
         IsLoading = true;
@@ -256,7 +257,7 @@
         try
         {
             await AgentWorkflowService.StopAgentAsync(PullRequestId);
-            AgentStatus = null;
+            _agentStatus = null;
             await OnStatusChanged.InvokeAsync();
         }
         catch (Exception ex)

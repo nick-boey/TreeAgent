@@ -1,4 +1,5 @@
-using Homespun.Features.OpenCode.Hubs;
+using Homespun.Features.Agents.Abstractions.Models;
+using Homespun.Features.Agents.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.OpenCode.Services;
@@ -31,11 +32,19 @@ public class AgentStartupBroadcaster(
         try
         {
             logger.LogDebug(
-                "Broadcasting agent startup state change: {EntityId} -> {State}", 
-                info.EntityId, 
+                "Broadcasting agent startup state change: {EntityId} -> {State}",
+                info.EntityId,
                 info.State);
-            
-            await hubContext.BroadcastAgentStartupStateChanged(info);
+
+            var status = info.State switch
+            {
+                AgentStartupState.Starting => AgentInstanceStatus.Starting,
+                AgentStartupState.Started => AgentInstanceStatus.Running,
+                AgentStartupState.Failed => AgentInstanceStatus.Failed,
+                _ => AgentInstanceStatus.Stopped
+            };
+
+            await hubContext.BroadcastAgentStartupStateChanged(info.EntityId, status, info.ErrorMessage);
         }
         catch (Exception ex)
         {

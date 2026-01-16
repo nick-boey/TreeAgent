@@ -1,21 +1,20 @@
 using System.Collections.Concurrent;
+using Homespun.Features.Agents.Abstractions;
+using Homespun.Features.Agents.Abstractions.Models;
 using Homespun.Features.Commands;
 using Homespun.Features.Git;
-using Homespun.Features.OpenCode.Models;
 using Homespun.Features.PullRequests.Data;
 
 namespace Homespun.Features.OpenCode.Services;
 
 /// <summary>
-/// Service for running test agents to debug OpenCode integration.
+/// Service for running test agents to debug Claude Code integration.
 /// Only available in DEBUG builds.
 /// </summary>
 public class TestAgentService(
-    IOpenCodeServerManager serverManager,
-    IOpenCodeClient client,
+    IAgentHarnessFactory harnessFactory,
     IGitWorktreeService worktreeService,
     IDataStore dataStore,
-    IOpenCodeConfigGenerator configGenerator,
     ICommandRunner commandRunner,
     ILogger<TestAgentService> logger) : ITestAgentService
 {
@@ -23,9 +22,9 @@ public class TestAgentService(
     private const string TestFileName = "test.txt";
     private const string TestEntityPrefix = "test-agent-";
 
-    // Use GLM-4.7 for test agents as it's free and doesn't require an API key
-    private const string TestAgentModel = "opencode/glm-4.7-free";
-    
+    // Use Claude Code UI harness for test agents (uses Claude Max subscription)
+    private const string TestHarnessType = "claudeui";
+
     private readonly ConcurrentDictionary<string, TestAgentStatus> _activeTestAgents = new();
 
     public async Task<TestAgentResult> StartTestAgentAsync(string projectId, CancellationToken ct = default)
@@ -38,41 +37,41 @@ public class TestAgentService(
             {
                 return TestAgentResult.Fail($"Project {projectId} not found");
             }
-            
-            logger.LogInformation("Starting test agent for project {ProjectId} at {LocalPath}", 
+
+            logger.LogInformation("Starting test agent for project {ProjectId} at {LocalPath}",
                 projectId, project.LocalPath);
-            
+
             // 2. Clean up any existing test worktree and branch first
             // This ensures a fresh start even if previous cleanup failed
             if (await worktreeService.WorktreeExistsAsync(project.LocalPath, TestBranchName))
             {
                 logger.LogInformation("Removing existing test worktree for branch {Branch}", TestBranchName);
                 await worktreeService.RemoveWorktreeAsync(project.LocalPath, TestBranchName);
-                
+
                 // Also delete the branch to ensure clean state
                 await commandRunner.RunAsync("git", $"branch -D \"{TestBranchName}\"", project.LocalPath);
             }
-            
+
             // Prune any stale worktree references
             await worktreeService.PruneWorktreesAsync(project.LocalPath);
-            
+
             // 3. Create worktree path
             // Worktree will be: ~/.homespun/src/<project>/hsp/test
             var worktreePath = await worktreeService.CreateWorktreeAsync(
-                project.LocalPath, 
-                TestBranchName, 
-                createBranch: true, 
+                project.LocalPath,
+                TestBranchName,
+                createBranch: true,
                 baseBranch: project.DefaultBranch);
-            
+
             if (string.IsNullOrEmpty(worktreePath))
             {
                 return TestAgentResult.Fail("Failed to create test worktree");
             }
-            
+
             // Normalize the path
             worktreePath = Path.GetFullPath(worktreePath);
             logger.LogInformation("Test worktree at {WorktreePath}", worktreePath);
-            
+
             // 4. Delete test.txt if it exists
             var testFilePath = Path.Combine(worktreePath, TestFileName);
             if (File.Exists(testFilePath))
@@ -80,44 +79,40 @@ public class TestAgentService(
                 File.Delete(testFilePath);
                 logger.LogInformation("Deleted existing {TestFile}", testFilePath);
             }
-            
-            // 5. Generate opencode.json config with GLM-4.7 (free, no API key required)
-            var config = configGenerator.CreateDefaultConfig(TestAgentModel);
-            await configGenerator.GenerateConfigAsync(worktreePath, config, ct);
-            
-            // 6. Start OpenCode server
+
+            // 5. Get the Claude Code UI harness
+            var harness = harnessFactory.GetHarness(TestHarnessType);
+
+            // 6. Start agent with initial prompt
             var entityId = $"{TestEntityPrefix}{projectId}";
-            var server = await serverManager.StartServerAsync(entityId, worktreePath, continueSession: false, ct);
-            
-            logger.LogInformation("Test OpenCode server started at {BaseUrl}", server.BaseUrl);
-            
-            // 7. Create session
-            var session = await client.CreateSessionAsync(server.BaseUrl, "Test Agent Session", ct);
-            logger.LogInformation("Test session created: {SessionId}", session.Id);
-            
-            // Set ActiveSessionId so WebViewUrl computes correctly
-            server.ActiveSessionId = session.Id;
-            
-            // 8. Send test prompt (fire and forget)
-            var prompt = PromptRequest.FromText(
-                $"Create a file called '{TestFileName}' in the current directory with the content 'Hello from OpenCode test agent - created at {DateTime.UtcNow:O}'");
-            
-            await client.SendPromptAsyncNoWait(server.BaseUrl, session.Id, prompt, ct);
-            logger.LogInformation("Test prompt sent to session {SessionId}", session.Id);
-            
-            // 9. Track status
+            var options = new AgentStartOptions
+            {
+                EntityId = entityId,
+                WorkingDirectory = worktreePath,
+                SessionTitle = "Test Agent Session",
+                InitialPrompt = new AgentPrompt
+                {
+                    Text = $"Create a file called '{TestFileName}' in the current directory with the content 'Hello from Claude Code test agent - created at {DateTime.UtcNow:O}'"
+                }
+            };
+
+            var agent = await harness.StartAgentAsync(options, ct);
+
+            logger.LogInformation("Test Claude Code agent started at {WebViewUrl}", agent.WebViewUrl);
+
+            // 7. Track status
             var status = new TestAgentStatus
             {
                 ProjectId = projectId,
-                ServerUrl = server.BaseUrl,
-                SessionId = session.Id,
+                ServerUrl = agent.ApiBaseUrl ?? "",
+                SessionId = agent.ActiveSessionId ?? "",
                 WorktreePath = worktreePath,
-                WebViewUrl = server.WebViewUrl,
+                WebViewUrl = agent.WebViewUrl,
                 StartedAt = DateTime.UtcNow
             };
             _activeTestAgents[projectId] = status;
-            
-            return TestAgentResult.Ok(server.BaseUrl, session.Id, worktreePath);
+
+            return TestAgentResult.Ok(agent.ApiBaseUrl ?? "", agent.ActiveSessionId ?? "", worktreePath);
         }
         catch (Exception ex)
         {
@@ -131,11 +126,12 @@ public class TestAgentService(
         try
         {
             var entityId = $"{TestEntityPrefix}{projectId}";
-            
-            // 1. Stop the server
-            await serverManager.StopServerAsync(entityId, ct);
-            logger.LogInformation("Stopped test agent server for project {ProjectId}", projectId);
-            
+
+            // 1. Stop the agent via harness
+            var harness = harnessFactory.GetHarness(TestHarnessType);
+            await harness.StopAgentAsync(entityId, ct);
+            logger.LogInformation("Stopped test agent for project {ProjectId}", projectId);
+
             // 2. Get project for worktree cleanup
             var project = dataStore.GetProject(projectId);
             if (project != null)
@@ -150,13 +146,13 @@ public class TestAgentService(
                 {
                     logger.LogWarning("Failed to remove test worktree for branch {Branch}", TestBranchName);
                 }
-                
+
                 // 4. Delete the branch
                 var branchResult = await commandRunner.RunAsync(
-                    "git", 
-                    $"branch -D \"{TestBranchName}\"", 
+                    "git",
+                    $"branch -D \"{TestBranchName}\"",
                     project.LocalPath);
-                
+
                 if (branchResult.Success)
                 {
                     logger.LogInformation("Deleted test branch {Branch}", TestBranchName);
@@ -166,7 +162,7 @@ public class TestAgentService(
                     logger.LogWarning("Failed to delete test branch {Branch}: {Error}", TestBranchName, branchResult.Error);
                 }
             }
-            
+
             // 5. Remove from tracking
             _activeTestAgents.TryRemove(projectId, out _);
         }
@@ -195,18 +191,27 @@ public class TestAgentService(
 
         try
         {
-            // Query the OpenCode server's session list
-            var sessions = await client.ListSessionsAsync(status.ServerUrl, ct);
-            var allIds = sessions.Select(s => s.Id).ToList();
-            var found = sessions.FirstOrDefault(s => s.Id == status.SessionId);
-            
+            // Get agent instance from harness
+            var harness = harnessFactory.GetHarness(TestHarnessType);
+            var entityId = $"{TestEntityPrefix}{projectId}";
+            var agent = harness.GetAgentForEntity(entityId);
+
+            if (agent == null)
+            {
+                return new SessionVerificationResult
+                {
+                    SessionFound = false,
+                    Error = "Agent not found in harness"
+                };
+            }
+
             return new SessionVerificationResult
             {
-                SessionFound = found != null,
-                TotalSessions = sessions.Count,
-                SessionId = found?.Id,
-                SessionTitle = found?.Title,
-                AllSessionIds = allIds
+                SessionFound = !string.IsNullOrEmpty(agent.ActiveSessionId),
+                TotalSessions = 1,
+                SessionId = agent.ActiveSessionId,
+                SessionTitle = "Test Agent Session",
+                AllSessionIds = agent.ActiveSessionId != null ? [agent.ActiveSessionId] : []
             };
         }
         catch (Exception ex)

@@ -1,8 +1,8 @@
 @using Homespun.Features.Beads
 @using Homespun.Features.Beads.Data
 @using Homespun.Features.Beads.Services
+@using Homespun.Features.Agents.Services
 @using Homespun.Features.OpenCode.Services
-@using Homespun.Features.OpenCode.Models
 @using Homespun.Features.Projects
 
 @inject IAgentWorkflowService AgentWorkflowService
@@ -229,12 +229,12 @@
             @if (_agentStatus != null)
             {
                 <div class="border-top pt-3 mt-3">
-                    <h6>OpenCode Agent</h6>
+                    <h6>Agent (@_agentStatus.HarnessType)</h6>
                     <div class="mb-2">
                         <span class="badge bg-success">Running</span>
-                        @if (_agentStatus.Server.WebViewUrl != null)
+                        @if (_agentStatus.Agent.WebViewUrl != null)
                         {
-                            <a href="@_agentStatus.Server.WebViewUrl" target="_blank" 
+                            <a href="@_agentStatus.Agent.WebViewUrl" target="_blank"
                                class="btn btn-sm btn-outline-primary ms-2">
                                 Open Web View
                             </a>
@@ -246,13 +246,13 @@
                     </div>
                     <div class="mb-2">
                         <small class="text-muted">
-                            Server: <code>@_agentStatus.Server.BaseUrl</code>
+                            Harness: <code>@_agentStatus.HarnessType</code>
                         </small>
-                        @if (_agentStatus.ActiveSession != null)
+                        @if (!string.IsNullOrEmpty(_agentStatus.Agent.ActiveSessionId))
                         {
                             <br/>
                             <small class="text-muted">
-                                Session: <code>@_agentStatus.ActiveSession.Id</code>
+                                Session: <code>@_agentStatus.Agent.ActiveSessionId</code>
                             </small>
                         }
                     </div>
@@ -414,7 +414,7 @@
     private bool _isEditMode;
     private bool _showDeleteConfirmation;
     private string? _errorMessage;
-    private AgentStatus? _agentStatus;
+    private WorkflowAgentStatus? _agentStatus;
     private (string Group, string BranchId)? _branchInfo;
     private EditModel _editModel = new();
     private List<string> _existingGroups = [];

@@ -12,6 +12,9 @@
 #   TAILSCALE_AUTH_KEY     - Tailscale auth key (optional, for remote access via tailnet)
 #   TAILSCALE_HOSTNAME     - Tailscale hostname (default: homespun)
 #   HSP_EXTERNAL_HOSTNAME  - Full external hostname for agent links (e.g., homespun.tail1234.ts.net)
+#
+# Volume mounts:
+#   CLAUDE_CREDENTIALS_FILE - Claude Code credentials file with OAuth tokens (default: ~/.claude/.credentials.json)
 
 services:
   # Tailscale sidecar container - provides tailnet access for Homespun
@@ -60,6 +63,7 @@ services:
     volumes:
       - ${DATA_DIR:-~/.homespun-container/data}:/data
       - ${SSH_DIR:-~/.ssh}:/home/homespun/.ssh:ro
+      - ${CLAUDE_CREDENTIALS_FILE:-~/.claude/.credentials.json}:/home/homespun/.claude/.credentials.json:ro
     environment:
       - HOME=/home/homespun
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
@@ -94,6 +98,7 @@ services:
     volumes:
       - ${DATA_DIR:-~/.homespun-container/data}:/data
       - ${SSH_DIR:-~/.ssh}:/home/homespun/.ssh:ro
+      - ${CLAUDE_CREDENTIALS_FILE:-~/.claude/.credentials.json}:/home/homespun/.claude/.credentials.json:ro
     environment:
       - HOME=/home/homespun
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
