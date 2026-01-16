@@ -267,4 +267,65 @@ public class TestAgentServiceTests
         // Assert
         Assert.That(status, Is.Null);
     }
+
+    [Test]
+    public async Task StartTestAgentAsync_FetchesBaseBranchBeforeCreatingWorktree()
+    {
+        // Arrange
+        var project = CreateTestProject();
+        _mockDataStore.Setup(d => d.GetProject("proj-123")).Returns(project);
+
+        _mockWorktreeService
+            .Setup(w => w.FetchAndUpdateBranchAsync("/path/to/project", "main"))
+            .ReturnsAsync(true);
+
+        _mockWorktreeService
+            .Setup(w => w.CreateWorktreeAsync("/path/to/project", "hsp/test", true, "main"))
+            .ReturnsAsync("/path/to/hsp/test");
+
+        _mockHarness
+            .Setup(h => h.StartAgentAsync(It.IsAny<AgentStartOptions>(), default))
+            .ReturnsAsync(CreateTestAgentInstance());
+
+        // Act
+        var result = await _service.StartTestAgentAsync("proj-123");
+
+        // Assert
+        Assert.That(result.Success, Is.True);
+        _mockWorktreeService.Verify(
+            w => w.FetchAndUpdateBranchAsync("/path/to/project", "main"),
+            Times.Once,
+            "FetchAndUpdateBranchAsync should be called before creating a new branch");
+    }
+
+    [Test]
+    public async Task StartTestAgentAsync_ContinuesEvenIfFetchFails()
+    {
+        // Arrange
+        var project = CreateTestProject();
+        _mockDataStore.Setup(d => d.GetProject("proj-123")).Returns(project);
+
+        // Fetch fails but should not block worktree creation
+        _mockWorktreeService
+            .Setup(w => w.FetchAndUpdateBranchAsync("/path/to/project", "main"))
+            .ReturnsAsync(false);
+
+        _mockWorktreeService
+            .Setup(w => w.CreateWorktreeAsync("/path/to/project", "hsp/test", true, "main"))
+            .ReturnsAsync("/path/to/hsp/test");
+
+        _mockHarness
+            .Setup(h => h.StartAgentAsync(It.IsAny<AgentStartOptions>(), default))
+            .ReturnsAsync(CreateTestAgentInstance());
+
+        // Act
+        var result = await _service.StartTestAgentAsync("proj-123");
+
+        // Assert
+        Assert.That(result.Success, Is.True, "Should succeed even if fetch fails");
+        _mockWorktreeService.Verify(
+            w => w.CreateWorktreeAsync("/path/to/project", "hsp/test", true, "main"),
+            Times.Once,
+            "CreateWorktreeAsync should still be called after fetch failure");
+    }
 }

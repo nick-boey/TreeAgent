@@ -55,7 +55,16 @@ public class TestAgentService(
             // Prune any stale worktree references
             await worktreeService.PruneWorktreesAsync(project.LocalPath);
 
-            // 3. Create worktree path
+            // 3. Ensure the base branch is up-to-date before creating a new branch from it
+            var fetchSuccess = await worktreeService.FetchAndUpdateBranchAsync(project.LocalPath, project.DefaultBranch);
+            if (!fetchSuccess)
+            {
+                logger.LogWarning(
+                    "Failed to fetch latest changes for base branch {BaseBranch}, continuing with local version",
+                    project.DefaultBranch);
+            }
+
+            // 4. Create worktree path
             // Worktree will be: ~/.homespun/src/<project>/hsp/test
             var worktreePath = await worktreeService.CreateWorktreeAsync(
                 project.LocalPath,
