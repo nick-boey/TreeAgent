@@ -1,0 +1,38 @@
+@using Homespun.Features.Agents.Abstractions
+
+@inject IAgentHarnessFactory HarnessFactory
+
+<select class="form-select form-select-sm" style="width: auto;" id="@Id" @bind="SelectedHarness" @bind:after="OnSelectionChanged">
+    @foreach (var harness in HarnessFactory.AvailableHarnessTypes)
+    {
+        <option value="@harness">@GetDisplayName(harness)</option>
+    }
+</select>
+
+@code {
+    [Parameter] public string SelectedHarness { get; set; } = "";
+
+    [Parameter] public EventCallback<string> SelectedHarnessChanged { get; set; }
+
+    [Parameter] public string Id { get; set; } = "harness-selector";
+
+    protected override void OnInitialized()
+    {
+        if (string.IsNullOrEmpty(SelectedHarness))
+        {
+            SelectedHarness = HarnessFactory.DefaultHarnessType;
+        }
+    }
+
+    private async Task OnSelectionChanged()
+    {
+        await SelectedHarnessChanged.InvokeAsync(SelectedHarness);
+    }
+
+    private static string GetDisplayName(string harnessType) => harnessType.ToLowerInvariant() switch
+    {
+        "opencode" => "OpenCode",
+        "claudeui" => "Claude Code UI",
+        _ => harnessType
+    };
+}

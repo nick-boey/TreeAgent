@@ -1,9 +1,11 @@
+@using Homespun.Features.Agents.Abstractions
 @using Homespun.Features.Agents.Services
 @using Homespun.Features.GitHub
 @using Homespun.Features.OpenCode.Services
 @using Homespun.Features.PullRequests.Data
 @using Homespun.Features.PullRequests.Data.Entities
 @using Homespun.Components
+@inject IAgentHarnessFactory HarnessFactory
 @inject PullRequestDataService PullRequestDataService
 @inject IGitHubService GitHubService
 @inject IAgentWorkflowService AgentWorkflowService
@@ -142,9 +144,12 @@
             else
             {
                 <div class="d-flex gap-2 align-items-center">
-                    <ModelSelector Id="@($"pr-{PullRequest.Id}")"
-                                 SelectedModel="_selectedModel"
-                                 SelectedModelChanged="OnModelChanged" />
+                    <HarnessSelector Id="@($"pr-harness-{PullRequest.Id}")"
+                                     SelectedHarness="@_selectedHarness"
+                                     SelectedHarnessChanged="@(h => _selectedHarness = h)" />
+                    <ModelSelector Id="@($"pr-model-{PullRequest.Id}")"
+                                   SelectedModel="@_selectedModel"
+                                   SelectedModelChanged="OnModelChanged" />
                     <button class="btn btn-sm btn-success" @onclick="StartAgent"
                             disabled="@StartAgentDisabled">
                         Start Agent
@@ -196,6 +201,12 @@
     private string? _agentErrorMessage;
     private WorkflowAgentStatus? _agentStatus;
     private string _selectedModel = "anthropic/claude-opus-4";
+    private string _selectedHarness = "";
+
+    protected override void OnInitialized()
+    {
+        _selectedHarness = HarnessFactory.DefaultHarnessType;
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -237,7 +248,7 @@
     {
         try
         {
-            var status = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequest.Id, _selectedModel);
+            var status = await AgentWorkflowService.StartAgentForPullRequestAsync(PullRequest.Id, _selectedModel, _selectedHarness);
             
             // Update status to InDevelopment (working) when agent starts
             await PullRequestDataService.UpdateStatusAsync(PullRequest.Id, OpenPullRequestStatus.InDevelopment);
