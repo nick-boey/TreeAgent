@@ -163,12 +163,31 @@ public class AgentWorkflowService : IAgentWorkflowService
 
         var (group, branchId) = branchInfo.Value;
 
-        // Transition to InProgress status
-        var transitionResult = await _beadsTransitionService.TransitionToInProgressAsync(projectId, issueId);
-        if (!transitionResult.Success)
+        // Determine if we need to transition to InProgress or if we're resuming
+        bool needsTransition = issue.Status == BeadsIssueStatus.Open;
+        bool isResuming = issue.Status == BeadsIssueStatus.InProgress ||
+                          (issue.Status == BeadsIssueStatus.Blocked && issue.Labels.Contains("awaiting-pr"));
+
+        if (needsTransition)
+        {
+            // Transition to InProgress status
+            var transitionResult = await _beadsTransitionService.TransitionToInProgressAsync(projectId, issueId);
+            if (!transitionResult.Success)
+            {
+                throw new InvalidOperationException(
+                    $"Failed to transition issue {issueId} to InProgress: {transitionResult.Error}");
+            }
+        }
+        else if (isResuming)
+        {
+            _logger.LogInformation(
+                "Resuming agent for issue {IssueId} with status {Status}",
+                issueId, issue.Status);
+        }
+        else
         {
             throw new InvalidOperationException(
-                $"Failed to transition issue {issueId} to InProgress: {transitionResult.Error}");
+                $"Cannot start agent on issue {issueId} with status {issue.Status}");
         }
 
         try
@@ -251,8 +270,10 @@ public class AgentWorkflowService : IAgentWorkflowService
             // Determine effective model
             var effectiveModel = model ?? project.DefaultModel;
 
-            // Build initial prompt
-            var initialPrompt = BuildInitialPromptForBeadsIssue(issue, branchName, project.DefaultBranch, agentMode);
+            // Build initial prompt (empty for resumed agents, full prompt for new agents)
+            var initialPrompt = isResuming
+                ? string.Empty
+                : BuildInitialPromptForBeadsIssue(issue, branchName, project.DefaultBranch, agentMode);
 
             // Start agent using harness
             var options = new AgentStartOptions

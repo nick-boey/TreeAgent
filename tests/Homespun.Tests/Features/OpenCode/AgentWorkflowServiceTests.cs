@@ -134,6 +134,36 @@ public class AgentWorkflowServiceTests
 
     #endregion
 
+    #region Agent Mode Tests
+
+    [Test]
+    public void BuildInitialPromptForBeadsIssue_PlanningMode_IncludesWorkflowInstructions()
+    {
+        var issue = CreateTestIssue();
+        var branchName = "core/feature/add-auth+bd-a3f8";
+
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main", AgentMode.Planning);
+
+        Assert.That(prompt, Does.Contain("Review the change described above carefully"));
+        Assert.That(prompt, Does.Contain("create an implementation plan"));
+        Assert.That(prompt, Does.Contain("Wait for approval before implementing"));
+    }
+
+    [Test]
+    public void BuildInitialPromptForBeadsIssue_BuildingMode_IncludesImplementationInstructions()
+    {
+        var issue = CreateTestIssue();
+        var branchName = "core/feature/add-auth+bd-a3f8";
+
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main", AgentMode.Building);
+
+        Assert.That(prompt, Does.Contain("Implement the change described above"));
+        Assert.That(prompt, Does.Contain("Write tests"));
+        Assert.That(prompt, Does.Contain("gh pr create"));
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static BeadsIssue CreateTestIssue()
