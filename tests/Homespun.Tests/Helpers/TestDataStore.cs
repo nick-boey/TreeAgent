@@ -12,10 +12,12 @@ public class TestDataStore : IDataStore
     private readonly List<Project> _projects = [];
     private readonly List<PullRequest> _pullRequests = [];
     private readonly List<BeadsIssueMetadata> _beadsIssueMetadata = [];
+    private readonly List<string> _favoriteModels = [];
 
     public IReadOnlyList<Project> Projects => _projects.AsReadOnly();
     public IReadOnlyList<PullRequest> PullRequests => _pullRequests.AsReadOnly();
     public IReadOnlyList<BeadsIssueMetadata> BeadsIssueMetadata => _beadsIssueMetadata.AsReadOnly();
+    public IReadOnlyList<string> FavoriteModels => _favoriteModels.AsReadOnly();
 
     public Project? GetProject(string id) => _projects.FirstOrDefault(p => p.Id == id);
 
@@ -103,6 +105,23 @@ public class TestDataStore : IDataStore
         return Task.CompletedTask;
     }
 
+    public Task AddFavoriteModelAsync(string modelId)
+    {
+        if (!_favoriteModels.Contains(modelId))
+        {
+            _favoriteModels.Add(modelId);
+        }
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveFavoriteModelAsync(string modelId)
+    {
+        _favoriteModels.Remove(modelId);
+        return Task.CompletedTask;
+    }
+
+    public bool IsFavoriteModel(string modelId) => _favoriteModels.Contains(modelId);
+
     public Task SaveAsync() => Task.CompletedTask;
 
     /// <summary>
@@ -113,5 +132,6 @@ public class TestDataStore : IDataStore
         _projects.Clear();
         _pullRequests.Clear();
         _beadsIssueMetadata.Clear();
+        _favoriteModels.Clear();
     }
 }

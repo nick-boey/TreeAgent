@@ -104,6 +104,30 @@ public interface IDataStore
     
     #endregion
 
+    #region Favorite Models
+
+    /// <summary>
+    /// Gets all favorite model IDs.
+    /// </summary>
+    IReadOnlyList<string> FavoriteModels { get; }
+
+    /// <summary>
+    /// Adds a model to favorites.
+    /// </summary>
+    Task AddFavoriteModelAsync(string modelId);
+
+    /// <summary>
+    /// Removes a model from favorites.
+    /// </summary>
+    Task RemoveFavoriteModelAsync(string modelId);
+
+    /// <summary>
+    /// Checks if a model is in favorites.
+    /// </summary>
+    bool IsFavoriteModel(string modelId);
+
+    #endregion
+
     /// <summary>
     /// Saves any pending changes to disk.
     /// </summary>

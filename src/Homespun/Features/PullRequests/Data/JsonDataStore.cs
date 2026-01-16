@@ -211,6 +211,45 @@ public class JsonDataStore : IDataStore
     
     #endregion
 
+    #region Favorite Models
+
+    public IReadOnlyList<string> FavoriteModels => _data.FavoriteModels.AsReadOnly();
+
+    public bool IsFavoriteModel(string modelId) => _data.FavoriteModels.Contains(modelId);
+
+    public async Task AddFavoriteModelAsync(string modelId)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            if (!_data.FavoriteModels.Contains(modelId))
+            {
+                _data.FavoriteModels.Add(modelId);
+                await SaveInternalAsync();
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task RemoveFavoriteModelAsync(string modelId)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            _data.FavoriteModels.Remove(modelId);
+            await SaveInternalAsync();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    #endregion
+
     public async Task SaveAsync()
     {
         await _lock.WaitAsync();
@@ -277,5 +316,6 @@ public class JsonDataStore : IDataStore
         public List<Project> Projects { get; set; } = [];
         public List<PullRequest> PullRequests { get; set; } = [];
         public List<BeadsIssueMetadata> BeadsIssueMetadata { get; set; } = [];
+        public List<string> FavoriteModels { get; set; } = [];
     }
 }

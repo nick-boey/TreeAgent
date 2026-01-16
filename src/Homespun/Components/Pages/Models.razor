@@ -1,0 +1,181 @@
+@page "/models"
+@using Homespun.Features.OpenCode.Data.Models
+@using Homespun.Features.OpenCode.Services
+@inject IOpenCodeModelsService ModelsService
+
+<PageTitle>Models</PageTitle>
+
+<div class="models-page">
+    <div class="models-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1>Models</h1>
+            <button class="btn btn-primary" @onclick="RefreshModels" disabled="@_isLoading">
+                @if (_isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    <span>Refreshing...</span>
+                }
+                else
+                {
+                    <span>Refresh models</span>
+                }
+            </button>
+        </div>
+    </div>
+
+    <div class="filters mb-4">
+        <div class="row g-2">
+            <div class="col-md-4">
+                <input type="text"
+                       class="form-control"
+                       placeholder="Search models..."
+                       @bind="_searchTerm"
+                       @oninput="OnSearchChanged" />
+            </div>
+            <div class="col-md-3">
+                <select class="form-select"
+                        @bind="_providerFilter"
+                        @bind:after="ApplyFilters">
+                    <option value="">All providers</option>
+                    @foreach (var provider in _providers)
+                    {
+                        <option value="@provider">@provider</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+
+    @if (_isLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+        </div>
+    }
+    else if (_models.Count == 0)
+    {
+        <div class="alert alert-info" role="alert">
+            No models available. Click "Refresh models" to load from OpenCode.
+        </div>
+    }
+    else
+    {
+        @if (_favoriteModels.Count > 0)
+        {
+            <div class="models-section mb-4">
+                <h2 class="models-section-title">
+                    <span class="star-icon">★</span> Favorites
+                </h2>
+                <div class="row g-3">
+                    @foreach (var model in _favoriteModels)
+                    {
+                        <div class="col-md-6 col-lg-4">
+                            <ModelCard Model="@model"
+                                      IsFavorite="true"
+                                      OnToggleFavorite="() => ToggleFavorite(model)" />
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @foreach (var group in _groupedModels)
+        {
+            <div class="models-section mb-4">
+                <h2 class="models-section-title">@group.Key</h2>
+                <div class="row g-3">
+                    @foreach (var model in group)
+                    {
+                        <div class="col-md-6 col-lg-4">
+                            <ModelCard Model="@model"
+                                      IsFavorite="@_favoriteModelIds.Contains(model.FullId)"
+                                      OnToggleFavorite="() => ToggleFavorite(model)" />
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private bool _isLoading = true;
+    private IReadOnlyList<ModelInfo> _models = [];
+    private List<ModelInfo> _favoriteModels = [];
+    private List<IGrouping<string, ModelInfo>> _groupedModels = [];
+    private List<string> _providers = [];
+    private string _searchTerm = "";
+    private string? _providerFilter = null;
+    private IReadOnlyList<string> _favoriteModelIds = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadModelsAsync();
+    }
+
+    private async Task LoadModelsAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _models = await ModelsService.GetModelsAsync();
+            _favoriteModelIds = await ModelsService.GetFavoriteModelIdsAsync();
+            _providers = _models.Select(m => m.ProviderId).Distinct().OrderBy(p => p).ToList();
+            ApplyFilters();
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task RefreshModels()
+    {
+        _models = await ModelsService.RefreshModelsAsync();
+        _favoriteModelIds = await ModelsService.GetFavoriteModelIdsAsync();
+        _providers = _models.Select(m => m.ProviderId).Distinct().OrderBy(p => p).ToList();
+        ApplyFilters();
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        _searchTerm = e.Value?.ToString() ?? "";
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        var groupedModels = ModelsService.GetModelsGroupedByProvider(
+            _favoriteModelIds,
+            _searchTerm,
+            _providerFilter);
+
+        _favoriteModels = groupedModels
+            .SelectMany(g => g)
+            .Where(m => _favoriteModelIds.Contains(m.FullId))
+            .OrderBy(m => m.Name)
+            .ToList();
+
+        _groupedModels = groupedModels
+            .Where(g => g.Key != "Favorites")
+            .ToList();
+    }
+
+    private async Task ToggleFavorite(ModelInfo model)
+    {
+        if (_favoriteModelIds.Contains(model.FullId))
+        {
+            await ModelsService.RemoveFavoriteAsync(model.FullId);
+            _favoriteModelIds = _favoriteModelIds.Where(id => id != model.FullId).ToList();
+        }
+        else
+        {
+            await ModelsService.AddFavoriteAsync(model.FullId);
+            _favoriteModelIds = [.._favoriteModelIds, model.FullId];
+        }
+
+        ApplyFilters();
+    }
+}

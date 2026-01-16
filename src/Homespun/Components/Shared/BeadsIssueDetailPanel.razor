@@ -1,10 +1,12 @@
 @using Homespun.Features.Beads
 @using Homespun.Features.Beads.Data
 @using Homespun.Features.Beads.Services
+@using Homespun.Features.Agents.Abstractions
 @using Homespun.Features.Agents.Services
 @using Homespun.Features.OpenCode.Services
 @using Homespun.Features.Projects
 
+@inject IAgentHarnessFactory HarnessFactory
 @inject IAgentWorkflowService AgentWorkflowService
 @inject IAgentStartupTracker StartupTracker
 @inject IBeadsDatabaseService BeadsDatabaseService
@@ -262,12 +264,19 @@
         <div class="card-footer">
             @if (_branchInfo != null && _agentStatus == null && !StartupTracker.IsStarting(Issue.Id))
             {
-                <div class="mb-2">
-                    <label class="form-label small mb-1">Model</label>
-                    <select class="form-select form-select-sm" style="width: auto;" @bind="_selectedModel">
-                        <option value="anthropic/claude-opus-4">Claude Opus 4</option>
-                        <option value="anthropic/claude-sonnet-4">Claude Sonnet 4</option>
-                    </select>
+                <div class="mb-2 d-flex gap-3">
+                    <div>
+                        <label class="form-label small mb-1">Harness</label>
+                        <HarnessSelector Id="@($"beads-harness-{Issue.Id}")"
+                                         SelectedHarness="@_selectedHarness"
+                                         SelectedHarnessChanged="@(h => _selectedHarness = h)" />
+                    </div>
+                    <div>
+                        <label class="form-label small mb-1">Model</label>
+                        <ModelSelector Id="@($"beads-model-{Issue.Id}")"
+                                       SelectedModel="@_selectedModel"
+                                       SelectedModelChanged="@(m => _selectedModel = m)" />
+                    </div>
                 </div>
             }
 
@@ -420,9 +429,13 @@
     private List<string> _existingGroups = [];
     private string? _projectLocalPath;
     private string _selectedModel = "anthropic/claude-opus-4";
+    private string _selectedHarness = "";
 
     protected override async Task OnInitializedAsync()
     {
+        // Initialize default harness
+        _selectedHarness = HarnessFactory.DefaultHarnessType;
+
         // Load project info for local path
         var project = await ProjectService.GetByIdAsync(ProjectId);
         _projectLocalPath = project?.LocalPath;
@@ -699,7 +712,7 @@
         try
         {
             var status = await AgentWorkflowService.StartAgentForBeadsIssueAsync(
-                ProjectId, Issue.Id, AgentMode.Planning, _selectedModel);
+                ProjectId, Issue.Id, AgentMode.Planning, _selectedModel, _selectedHarness);
             StartupTracker.MarkAsStarted(Issue.Id);
             _agentStatus = status;
             await InvokeAsync(StateHasChanged);
@@ -717,7 +730,7 @@
         try
         {
             var status = await AgentWorkflowService.StartAgentForBeadsIssueAsync(
-                ProjectId, Issue.Id, AgentMode.Building, _selectedModel);
+                ProjectId, Issue.Id, AgentMode.Building, _selectedModel, _selectedHarness);
             StartupTracker.MarkAsStarted(Issue.Id);
             _agentStatus = status;
             await InvokeAsync(StateHasChanged);
@@ -735,7 +748,7 @@
         try
         {
             var status = await AgentWorkflowService.StartAgentForBeadsIssueAsync(
-                ProjectId, Issue.Id, AgentMode.Building, _selectedModel);
+                ProjectId, Issue.Id, AgentMode.Building, _selectedModel, _selectedHarness);
             StartupTracker.MarkAsStarted(Issue.Id);
             _agentStatus = status;
             await InvokeAsync(StateHasChanged);
