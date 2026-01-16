@@ -10,11 +10,13 @@ namespace Homespun.Features.Gitgraph.Services;
 
 /// <summary>
 /// Service for building graph data from BeadsIssues and PullRequests.
+/// Uses direct SQLite access via IBeadsDatabaseService for performance.
 /// </summary>
 public class GraphService(
     ProjectService projectService,
     IGitHubService gitHubService,
     IBeadsService beadsService,
+    IBeadsDatabaseService beadsDatabaseService,
     ILogger<GraphService> logger) : IGraphService
 {
     private readonly GraphBuilder _graphBuilder = new();
@@ -35,11 +37,14 @@ public class GraphService(
         var closedPrs = await GetClosedPullRequestsSafe(projectId);
         var allPrs = closedPrs.Concat(openPrs).ToList();
 
-        // Fetch issues from beads
-        var issues = await GetIssuesSafe(project.LocalPath);
+        // Load beads data from SQLite into cache (single database read)
+        await LoadBeadsDataAsync(project.LocalPath);
 
-        // Fetch dependencies for issues that have them
-        var dependencies = await GetDependenciesSafe(project.LocalPath, issues);
+        // Fetch issues from cache
+        var issues = GetIssuesFromCache(project.LocalPath);
+
+        // Fetch dependencies from cache
+        var dependencies = GetDependenciesFromCache(project.LocalPath, issues);
 
         logger.LogDebug(
             "Building graph for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues, {DepCount} dependencies",
@@ -81,61 +86,82 @@ public class GraphService(
         }
     }
 
-    private async Task<List<BeadsIssue>> GetIssuesSafe(string workingDirectory)
+    /// <summary>
+    /// Loads beads data from SQLite into the in-memory cache.
+    /// This is a single database read that replaces multiple CLI calls.
+    /// </summary>
+    private async Task LoadBeadsDataAsync(string workingDirectory)
     {
         try
         {
+            // Check if beads is initialized using CLI (fast check)
             var isInitialized = await beadsService.IsInitializedAsync(workingDirectory);
             if (!isInitialized)
+            {
+                logger.LogDebug("Beads not initialized for {WorkingDirectory}", workingDirectory);
+                return;
+            }
+
+            // Load all data from SQLite into cache (single read operation)
+            await beadsDatabaseService.RefreshFromDatabaseAsync(workingDirectory);
+            logger.LogDebug("Loaded beads data from SQLite for {WorkingDirectory}", workingDirectory);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load beads data for {WorkingDirectory}", workingDirectory);
+        }
+    }
+
+    /// <summary>
+    /// Gets issues from the in-memory cache (fast, no CLI calls).
+    /// </summary>
+    private List<BeadsIssue> GetIssuesFromCache(string workingDirectory)
+    {
+        try
+        {
+            if (!beadsDatabaseService.IsProjectLoaded(workingDirectory))
             {
                 return [];
             }
 
-            // Get all open issues (for future work)
-            var openIssues = await beadsService.ListIssuesAsync(workingDirectory, new BeadsListOptions
+            // Get open and in-progress issues from cache
+            var openIssues = beadsDatabaseService.ListIssues(workingDirectory, new BeadsListOptions
             {
                 Status = "open"
             });
 
-            // Get in-progress issues (current work)
-            var inProgressIssues = await beadsService.ListIssuesAsync(workingDirectory, new BeadsListOptions
+            var inProgressIssues = beadsDatabaseService.ListIssues(workingDirectory, new BeadsListOptions
             {
                 Status = "in_progress"
             });
 
             // Combine and dedupe
-            var allIssues = openIssues
+            return openIssues
                 .Concat(inProgressIssues)
                 .DistinctBy(i => i.Id)
                 .ToList();
-
-            return allIssues;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to fetch issues from beads for {WorkingDirectory}", workingDirectory);
+            logger.LogWarning(ex, "Failed to get issues from cache for {WorkingDirectory}", workingDirectory);
             return [];
         }
     }
 
-    private async Task<List<BeadsDependency>> GetDependenciesSafe(string workingDirectory, List<BeadsIssue> issues)
+    /// <summary>
+    /// Gets dependencies from the in-memory cache (fast, no CLI calls).
+    /// </summary>
+    private List<BeadsDependency> GetDependenciesFromCache(string workingDirectory, List<BeadsIssue> issues)
     {
         var allDependencies = new List<BeadsDependency>();
 
         try
         {
-            // Get dependencies for each issue that might have them
+            // Get dependencies for each issue from cache (instant, no CLI calls)
             foreach (var issue in issues)
             {
-                try
-                {
-                    var deps = await beadsService.GetDependencyTreeAsync(workingDirectory, issue.Id);
-                    allDependencies.AddRange(deps);
-                }
-                catch
-                {
-                    // Ignore failures for individual issues
-                }
+                var deps = beadsDatabaseService.GetDependencies(workingDirectory, issue.Id);
+                allDependencies.AddRange(deps);
             }
 
             // Dedupe dependencies
@@ -145,7 +171,7 @@ public class GraphService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Failed to fetch dependencies from beads for {WorkingDirectory}", workingDirectory);
+            logger.LogWarning(ex, "Failed to get dependencies from cache for {WorkingDirectory}", workingDirectory);
             return [];
         }
     }

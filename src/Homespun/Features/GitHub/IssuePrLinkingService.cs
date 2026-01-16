@@ -7,10 +7,11 @@ namespace Homespun.Features.GitHub;
 /// <summary>
 /// Service for linking beads issues to pull requests.
 /// Handles the bidirectional link: PR.BeadsIssueId and issue label hsp:pr-{number}.
+/// Uses direct SQLite access via IBeadsDatabaseService for performance.
 /// </summary>
 public class IssuePrLinkingService(
     IDataStore dataStore,
-    IBeadsService beadsService,
+    IBeadsDatabaseService beadsDatabaseService,
     ILogger<IssuePrLinkingService> logger)
     : IIssuePrLinkingService
 {
@@ -57,9 +58,9 @@ public class IssuePrLinkingService(
 
         logger.LogInformation("Linked PR {PullRequestId} to beads issue {IssueId}", pullRequestId, issueId);
 
-        // Add the label to the beads issue
+        // Add the label to the beads issue (updates cache immediately, queues DB write)
         var label = BranchNameParser.GetPrLabel(prNumber);
-        var labelAdded = await beadsService.AddLabelAsync(project.LocalPath, issueId, label);
+        var labelAdded = await beadsDatabaseService.AddLabelAsync(project.LocalPath, issueId, label);
 
         if (!labelAdded)
         {
@@ -146,7 +147,7 @@ public class IssuePrLinkingService(
             return false;
         }
 
-        var closed = await beadsService.CloseIssueAsync(project.LocalPath, pullRequest.BeadsIssueId, reason);
+        var closed = await beadsDatabaseService.CloseIssueAsync(project.LocalPath, pullRequest.BeadsIssueId, reason);
 
         if (closed)
         {

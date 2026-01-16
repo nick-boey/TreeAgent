@@ -165,6 +165,14 @@
         }
     }
 
+    public async Task RefreshAsync()
+    {
+        if (_jsModule != null)
+        {
+            await LoadAndRenderGraph();
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_jsModule != null)

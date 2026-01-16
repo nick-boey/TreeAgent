@@ -1,7 +1,54 @@
 {
   "TCP": {
-    "8080": {
-      "TCPForward": "127.0.0.1:8080"
+    "443": {
+      "HTTPS": true
+    },
+    "4096": { "HTTPS": true },
+    "4097": { "HTTPS": true },
+    "4098": { "HTTPS": true },
+    "4099": { "HTTPS": true },
+    "4100": { "HTTPS": true },
+    "4101": { "HTTPS": true },
+    "4102": { "HTTPS": true },
+    "4103": { "HTTPS": true },
+    "4104": { "HTTPS": true },
+    "4105": { "HTTPS": true }
+  },
+  "Web": {
+    "${TS_CERT_DOMAIN}:443": {
+      "Handlers": {
+        "/": { "Proxy": "http://127.0.0.1:8080" }
+      }
+    },
+    "${TS_CERT_DOMAIN}:4096": {
+      "Handlers": { "/": { "Proxy": "http://127.0.0.1:4096" } }
+    },
+    "${TS_CERT_DOMAIN}:4097": {
+      "Handlers": { "/": { "Proxy": "http://127.0.0.1:4097" } }
+    },
+    "${TS_CERT_DOMAIN}:4098": {
+      "Handlers": { "/": { "Proxy": "http://127.0.0.1:4098" } }
+    },
+    "${TS_CERT_DOMAIN}:4099": {
+      "Handlers": { "/": { "Proxy": "http://127.0.0.1:4099" } }
+    },
+    "${TS_CERT_DOMAIN}:4100": {
+      "Handlers": { "/": { "Proxy": "http://127.0.0.1:4100" } }
+    },
+    "${TS_CERT_DOMAIN}:4101": {
+      "Handlers": { "/": { "Proxy": "http://127.0.0.1:4101" } }
+    },
+    "${TS_CERT_DOMAIN}:4102": {
+      "Handlers": { "/": { "Proxy": "http://127.0.0.1:4102" } }
+    },
+    "${TS_CERT_DOMAIN}:4103": {
+      "Handlers": { "/": { "Proxy": "http://127.0.0.1:4103" } }
+    },
+    "${TS_CERT_DOMAIN}:4104": {
+      "Handlers": { "/": { "Proxy": "http://127.0.0.1:4104" } }
+    },
+    "${TS_CERT_DOMAIN}:4105": {
+      "Handlers": { "/": { "Proxy": "http://127.0.0.1:4105" } }
     }
   }
 }

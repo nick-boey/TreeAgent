@@ -12,13 +12,16 @@
 #   TAILSCALE_AUTH_KEY     - Tailscale auth key (optional, for remote access via tailnet)
 #   TAILSCALE_HOSTNAME     - Tailscale hostname (default: homespun)
 #   HSP_EXTERNAL_HOSTNAME  - Full external hostname for agent links (e.g., homespun.tail1234.ts.net)
+#
+# Volume mounts:
+#   CLAUDE_CREDENTIALS_FILE - Claude Code credentials file with OAuth tokens (default: ~/.claude/.credentials.json)
 
 services:
   # Tailscale sidecar container - provides tailnet access for Homespun
   # When configured, Homespun and OpenCode servers are accessible via:
-  #   - http://<hostname>.<tailnet>.ts.net:8080 (Homespun web UI)
-  #   - http://<hostname>.<tailnet>.ts.net:4096-4105 (OpenCode servers)
-  # Note: Access via port 8080, not 80/443 (no HTTPS termination configured)
+  #   - https://<hostname>.<tailnet>.ts.net (Homespun web UI on port 443)
+  #   - https://<hostname>.<tailnet>.ts.net:4096-4105 (OpenCode servers)
+  # Note: Requires HTTPS certificates enabled in Tailscale admin console
   tailscale-homespun:
     image: tailscale/tailscale:latest
     container_name: tailscale-homespun
@@ -50,8 +53,9 @@ services:
   homespun:
     image: ${HOMESPUN_IMAGE:-ghcr.io/nick-boey/homespun:latest}
     container_name: homespun
-    # Note: We don't override user here - container runs as 'homespun' user from Dockerfile.
-    # This avoids UID mismatch issues with mounted volumes, especially on Windows.
+    # Run as the host user to ensure files created in mounted volumes have correct ownership.
+    # HOST_UID and HOST_GID are set by run.sh to the current user's UID/GID.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     profiles:
       - standalone
     ports:
@@ -59,6 +63,7 @@ services:
     volumes:
       - ${DATA_DIR:-~/.homespun-container/data}:/data
       - ${SSH_DIR:-~/.ssh}:/home/homespun/.ssh:ro
+      - ${CLAUDE_CREDENTIALS_FILE:-~/.claude/.credentials.json}:/home/homespun/.claude/.credentials.json:ro
     environment:
       - HOME=/home/homespun
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
@@ -81,7 +86,9 @@ services:
   homespun-tailscale:
     image: ${HOMESPUN_IMAGE:-ghcr.io/nick-boey/homespun:latest}
     container_name: homespun
-    # Note: We don't override user here - container runs as 'homespun' user from Dockerfile.
+    # Run as the host user to ensure files created in mounted volumes have correct ownership.
+    # HOST_UID and HOST_GID are set by run.sh to the current user's UID/GID.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     profiles:
       - tailscale
     depends_on:
@@ -91,6 +98,7 @@ services:
     volumes:
       - ${DATA_DIR:-~/.homespun-container/data}:/data
       - ${SSH_DIR:-~/.ssh}:/home/homespun/.ssh:ro
+      - ${CLAUDE_CREDENTIALS_FILE:-~/.claude/.credentials.json}:/home/homespun/.claude/.credentials.json:ro
     environment:
       - HOME=/home/homespun
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}

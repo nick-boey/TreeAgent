@@ -68,6 +68,14 @@ public interface IBeadsService
     /// <returns>True if the reopen succeeded.</returns>
     Task<bool> ReopenIssueAsync(string workingDirectory, string issueId, string? reason = null);
     
+    /// <summary>
+    /// Deletes an issue (sets status to tombstone).
+    /// </summary>
+    /// <param name="workingDirectory">The directory to run the command in.</param>
+    /// <param name="issueId">The beads issue ID.</param>
+    /// <returns>True if the delete succeeded.</returns>
+    Task<bool> DeleteIssueAsync(string workingDirectory, string issueId);
+    
     #endregion
     
     #region Dependencies

@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using Homespun.Features.OpenCode.Hubs;
+using Homespun.Features.Agents.Abstractions.Models;
+using Homespun.Features.Agents.Hubs;
+using Homespun.Features.GitHub;
 using Homespun.Features.OpenCode.Models;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Options;
@@ -17,6 +19,7 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
     private readonly IOpenCodeClient _client;
     private readonly IPortAllocationService _portAllocationService;
     private readonly IHubContext<AgentHub> _hubContext;
+    private readonly IGitHubEnvironmentService _gitHubEnvironmentService;
     private readonly ILogger<OpenCodeServerManager> _logger;
     private readonly ConcurrentDictionary<string, OpenCodeServer> _servers = new();
     private readonly string _resolvedExecutablePath;
@@ -27,12 +30,14 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
         IOpenCodeClient client,
         IPortAllocationService portAllocationService,
         IHubContext<AgentHub> hubContext,
+        IGitHubEnvironmentService gitHubEnvironmentService,
         ILogger<OpenCodeServerManager> logger)
     {
         _options = options.Value;
         _client = client;
         _portAllocationService = portAllocationService;
         _hubContext = hubContext;
+        _gitHubEnvironmentService = gitHubEnvironmentService;
         _logger = logger;
         _resolvedExecutablePath = ResolveExecutablePath(_options.ExecutablePath);
         _logger.LogDebug("Resolved OpenCode executable path: {Path}", _resolvedExecutablePath);
@@ -362,19 +367,21 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
     /// </summary>
     private async Task BroadcastServerListAsync()
     {
-        var servers = GetRunningServers()
-            .Select(s => new RunningServerInfo
+        var agents = GetRunningServers()
+            .Select(s => new RunningAgentInfo
             {
                 EntityId = s.EntityId,
+                HarnessType = "opencode",
                 Port = s.Port,
                 BaseUrl = s.ExternalBaseUrl, // Use external URL for UI display
-                WorktreePath = s.WorktreePath,
+                WorkingDirectory = s.WorktreePath,
                 StartedAt = s.StartedAt,
                 ActiveSessionId = s.ActiveSessionId,
-                WebViewUrl = s.WebViewUrl
+                WebViewUrl = s.WebViewUrl,
+                Status = s.Status == OpenCodeServerStatus.Running ? AgentInstanceStatus.Running : AgentInstanceStatus.Starting
             }).ToList();
 
-        await _hubContext.BroadcastServerListChanged(servers);
+        await _hubContext.BroadcastAgentListChanged(agents);
     }
 
     public async Task<bool> IsHealthyAsync(OpenCodeServer server, CancellationToken ct = default)
@@ -437,6 +444,20 @@ public class OpenCodeServerManager : IOpenCodeServerManager, IDisposable
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+
+        // Inject GitHub environment variables for authentication
+        var gitHubEnv = _gitHubEnvironmentService.GetGitHubEnvironment();
+        foreach (var (key, value) in gitHubEnv)
+        {
+            startInfo.Environment[key] = value;
+        }
+
+        if (gitHubEnv.Count > 0)
+        {
+            _logger.LogInformation(
+                "Injected {Count} GitHub environment variables into OpenCode process",
+                gitHubEnv.Count);
+        }
 
         _logger.LogInformation(
             "ProcessStartInfo details: FileName={FileName}, Arguments={Arguments}, WorkingDirectory={WorkingDirectory}, " +

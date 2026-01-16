@@ -1,5 +1,5 @@
+using Homespun.Features.Agents.Hubs;
 using Homespun.Features.Beads.Services;
-using Homespun.Features.OpenCode.Hubs;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
 using Microsoft.AspNetCore.SignalR;
@@ -104,10 +104,10 @@ public class GitHubSyncPollingService(
                 project.GitHubOwner, project.GitHubRepo, syncResult.Imported, syncResult.Updated, syncResult.Removed);
 
             // Close linked beads issues for removed (merged/closed) PRs
-            // We use BeadsService directly since the PR has already been removed from the data store
+            // Uses IBeadsDatabaseService for direct SQLite access (updates cache immediately, queues DB write)
             using var closeScope = scopeFactory.CreateScope();
-            var beadsService = closeScope.ServiceProvider.GetRequiredService<IBeadsService>();
-            
+            var beadsDatabaseService = closeScope.ServiceProvider.GetRequiredService<IBeadsDatabaseService>();
+
             foreach (var removedPr in syncResult.RemovedPrs)
             {
                 if (!string.IsNullOrEmpty(removedPr.BeadsIssueId))
@@ -117,9 +117,9 @@ public class GitHubSyncPollingService(
                         var reason = removedPr.GitHubPrNumber.HasValue
                             ? $"PR #{removedPr.GitHubPrNumber} merged/closed"
                             : "PR merged/closed";
-                        
-                        var closed = await beadsService.CloseIssueAsync(project.LocalPath, removedPr.BeadsIssueId, reason);
-                        
+
+                        var closed = await beadsDatabaseService.CloseIssueAsync(project.LocalPath, removedPr.BeadsIssueId, reason);
+
                         if (closed)
                         {
                             logger.LogInformation(

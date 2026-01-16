@@ -1,5 +1,5 @@
+using Homespun.Features.Agents.Hubs;
 using Homespun.Features.Beads.Data;
-using Homespun.Features.OpenCode.Hubs;
 using Homespun.Features.PullRequests.Data;
 using Microsoft.AspNetCore.SignalR;
 
@@ -8,9 +8,10 @@ namespace Homespun.Features.Beads.Services;
 /// <summary>
 /// Service for managing status transitions for beads issues.
 /// Coordinates between beads updates, agent workflow, and SignalR notifications.
+/// Uses direct SQLite access via IBeadsDatabaseService for performance.
 /// </summary>
 public class BeadsIssueTransitionService(
-    IBeadsService beadsService,
+    IBeadsDatabaseService beadsDatabaseService,
     IDataStore dataStore,
     IHubContext<AgentHub> hubContext,
     ILogger<BeadsIssueTransitionService> logger)
@@ -23,41 +24,41 @@ public class BeadsIssueTransitionService(
         {
             return BeadsTransitionResult.Fail($"Project '{projectId}' not found");
         }
-        
-        var issue = await beadsService.GetIssueAsync(project.LocalPath, issueId);
+
+        var issue = beadsDatabaseService.GetIssue(project.LocalPath, issueId);
         if (issue == null)
         {
             return BeadsTransitionResult.Fail($"Issue '{issueId}' not found");
         }
-        
+
         // Validate transition
         if (issue.Status == BeadsIssueStatus.InProgress)
         {
             return BeadsTransitionResult.Fail("Issue is already InProgress", issue.Status);
         }
-        
+
         if (issue.Status == BeadsIssueStatus.Closed)
         {
             return BeadsTransitionResult.Fail("Cannot transition Closed issue to InProgress", issue.Status);
         }
-        
+
         var previousStatus = issue.Status;
-        var success = await beadsService.UpdateIssueAsync(
-            project.LocalPath, 
-            issueId, 
+        var success = await beadsDatabaseService.UpdateIssueAsync(
+            project.LocalPath,
+            issueId,
             new BeadsUpdateOptions { Status = BeadsIssueStatus.InProgress });
-        
+
         if (!success)
         {
             return BeadsTransitionResult.Fail("Failed to update issue status", previousStatus);
         }
-        
+
         logger.LogInformation(
             "Issue '{IssueId}' transitioned from {PreviousStatus} to InProgress",
             issueId, previousStatus);
-        
+
         await BroadcastStatusChangeAsync(projectId, issueId, BeadsIssueStatus.InProgress);
-        
+
         return BeadsTransitionResult.Ok(previousStatus, BeadsIssueStatus.InProgress);
     }
     
@@ -68,42 +69,42 @@ public class BeadsIssueTransitionService(
         {
             return BeadsTransitionResult.Fail($"Project '{projectId}' not found");
         }
-        
-        var issue = await beadsService.GetIssueAsync(project.LocalPath, issueId);
+
+        var issue = beadsDatabaseService.GetIssue(project.LocalPath, issueId);
         if (issue == null)
         {
             return BeadsTransitionResult.Fail($"Issue '{issueId}' not found");
         }
-        
+
         // Validate transition - for beads we use "blocked" status to indicate awaiting PR
         // since beads doesn't have an "awaiting_pr" status
         if (issue.Status == BeadsIssueStatus.Closed)
         {
             return BeadsTransitionResult.Fail("Cannot transition Closed issue to AwaitingPR", issue.Status);
         }
-        
+
         var previousStatus = issue.Status;
-        
+
         // Use "blocked" status and add a label to indicate awaiting PR
-        var success = await beadsService.UpdateIssueAsync(
-            project.LocalPath, 
-            issueId, 
+        var success = await beadsDatabaseService.UpdateIssueAsync(
+            project.LocalPath,
+            issueId,
             new BeadsUpdateOptions { Status = BeadsIssueStatus.Blocked });
-        
+
         if (!success)
         {
             return BeadsTransitionResult.Fail("Failed to update issue status", previousStatus);
         }
-        
+
         // Add label to indicate awaiting PR
-        await beadsService.AddLabelAsync(project.LocalPath, issueId, "awaiting-pr");
-        
+        await beadsDatabaseService.AddLabelAsync(project.LocalPath, issueId, "awaiting-pr");
+
         logger.LogInformation(
             "Issue '{IssueId}' transitioned from {PreviousStatus} to AwaitingPR (using Blocked status)",
             issueId, previousStatus);
-        
+
         await BroadcastStatusChangeAsync(projectId, issueId, BeadsIssueStatus.Blocked);
-        
+
         return BeadsTransitionResult.Ok(previousStatus, BeadsIssueStatus.Blocked);
     }
     
@@ -114,48 +115,48 @@ public class BeadsIssueTransitionService(
         {
             return BeadsTransitionResult.Fail($"Project '{projectId}' not found");
         }
-        
-        var issue = await beadsService.GetIssueAsync(project.LocalPath, issueId);
+
+        var issue = beadsDatabaseService.GetIssue(project.LocalPath, issueId);
         if (issue == null)
         {
             return BeadsTransitionResult.Fail($"Issue '{issueId}' not found");
         }
-        
+
         // Validate transition
         if (issue.Status == BeadsIssueStatus.Closed)
         {
             return BeadsTransitionResult.Fail("Issue is already Closed", issue.Status);
         }
-        
+
         var previousStatus = issue.Status;
-        
+
         // Add PR label if we have a PR number
         if (prNumber.HasValue)
         {
-            await beadsService.AddLabelAsync(project.LocalPath, issueId, $"pr:{prNumber}");
+            await beadsDatabaseService.AddLabelAsync(project.LocalPath, issueId, $"pr:{prNumber}");
         }
-        
+
         // Close the issue
-        var reason = prNumber.HasValue 
-            ? $"PR #{prNumber} created" 
+        var reason = prNumber.HasValue
+            ? $"PR #{prNumber} created"
             : "Completed";
-        
-        var success = await beadsService.CloseIssueAsync(project.LocalPath, issueId, reason);
-        
+
+        var success = await beadsDatabaseService.CloseIssueAsync(project.LocalPath, issueId, reason);
+
         if (!success)
         {
             return BeadsTransitionResult.Fail("Failed to close issue", previousStatus);
         }
-        
+
         // Remove awaiting-pr label if present
-        await beadsService.RemoveLabelAsync(project.LocalPath, issueId, "awaiting-pr");
-        
+        await beadsDatabaseService.RemoveLabelAsync(project.LocalPath, issueId, "awaiting-pr");
+
         logger.LogInformation(
             "Issue '{IssueId}' transitioned from {PreviousStatus} to Closed (PR #{PrNumber})",
             issueId, previousStatus, prNumber);
-        
+
         await BroadcastStatusChangeAsync(projectId, issueId, BeadsIssueStatus.Closed);
-        
+
         return BeadsTransitionResult.Ok(previousStatus, BeadsIssueStatus.Closed, prNumber);
     }
     
@@ -166,21 +167,21 @@ public class BeadsIssueTransitionService(
         {
             return BeadsTransitionResult.Fail($"Project '{projectId}' not found");
         }
-        
-        var issue = await beadsService.GetIssueAsync(project.LocalPath, issueId);
+
+        var issue = beadsDatabaseService.GetIssue(project.LocalPath, issueId);
         if (issue == null)
         {
             return BeadsTransitionResult.Fail($"Issue '{issueId}' not found");
         }
-        
+
         // Can't revert a closed issue
         if (issue.Status == BeadsIssueStatus.Closed)
         {
             return BeadsTransitionResult.Fail("Cannot revert a closed issue", issue.Status);
         }
-        
+
         var previousStatus = issue.Status;
-        
+
         // If already open, nothing to do
         if (issue.Status == BeadsIssueStatus.Open)
         {
@@ -189,39 +190,39 @@ public class BeadsIssueTransitionService(
                 issueId, error);
             return BeadsTransitionResult.Ok(previousStatus, BeadsIssueStatus.Open);
         }
-        
-        var success = await beadsService.UpdateIssueAsync(
-            project.LocalPath, 
-            issueId, 
+
+        var success = await beadsDatabaseService.UpdateIssueAsync(
+            project.LocalPath,
+            issueId,
             new BeadsUpdateOptions { Status = BeadsIssueStatus.Open });
-        
+
         if (!success)
         {
             return BeadsTransitionResult.Fail("Failed to revert issue status", previousStatus);
         }
-        
+
         // Remove awaiting-pr label if present
-        await beadsService.RemoveLabelAsync(project.LocalPath, issueId, "awaiting-pr");
-        
+        await beadsDatabaseService.RemoveLabelAsync(project.LocalPath, issueId, "awaiting-pr");
+
         logger.LogWarning(
             "Issue '{IssueId}' reverted from {PreviousStatus} to Open due to agent failure: {Error}",
             issueId, previousStatus, error);
-        
+
         await BroadcastStatusChangeAsync(projectId, issueId, BeadsIssueStatus.Open);
-        
+
         return BeadsTransitionResult.Ok(previousStatus, BeadsIssueStatus.Open);
     }
-    
-    public async Task<BeadsIssueStatus?> GetStatusAsync(string projectId, string issueId)
+
+    public Task<BeadsIssueStatus?> GetStatusAsync(string projectId, string issueId)
     {
         var project = dataStore.GetProject(projectId);
         if (project == null)
         {
-            return null;
+            return Task.FromResult<BeadsIssueStatus?>(null);
         }
-        
-        var issue = await beadsService.GetIssueAsync(project.LocalPath, issueId);
-        return issue?.Status;
+
+        var issue = beadsDatabaseService.GetIssue(project.LocalPath, issueId);
+        return Task.FromResult(issue?.Status);
     }
     
     private async Task BroadcastStatusChangeAsync(string projectId, string issueId, BeadsIssueStatus newStatus)

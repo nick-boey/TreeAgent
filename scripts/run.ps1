@@ -47,6 +47,9 @@
     - HSP_GITHUB_TOKEN / GITHUB_TOKEN - GitHub personal access token
     - HSP_TAILSCALE_AUTH_KEY / TAILSCALE_AUTH_KEY - Tailscale auth key
     - HSP_EXTERNAL_HOSTNAME - External hostname for agent URLs
+
+    Volume Mounts:
+    - Claude Code config (~/.claude) is automatically mounted for OAuth authentication
 #>
 
 #Requires -Version 7.0
@@ -343,6 +346,7 @@ try {
     $homeDir = [Environment]::GetFolderPath('UserProfile')
     $dataDir = Join-Path $homeDir ".homespun-container" "data"
     $sshDir = Join-Path $homeDir ".ssh"
+    $claudeCredentialsFile = Join-Path $homeDir ".claude\.credentials.json"
 
     if (-not (Test-Path $dataDir)) {
         New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
@@ -357,6 +361,16 @@ try {
         $sshDir = ""
     }
 
+    # Check Claude Code credentials file (for OAuth authentication)
+    if (-not (Test-Path $claudeCredentialsFile)) {
+        Write-Warning "      Claude credentials not found: $claudeCredentialsFile"
+        Write-Warning "      Run 'claude login' on host to authenticate Claude Code."
+        $claudeCredentialsFile = ""
+    }
+    else {
+        Write-Host "      Claude credentials found: $claudeCredentialsFile" -ForegroundColor Green
+    }
+
     # Step 5: Start containers
     Write-Host "[5/5] Starting containers..." -ForegroundColor Cyan
     Write-Host ""
@@ -364,11 +378,13 @@ try {
     # Convert paths for Docker
     $dataDirUnix = $dataDir -replace '\\', '/'
     $sshDirUnix = if ($sshDir) { $sshDir -replace '\\', '/' } else { "/dev/null" }
+    $claudeCredentialsFileUnix = if ($claudeCredentialsFile) { $claudeCredentialsFile -replace '\\', '/' } else { "/dev/null" }
 
     # Set environment variables for docker-compose
     $env:HOMESPUN_IMAGE = $ImageName
     $env:DATA_DIR = $dataDirUnix
     $env:SSH_DIR = $sshDirUnix
+    $env:CLAUDE_CREDENTIALS_FILE = $claudeCredentialsFileUnix
     $env:GITHUB_TOKEN = $githubToken
     $env:TAILSCALE_AUTH_KEY = $tailscaleKey
     $env:TAILSCALE_HOSTNAME = $TailscaleHostname
@@ -399,11 +415,14 @@ try {
     if ($sshDir) {
         Write-Host "  SSH mount:   $sshDir (read-only)"
     }
+    if ($claudeCredentialsFile) {
+        Write-Host "  Claude auth: $claudeCredentialsFile (read-only)"
+    }
     if ($Tailscale) {
         Write-Host "  Tailscale:   Enabled via sidecar ($TailscaleHostname)"
     }
     if (-not [string]::IsNullOrWhiteSpace($externalHostnameValue)) {
-        Write-Host "  Agent URLs:  http://$($externalHostnameValue):<port>"
+        Write-Host "  Agent URLs:  https://$($externalHostnameValue):<port>"
     }
     if (-not $Local) {
         Write-Host "  Watchtower:  Enabled (auto-updates every 5 min)"
@@ -427,8 +446,8 @@ try {
         Write-Host ""
         Write-Host "Access URLs:"
         if ($Tailscale) {
-            Write-Host "  Tailnet:     http://$TailscaleHostname.<your-tailnet>.ts.net:8080"
-            Write-Host "  OpenCode:    http://$TailscaleHostname.<your-tailnet>.ts.net:4096-4105"
+            Write-Host "  Tailnet:     https://$TailscaleHostname.<your-tailnet>.ts.net"
+            Write-Host "  OpenCode:    https://$TailscaleHostname.<your-tailnet>.ts.net:4096-4105"
         }
         else {
             Write-Host "  Local:       http://localhost:8080"

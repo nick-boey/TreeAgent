@@ -63,7 +63,9 @@ public class GitHubServiceIntegrationTests
             })
             .Build();
 
-        var runner = new CommandRunner(new Microsoft.Extensions.Logging.Abstractions.NullLogger<CommandRunner>());
+        var mockGitHubEnv = new Mock<IGitHubEnvironmentService>();
+        mockGitHubEnv.Setup(g => g.GetGitHubEnvironment()).Returns(new Dictionary<string, string>());
+        var runner = new CommandRunner(mockGitHubEnv.Object, new Microsoft.Extensions.Logging.Abstractions.NullLogger<CommandRunner>());
         var client = new GitHubClientWrapper();
         var mockLinkingService = new Mock<IIssuePrLinkingService>();
         var logger = new Microsoft.Extensions.Logging.Abstractions.NullLogger<GitHubService>();

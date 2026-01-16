@@ -3,6 +3,7 @@
 @using Homespun.Features.Beads
 @using Homespun.Features.Beads.Data
 @using Homespun.Features.Beads.Services
+@using Homespun.Features.Agents.Services
 @using Homespun.Features.GitHub
 @using Homespun.Features.Gitgraph.Services
 @using Homespun.Features.OpenCode.Services
@@ -40,6 +41,7 @@ else
             </div>
 
             <GitgraphVisualization
+                @ref="_graphVisualization"
                 ProjectId="@Id"
                 OnPullRequestClick="@SelectPullRequestByNumber"
                 OnIssueClick="@SelectBeadsIssue"
@@ -442,6 +444,7 @@ else
     private List<BeadsIssueWithMetadata>? _openIssues;
     private List<BeadsIssueWithMetadata>? _inProgressIssues;
     private List<string> _existingGroups = [];
+    private GitgraphVisualization? _graphVisualization;
 
     // Debug-only fields (always declared, only used in DEBUG builds)
     private TestAgentStatus? _testAgentStatus;
@@ -650,6 +653,7 @@ else
         {
             _selectedPullRequest = await PullRequestDataService.GetByIdAsync(_selectedPullRequestId);
         }
+        await _graphVisualization?.RefreshAsync()!;
     }
 
     private async Task SelectPullRequest(string pullRequestId)

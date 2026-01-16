@@ -12,7 +12,7 @@ namespace Homespun.Tests.Features.GitHub;
 public class IssuePrLinkingServiceTests
 {
     private TestDataStore _dataStore = null!;
-    private Mock<IBeadsService> _mockBeadsService = null!;
+    private Mock<IBeadsDatabaseService> _mockBeadsDatabaseService = null!;
     private Mock<ILogger<IssuePrLinkingService>> _mockLogger = null!;
     private IssuePrLinkingService _service = null!;
 
@@ -20,9 +20,9 @@ public class IssuePrLinkingServiceTests
     public void SetUp()
     {
         _dataStore = new TestDataStore();
-        _mockBeadsService = new Mock<IBeadsService>();
+        _mockBeadsDatabaseService = new Mock<IBeadsDatabaseService>();
         _mockLogger = new Mock<ILogger<IssuePrLinkingService>>();
-        _service = new IssuePrLinkingService(_dataStore, _mockBeadsService.Object, _mockLogger.Object);
+        _service = new IssuePrLinkingService(_dataStore, _mockBeadsDatabaseService.Object, _mockLogger.Object);
     }
 
     [TearDown]
@@ -69,7 +69,7 @@ public class IssuePrLinkingServiceTests
         var project = await CreateTestProject();
         var pr = await CreateTestPullRequest(project.Id, "issues/feature/test+hsp-123", 42);
 
-        _mockBeadsService
+        _mockBeadsDatabaseService
             .Setup(b => b.AddLabelAsync(project.LocalPath, "hsp-123", "hsp:pr-42"))
             .ReturnsAsync(true);
 
@@ -82,7 +82,7 @@ public class IssuePrLinkingServiceTests
         var updatedPr = _dataStore.GetPullRequest(pr.Id);
         Assert.That(updatedPr!.BeadsIssueId, Is.EqualTo("hsp-123"));
 
-        _mockBeadsService.Verify(b => b.AddLabelAsync(project.LocalPath, "hsp-123", "hsp:pr-42"), Times.Once);
+        _mockBeadsDatabaseService.Verify(b => b.AddLabelAsync(project.LocalPath, "hsp-123", "hsp:pr-42"), Times.Once);
     }
 
     [Test]
@@ -93,7 +93,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.False);
-        _mockBeadsService.Verify(b => b.AddLabelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockBeadsDatabaseService.Verify(b => b.AddLabelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Test]
@@ -107,7 +107,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.False);
-        _mockBeadsService.Verify(b => b.AddLabelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockBeadsDatabaseService.Verify(b => b.AddLabelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Test]
@@ -124,7 +124,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        _mockBeadsService.Verify(b => b.AddLabelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockBeadsDatabaseService.Verify(b => b.AddLabelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Test]
@@ -134,7 +134,7 @@ public class IssuePrLinkingServiceTests
         var project = await CreateTestProject();
         var pr = await CreateTestPullRequest(project.Id, "issues/feature/test+hsp-123", 42);
 
-        _mockBeadsService
+        _mockBeadsDatabaseService
             .Setup(b => b.AddLabelAsync(project.LocalPath, "hsp-123", "hsp:pr-42"))
             .ReturnsAsync(false);
 
@@ -159,7 +159,7 @@ public class IssuePrLinkingServiceTests
         var project = await CreateTestProject();
         var pr = await CreateTestPullRequest(project.Id, "issues/feature/test+hsp-123", 42);
 
-        _mockBeadsService
+        _mockBeadsDatabaseService
             .Setup(b => b.AddLabelAsync(project.LocalPath, "hsp-123", "hsp:pr-42"))
             .ReturnsAsync(true);
 
@@ -204,7 +204,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.EqualTo("hsp-123"));
-        _mockBeadsService.Verify(b => b.AddLabelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockBeadsDatabaseService.Verify(b => b.AddLabelAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Test]
@@ -248,7 +248,7 @@ public class IssuePrLinkingServiceTests
         pr.BeadsIssueId = "hsp-123";
         await _dataStore.UpdatePullRequestAsync(pr);
 
-        _mockBeadsService
+        _mockBeadsDatabaseService
             .Setup(b => b.CloseIssueAsync(project.LocalPath, "hsp-123", It.IsAny<string>()))
             .ReturnsAsync(true);
 
@@ -257,7 +257,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.True);
-        _mockBeadsService.Verify(b => b.CloseIssueAsync(project.LocalPath, "hsp-123", "PR #42 merged"), Times.Once);
+        _mockBeadsDatabaseService.Verify(b => b.CloseIssueAsync(project.LocalPath, "hsp-123", "PR #42 merged"), Times.Once);
     }
 
     [Test]
@@ -272,7 +272,7 @@ public class IssuePrLinkingServiceTests
 
         // Assert
         Assert.That(result, Is.False);
-        _mockBeadsService.Verify(b => b.CloseIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        _mockBeadsDatabaseService.Verify(b => b.CloseIssueAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
     }
 
     [Test]

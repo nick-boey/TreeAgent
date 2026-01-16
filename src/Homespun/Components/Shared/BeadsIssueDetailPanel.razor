@@ -1,13 +1,13 @@
 @using Homespun.Features.Beads
 @using Homespun.Features.Beads.Data
 @using Homespun.Features.Beads.Services
+@using Homespun.Features.Agents.Services
 @using Homespun.Features.OpenCode.Services
-@using Homespun.Features.OpenCode.Models
 @using Homespun.Features.Projects
 
 @inject IAgentWorkflowService AgentWorkflowService
 @inject IAgentStartupTracker StartupTracker
-@inject IBeadsService BeadsService
+@inject IBeadsDatabaseService BeadsDatabaseService
 @inject ProjectService ProjectService
 @inject NavigationManager NavigationManager
 
@@ -229,12 +229,12 @@
             @if (_agentStatus != null)
             {
                 <div class="border-top pt-3 mt-3">
-                    <h6>OpenCode Agent</h6>
+                    <h6>Agent (@_agentStatus.HarnessType)</h6>
                     <div class="mb-2">
                         <span class="badge bg-success">Running</span>
-                        @if (_agentStatus.Server.WebViewUrl != null)
+                        @if (_agentStatus.Agent.WebViewUrl != null)
                         {
-                            <a href="@_agentStatus.Server.WebViewUrl" target="_blank" 
+                            <a href="@_agentStatus.Agent.WebViewUrl" target="_blank"
                                class="btn btn-sm btn-outline-primary ms-2">
                                 Open Web View
                             </a>
@@ -246,13 +246,13 @@
                     </div>
                     <div class="mb-2">
                         <small class="text-muted">
-                            Server: <code>@_agentStatus.Server.BaseUrl</code>
+                            Harness: <code>@_agentStatus.HarnessType</code>
                         </small>
-                        @if (_agentStatus.ActiveSession != null)
+                        @if (!string.IsNullOrEmpty(_agentStatus.Agent.ActiveSessionId))
                         {
                             <br/>
                             <small class="text-muted">
-                                Session: <code>@_agentStatus.ActiveSession.Id</code>
+                                Session: <code>@_agentStatus.Agent.ActiveSessionId</code>
                             </small>
                         }
                     </div>
@@ -312,6 +312,17 @@
                         Resume Agent
                     </button>
                 }
+                
+                @if (Issue.Status == BeadsIssueStatus.Open || Issue.Status == BeadsIssueStatus.InProgress || Issue.Status == BeadsIssueStatus.Blocked || Issue.Status == BeadsIssueStatus.Deferred)
+                {
+                    <button class="btn btn-sm btn-outline-primary" @onclick="CloseIssue" disabled="@_isLoading" title="Mark issue as completed">
+                        Close Issue
+                    </button>
+                }
+                
+                <button class="btn btn-sm btn-outline-danger" @onclick="ShowDeleteConfirmation" disabled="@_isLoading" title="Delete issue permanently">
+                    Delete
+                </button>
             </div>
 
             @if (!string.IsNullOrEmpty(_errorMessage))
@@ -319,6 +330,35 @@
                 <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
             }
         </div>
+        
+        @if (_showDeleteConfirmation)
+        {
+            <div class="modal-backdrop fade show" style="background-color: rgba(0,0,0,0.5);"></div>
+            <div class="modal fade show d-block" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Delete Issue</h5>
+                            <button type="button" class="btn-close" @onclick="HideDeleteConfirmation"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Are you sure you want to delete issue <strong>@Issue.Id</strong>?</p>
+                            <p class="mb-0">This action will mark the issue as tombstone and cannot be undone.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" @onclick="HideDeleteConfirmation">Cancel</button>
+                            <button type="button" class="btn btn-danger" @onclick="DeleteIssue" disabled="@_isLoading">
+                                @if (_isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                }
+                                Delete Issue
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
     }
 </div>
 
@@ -372,8 +412,9 @@
 
     private bool _isLoading;
     private bool _isEditMode;
+    private bool _showDeleteConfirmation;
     private string? _errorMessage;
-    private AgentStatus? _agentStatus;
+    private WorkflowAgentStatus? _agentStatus;
     private (string Group, string BranchId)? _branchInfo;
     private EditModel _editModel = new();
     private List<string> _existingGroups = [];
@@ -386,12 +427,12 @@
         var project = await ProjectService.GetByIdAsync(ProjectId);
         _projectLocalPath = project?.LocalPath;
         
-        // Load existing groups for autocomplete
+        // Load existing groups for autocomplete (from cache - synchronous)
         if (_projectLocalPath != null)
         {
             try
             {
-                _existingGroups = await BeadsService.GetUniqueGroupsAsync(_projectLocalPath);
+                _existingGroups = BeadsDatabaseService.GetUniqueGroups(_projectLocalPath).ToList();
             }
             catch
             {
@@ -565,17 +606,15 @@
             if (labelsToRemove.Count > 0)
                 updateOptions.LabelsToRemove = labelsToRemove;
             
-            // Perform update
-            var success = await BeadsService.UpdateIssueAsync(_projectLocalPath, Issue.Id, updateOptions);
-            
+            // Perform update (updates cache immediately, queues DB write)
+            var success = await BeadsDatabaseService.UpdateIssueAsync(_projectLocalPath, Issue.Id, updateOptions);
+
             if (!success)
             {
                 _errorMessage = "Failed to update issue.";
                 return;
             }
-            
-            // Sync changes
-            await BeadsService.SyncAsync(_projectLocalPath);
+            // Note: bd sync is handled by the queue processor after debounce
             
             _isEditMode = false;
             await OnActionCompleted.InvokeAsync();
@@ -724,6 +763,86 @@
         catch (Exception ex)
         {
             _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task CloseIssue()
+    {
+        if (_projectLocalPath == null)
+        {
+            _errorMessage = "Project path not available.";
+            return;
+        }
+
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            var success = await BeadsDatabaseService.CloseIssueAsync(_projectLocalPath, Issue.Id);
+
+            if (!success)
+            {
+                _errorMessage = "Failed to close issue.";
+                return;
+            }
+            // Note: bd sync is handled by the queue processor after debounce
+            await OnActionCompleted.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to close issue: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void ShowDeleteConfirmation()
+    {
+        _showDeleteConfirmation = true;
+    }
+
+    private void HideDeleteConfirmation()
+    {
+        _showDeleteConfirmation = false;
+    }
+
+    private async Task DeleteIssue()
+    {
+        if (_projectLocalPath == null)
+        {
+            _errorMessage = "Project path not available.";
+            return;
+        }
+
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            var success = await BeadsDatabaseService.DeleteIssueAsync(_projectLocalPath, Issue.Id);
+
+            if (!success)
+            {
+                _errorMessage = "Failed to delete issue.";
+                _showDeleteConfirmation = false;
+                return;
+            }
+            // Note: bd sync is handled by the queue processor after debounce
+            _showDeleteConfirmation = false;
+            await OnActionCompleted.InvokeAsync();
+            await OnClose.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to delete issue: {ex.Message}";
+            _showDeleteConfirmation = false;
         }
         finally
         {

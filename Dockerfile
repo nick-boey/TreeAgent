@@ -60,8 +60,18 @@ RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Install beads (bd) and OpenCode globally
-RUN npm install -g @beads/bd opencode-ai@latest
+# Install build dependencies for native npm packages (node-pty requires compilation)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-setuptools \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install beads (bd), OpenCode, Claude Code, and Claude Code UI (cloudcli) globally
+RUN npm install -g @beads/bd opencode-ai@latest @anthropic-ai/claude-code @siteboon/claude-code-ui
+
+# Clean up build dependencies to reduce image size
+RUN apt-get update && apt-get remove -y build-essential && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash homespun
@@ -69,6 +79,18 @@ RUN useradd --create-home --shell /bin/bash homespun
 # Create data directory
 RUN mkdir -p /data \
     && chown -R homespun:homespun /data
+
+# Make home directory accessible to any runtime user
+# This is needed because docker-compose may override the runtime user (HOST_UID/HOST_GID)
+# for proper file ownership on mounted volumes, but HOME still points to /home/homespun
+# Also create .claude directory structure for Claude Code runtime data (todos, debug, sessions)
+RUN chmod 777 /home/homespun \
+    && mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
+    && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig \
+    && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude
+
+# Configure git to trust mounted directories (avoids "dubious ownership" errors)
+RUN git config --global --add safe.directory '*'
 
 # Copy published application
 COPY --from=build /app/publish .

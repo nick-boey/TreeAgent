@@ -2,7 +2,7 @@
 @using Homespun.Features.Beads.Data
 @using Homespun.Features.Beads.Services
 
-@inject IBeadsService BeadsService
+@inject IBeadsDatabaseService BeadsDatabaseService
 
 <div class="quick-issue-bar">
     <div class="quick-issue-container">
@@ -241,8 +241,9 @@
                 Labels = labels.Count > 0 ? labels : null
             };
             
-            await BeadsService.CreateIssueAsync(LocalPath, options);
-            await BeadsService.SyncAsync(LocalPath);
+            // Create issue via direct SQLite (updates cache immediately, queues DB write)
+            await BeadsDatabaseService.CreateIssueAsync(LocalPath, options);
+            // Note: bd sync is handled by the queue processor after debounce
             
             // Clear inputs for next entry
             _title = "";

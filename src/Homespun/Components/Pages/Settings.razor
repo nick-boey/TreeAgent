@@ -1,0 +1,239 @@
+@page "/settings"
+@using Homespun.Features.GitHub
+@inject IGitHubEnvironmentService GitHubEnvironmentService
+@rendermode InteractiveServer
+
+<PageTitle>Settings - Homespun</PageTitle>
+
+<h1>Settings</h1>
+
+<div class="settings-container">
+    <section class="settings-section">
+        <h2>GitHub Authentication</h2>
+        <p class="text-muted">Authentication status for agents pushing code and creating PRs.</p>
+
+        <div class="auth-status-card">
+            @if (_isLoading)
+            {
+                <div class="d-flex align-items-center gap-2">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Checking...</span>
+                    </div>
+                    <span>Checking authentication status...</span>
+                </div>
+            }
+            else
+            {
+                <div class="status-header">
+                    @if (_authStatus?.IsAuthenticated == true)
+                    {
+                        <span class="status-badge status-ok">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
+                            </svg>
+                            Authenticated
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="status-badge status-error">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M5.354 4.646a.5.5 0 1 0-.708.708L7.293 8l-2.647 2.646a.5.5 0 0 0 .708.708L8 8.707l2.646 2.647a.5.5 0 0 0 .708-.708L8.707 8l2.647-2.646a.5.5 0 0 0-.708-.708L8 7.293z"/>
+                            </svg>
+                            Not Authenticated
+                        </span>
+                    }
+                </div>
+
+                <dl class="auth-details">
+                    <dt>Token Configured</dt>
+                    <dd>
+                        @if (GitHubEnvironmentService.IsConfigured)
+                        {
+                            <span class="text-success">Yes</span>
+                        }
+                        else
+                        {
+                            <span class="text-danger">No</span>
+                        }
+                    </dd>
+
+                    <dt>Token (masked)</dt>
+                    <dd><code>@(GitHubEnvironmentService.GetMaskedToken() ?? "Not set")</code></dd>
+
+                    @if (_authStatus?.Username != null)
+                    {
+                        <dt>GitHub User</dt>
+                        <dd>@_authStatus.Username</dd>
+                    }
+
+                    @if (_authStatus?.Message != null)
+                    {
+                        <dt>Status</dt>
+                        <dd>@_authStatus.Message</dd>
+                    }
+
+                    <dt>Auth Method</dt>
+                    <dd>@FormatAuthMethod(_authStatus?.AuthMethod ?? GitHubAuthMethod.None)</dd>
+
+                    @if (_authStatus?.ErrorMessage != null)
+                    {
+                        <dt>Error</dt>
+                        <dd class="text-danger">@_authStatus.ErrorMessage</dd>
+                    }
+                </dl>
+
+                <button class="btn btn-sm btn-outline-secondary mt-3" @onclick="RefreshStatus" disabled="@_isLoading">
+                    Refresh Status
+                </button>
+            }
+        </div>
+
+        <div class="config-instructions mt-4">
+            <h4>Configuration</h4>
+            <p>Set <code>GITHUB_TOKEN</code> using one of these methods:</p>
+            <ol>
+                <li>
+                    <strong>User secrets (recommended for development):</strong>
+                    <pre><code>dotnet user-secrets set "GitHub:Token" "ghp_..." --project src/Homespun</code></pre>
+                </li>
+                <li>
+                    <strong>Environment variable:</strong>
+                    <pre><code>GITHUB_TOKEN=ghp_...</code></pre>
+                </li>
+                <li>
+                    <strong>Docker/container:</strong>
+                    <pre><code>-e GITHUB_TOKEN=ghp_...</code></pre>
+                </li>
+            </ol>
+            <p class="text-muted">
+                The token needs <code>repo</code> scope for pushing code and creating PRs.
+                Create a token at <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a>.
+            </p>
+        </div>
+    </section>
+</div>
+
+<style>
+    .settings-container {
+        max-width: 800px;
+    }
+
+    .settings-section {
+        margin-bottom: 2rem;
+    }
+
+    .settings-section h2 {
+        font-size: 1.25rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .auth-status-card {
+        background: var(--card-bg, #f8f9fa);
+        border: 1px solid var(--border-color, #dee2e6);
+        border-radius: 0.5rem;
+        padding: 1.5rem;
+    }
+
+    .status-header {
+        margin-bottom: 1rem;
+    }
+
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 1rem;
+        font-weight: 500;
+        padding: 0.25rem 0.75rem;
+        border-radius: 0.25rem;
+    }
+
+    .status-ok {
+        background-color: rgba(25, 135, 84, 0.1);
+        color: var(--success-color, #198754);
+    }
+
+    .status-error {
+        background-color: rgba(220, 53, 69, 0.1);
+        color: var(--danger-color, #dc3545);
+    }
+
+    .auth-details {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 0.5rem 1rem;
+        margin: 0;
+    }
+
+    .auth-details dt {
+        font-weight: 500;
+        color: var(--text-muted, #6c757d);
+    }
+
+    .auth-details dd {
+        margin: 0;
+    }
+
+    .config-instructions h4 {
+        font-size: 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .config-instructions pre {
+        background: var(--card-bg, #f8f9fa);
+        border: 1px solid var(--border-color, #dee2e6);
+        border-radius: 0.25rem;
+        padding: 0.5rem;
+        overflow-x: auto;
+        font-size: 0.875rem;
+    }
+
+    .config-instructions ol {
+        padding-left: 1.25rem;
+    }
+
+    .config-instructions li {
+        margin-bottom: 1rem;
+    }
+</style>
+
+@code {
+    private GitHubAuthStatus? _authStatus;
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshStatus();
+    }
+
+    private async Task RefreshStatus()
+    {
+        _isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            _authStatus = await GitHubEnvironmentService.CheckGhAuthStatusAsync();
+        }
+        catch (Exception)
+        {
+            _authStatus = new GitHubAuthStatus
+            {
+                IsAuthenticated = false,
+                ErrorMessage = "Failed to check authentication status"
+            };
+        }
+
+        _isLoading = false;
+        StateHasChanged();
+    }
+
+    private static string FormatAuthMethod(GitHubAuthMethod method) => method switch
+    {
+        GitHubAuthMethod.Token => "Token (GITHUB_TOKEN)",
+        GitHubAuthMethod.GhCli => "gh CLI",
+        GitHubAuthMethod.Both => "Token + gh CLI",
+        _ => "None"
+    };
+}
