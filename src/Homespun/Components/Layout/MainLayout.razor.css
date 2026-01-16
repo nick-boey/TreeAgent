@@ -204,6 +204,14 @@
 }
 
 /* ==========================================================================
+   Sidebar Backdrop
+   ========================================================================== */
+
+.sidebar-backdrop {
+    display: none;
+}
+
+/* ==========================================================================
    Responsive - Mobile
    ========================================================================== */
 
@@ -241,12 +249,24 @@
     }
 
     .page.sidebar-open .main-content {
-        opacity: 0.5;
         pointer-events: none;
     }
 
     .content {
         padding: var(--spacing-sm);
+    }
+
+    /* Sidebar Backdrop */
+    .sidebar-backdrop {
+        display: block;
+        position: fixed;
+        top: 2.5rem;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: 85;
+        cursor: pointer;
     }
 }
 
