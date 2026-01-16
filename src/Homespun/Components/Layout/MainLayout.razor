@@ -3,7 +3,7 @@
 @inject IJSRuntime JSRuntime
 @using Homespun.Components.Shared
 
-<div class="page @(_sidebarOpen ? "sidebar-open" : "sidebar-closed")">
+<div class="page @(_sidebarOpen ? "sidebar-open" : "sidebar-closed")" @onkeydown="HandleKeyDown" tabindex="-1">
     <header class="top-bar">
         <button class="sidebar-toggle" @onclick="ToggleSidebar" title="Toggle sidebar">
             <span class="toggle-icon"></span>
@@ -33,6 +33,11 @@
         <NavMenu />
     </aside>
 
+    @if (_sidebarOpen)
+    {
+        <div class="sidebar-backdrop" @onclick="CloseSidebar"></div>
+    }
+
     <main class="main-content">
         <article class="content">
             <NotificationBanner />
@@ -48,7 +53,7 @@
 </div>
 
 @code {
-    private bool _sidebarOpen = true;
+    private bool _sidebarOpen = false;
     private List<Breadcrumb> _breadcrumbs = new();
     private string _currentTheme = "auto";
 
@@ -63,12 +68,24 @@
         if (firstRender)
         {
             _currentTheme = await JSRuntime.InvokeAsync<string>("themeManager.getTheme") ?? "auto";
+
+            // Set sidebar open for desktop, closed for mobile
+            var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
+            _sidebarOpen = !isMobile;
+
             StateHasChanged();
         }
     }
 
-    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
+        // Close sidebar on mobile when navigating
+        var isMobile = await JSRuntime.InvokeAsync<bool>("sidebarManager.isMobile");
+        if (isMobile && _sidebarOpen)
+        {
+            _sidebarOpen = false;
+        }
+
         UpdateBreadcrumbs();
         StateHasChanged();
     }
@@ -118,6 +135,19 @@
     private void ToggleSidebar()
     {
         _sidebarOpen = !_sidebarOpen;
+    }
+
+    private void CloseSidebar()
+    {
+        _sidebarOpen = false;
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && _sidebarOpen)
+        {
+            _sidebarOpen = false;
+        }
     }
 
     private async Task CycleTheme()
