@@ -1,6 +1,7 @@
 using Homespun.Features.ClaudeCodeUI;
 using Homespun.Features.ClaudeCodeUI.Models;
 using Homespun.Features.ClaudeCodeUI.Services;
+using Homespun.Features.GitHub;
 using Homespun.Features.OpenCode;
 using Homespun.Features.OpenCode.Services;
 using Microsoft.Extensions.Logging;
@@ -52,6 +53,7 @@ public class ClaudeCodeUIIntegrationTests
             _options,
             _client,
             portAllocationService,
+            Mock.Of<IGitHubEnvironmentService>(),
             Mock.Of<ILogger<ClaudeCodeUIServerManager>>());
 
         _tempDir = Path.Combine(Path.GetTempPath(), $"claudeui-integration-test-{Guid.NewGuid()}");
@@ -141,6 +143,7 @@ public class ClaudeCodeUIIntegrationTests
             testOptions,
             testClient,
             testPortAllocationService,
+            Mock.Of<IGitHubEnvironmentService>(),
             Mock.Of<ILogger<ClaudeCodeUIServerManager>>());
 
         ClaudeCodeUIServer? server = null;
@@ -180,6 +183,7 @@ public class ClaudeCodeUIIntegrationTests
                 testOptions,
                 testClient,
                 testPortAllocationService,
+                Mock.Of<IGitHubEnvironmentService>(),
                 Mock.Of<ILogger<ClaudeCodeUIServerManager>>());
 
             try
@@ -421,6 +425,7 @@ public class ClaudeCodeUIIntegrationTests
             testOptions,
             testClient,
             testPortAllocationService,
+            Mock.Of<IGitHubEnvironmentService>(),
             Mock.Of<ILogger<ClaudeCodeUIServerManager>>());
 
         try

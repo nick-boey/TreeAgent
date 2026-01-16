@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Homespun.Features.ClaudeCodeUI.Models;
+using Homespun.Features.GitHub;
 using Homespun.Features.OpenCode.Services;
 using Microsoft.Extensions.Options;
 
@@ -15,6 +16,7 @@ public class ClaudeCodeUIServerManager : IDisposable
     private readonly ClaudeCodeUIOptions _options;
     private readonly IClaudeCodeUIClient _client;
     private readonly IPortAllocationService _portService;
+    private readonly IGitHubEnvironmentService _githubEnvService;
     private readonly ILogger<ClaudeCodeUIServerManager> _logger;
     private readonly ConcurrentDictionary<string, ClaudeCodeUIServer> _servers = new();
     private bool _disposed;
@@ -23,11 +25,13 @@ public class ClaudeCodeUIServerManager : IDisposable
         IOptions<ClaudeCodeUIOptions> options,
         IClaudeCodeUIClient client,
         IPortAllocationService portService,
+        IGitHubEnvironmentService githubEnvService,
         ILogger<ClaudeCodeUIServerManager> logger)
     {
         _options = options.Value;
         _client = client;
         _portService = portService;
+        _githubEnvService = githubEnvService;
         _logger = logger;
     }
 
@@ -51,8 +55,7 @@ public class ClaudeCodeUIServerManager : IDisposable
         {
             EntityId = entityId,
             WorkingDirectory = workingDirectory,
-            Port = port,
-            ExternalHostname = _options.ExternalHostname
+            Port = port
         };
 
         _servers[entityId] = server;
@@ -85,12 +88,12 @@ public class ClaudeCodeUIServerManager : IDisposable
             var dbPath = Path.Combine(workingDirectory, ".cloudcli-auth.db");
             startInfo.Environment["DATABASE_PATH"] = dbPath;
 
-            // GitHub token for gh CLI
-            var githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
-            if (!string.IsNullOrEmpty(githubToken))
+            // Add GitHub environment (token, GIT_ASKPASS, and Git identity)
+            // This provides GITHUB_TOKEN, GH_TOKEN, GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, etc.
+            var githubEnv = _githubEnvService.GetGitHubEnvironment();
+            foreach (var kvp in githubEnv)
             {
-                startInfo.Environment["GITHUB_TOKEN"] = githubToken;
-                startInfo.Environment["GH_TOKEN"] = githubToken;
+                startInfo.Environment[kvp.Key] = kvp.Value;
             }
 
             _logger.LogInformation(

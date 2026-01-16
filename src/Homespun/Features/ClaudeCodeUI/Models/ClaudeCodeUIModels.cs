@@ -165,6 +165,12 @@ public static class ClaudeCodeUIEventTypes
 public class ClaudeCodeUIServer
 {
     /// <summary>
+    /// External hostname for generating URLs accessible from outside the container.
+    /// Set at application startup from configuration.
+    /// </summary>
+    public static string? ExternalHostname { get; set; }
+
+    /// <summary>
     /// Unique server ID.
     /// </summary>
     public string Id { get; init; } = Guid.NewGuid().ToString();
@@ -185,26 +191,24 @@ public class ClaudeCodeUIServer
     public required int Port { get; init; }
 
     /// <summary>
-    /// Internal base URL.
+    /// Internal base URL for server-to-server communication (always localhost).
     /// </summary>
     public string BaseUrl => $"http://127.0.0.1:{Port}";
 
     /// <summary>
-    /// External base URL for UI access.
-    /// </summary>
-    public string? ExternalHostname { get; init; }
-
-    /// <summary>
-    /// External URL for web view.
+    /// External base URL for UI links. Uses ExternalHostname if configured, otherwise localhost.
     /// </summary>
     public string ExternalBaseUrl => !string.IsNullOrEmpty(ExternalHostname)
         ? $"https://{ExternalHostname}:{Port}"
         : BaseUrl;
 
     /// <summary>
-    /// URL to open the web UI.
+    /// Gets the full web view URL including session if available.
+    /// Uses external hostname if configured.
     /// </summary>
-    public string WebViewUrl => ExternalBaseUrl;
+    public string? WebViewUrl => ActiveSessionId != null
+        ? $"{ExternalBaseUrl}/session/{ActiveSessionId}"
+        : ExternalBaseUrl;
 
     /// <summary>
     /// The process running the server.

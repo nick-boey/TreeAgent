@@ -4,6 +4,7 @@ using Homespun.Features.Agents.Hubs;
 using Homespun.Features.Agents.Services;
 using Homespun.Features.Beads.Services;
 using Homespun.Features.ClaudeCodeUI;
+using Homespun.Features.ClaudeCodeUI.Models;
 using Homespun.Features.ClaudeCodeUI.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Git;
@@ -167,6 +168,7 @@ if (string.IsNullOrEmpty(externalHostname))
 if (!string.IsNullOrEmpty(externalHostname))
 {
     OpenCodeServer.ExternalHostname = externalHostname;
+    ClaudeCodeUIServer.ExternalHostname = externalHostname;
     app.Logger.LogInformation("External hostname configured for agent URLs: {Hostname}", externalHostname);
 }
 else
