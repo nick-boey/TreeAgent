@@ -238,14 +238,15 @@ public class ClaudeCodeUIIntegrationTests
             var testFileName = "HelloWorld.cs";
             var prompt = new ClaudeCodeUIPromptRequest
             {
-                Prompt = $"Create a simple C# file named '{testFileName}' in the current directory. " +
+                Message = $"Create a simple C# file named '{testFileName}' in the current directory. " +
                         "The file should contain a basic HelloWorld class with a Main method that prints 'Hello from Claude Code UI!'. " +
                         "Just create the file, no need to compile or run it.",
-                WorkingDirectory = testTempDir,
-                PermissionMode = "bypassPermissions"
+                ProjectPath = testTempDir,
+                Provider = "claude",
+                Stream = true
             };
 
-            Console.WriteLine($"Sending prompt: {prompt.Prompt}");
+            Console.WriteLine($"Sending prompt: {prompt.Message}");
             Console.WriteLine();
 
             var response = await testClient.SendPromptAsync(server.BaseUrl, prompt);

@@ -3,39 +3,45 @@ using System.Text.Json.Serialization;
 namespace Homespun.Features.ClaudeCodeUI.Models;
 
 /// <summary>
-/// Request body for sending a prompt to Claude Code UI.
+/// Request body for sending a prompt to Claude Code UI's /api/agent endpoint.
 /// </summary>
 public class ClaudeCodeUIPromptRequest
 {
     /// <summary>
-    /// The prompt text.
+    /// The task/prompt message for the agent.
     /// </summary>
-    [JsonPropertyName("prompt")]
-    public required string Prompt { get; init; }
+    [JsonPropertyName("message")]
+    public required string Message { get; init; }
 
     /// <summary>
-    /// Working directory for the agent.
+    /// Path to the project directory.
     /// </summary>
-    [JsonPropertyName("cwd")]
-    public required string WorkingDirectory { get; init; }
+    [JsonPropertyName("projectPath")]
+    public required string ProjectPath { get; init; }
 
     /// <summary>
-    /// Optional session ID to continue.
+    /// AI provider: "claude", "cursor", or "codex".
     /// </summary>
-    [JsonPropertyName("sessionId")]
-    public string? SessionId { get; init; }
+    [JsonPropertyName("provider")]
+    public string Provider { get; init; } = "claude";
 
     /// <summary>
-    /// Optional model override (e.g., "sonnet", "opus").
+    /// Model identifier (e.g., "claude-sonnet-4-20250514").
     /// </summary>
     [JsonPropertyName("model")]
     public string? Model { get; init; }
 
     /// <summary>
-    /// Permission mode (e.g., "default", "bypassPermissions").
+    /// Enable SSE streaming for real-time updates.
     /// </summary>
-    [JsonPropertyName("permissionMode")]
-    public string? PermissionMode { get; init; }
+    [JsonPropertyName("stream")]
+    public bool Stream { get; init; } = true;
+
+    /// <summary>
+    /// Optional session ID to continue a conversation.
+    /// </summary>
+    [JsonPropertyName("sessionId")]
+    public string? SessionId { get; init; }
 }
 
 /// <summary>

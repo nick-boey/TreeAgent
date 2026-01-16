@@ -174,11 +174,12 @@ public class ClaudeCodeUIHarness : IAgentHarness
     {
         return new ClaudeCodeUIPromptRequest
         {
-            Prompt = prompt.Text,
-            WorkingDirectory = workingDirectory,
-            SessionId = sessionId,
+            Message = prompt.Text,
+            ProjectPath = workingDirectory,
+            Provider = "claude",
             Model = MapModel(prompt.Model),
-            PermissionMode = "bypassPermissions" // Allow all operations for automation
+            Stream = true,
+            SessionId = sessionId
         };
     }
 
@@ -187,12 +188,12 @@ public class ClaudeCodeUIHarness : IAgentHarness
         if (string.IsNullOrEmpty(model))
             return null;
 
-        // Claude Code UI uses simple model names: sonnet, opus, haiku
+        // Use full Claude model identifiers
         if (model.Contains("opus", StringComparison.OrdinalIgnoreCase))
-            return "opus";
+            return "claude-opus-4-20250514";
         if (model.Contains("haiku", StringComparison.OrdinalIgnoreCase))
-            return "haiku";
-        return "sonnet"; // Default
+            return "claude-haiku-3-5-20241022";
+        return "claude-sonnet-4-20250514"; // Default
     }
 
     private AgentInstance MapToAgentInstance(ClaudeCodeUIServer server)
