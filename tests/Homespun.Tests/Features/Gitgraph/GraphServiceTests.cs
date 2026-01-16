@@ -5,7 +5,7 @@ using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
 using Microsoft.Extensions.Logging;
-using NSubstitute;
+using Moq;
 using NUnit.Framework;
 
 namespace Homespun.Tests.Features.Gitgraph;
@@ -17,27 +17,27 @@ namespace Homespun.Tests.Features.Gitgraph;
 public class GraphServiceTests
 {
     private GraphService _graphService;
-    private IProjectService _mockProjectService;
-    private IDataStore _mockDataStore;
-    private IBeadsDatabaseService _mockBeadsDatabaseService;
-    private IGitHubService _mockGitHubService;
-    private ILogger<GraphService> _mockLogger;
+    private Mock<ProjectService> _mockProjectService;
+    private Mock<IDataStore> _mockDataStore;
+    private Mock<IBeadsDatabaseService> _mockBeadsDatabaseService;
+    private Mock<IGitHubService> _mockGitHubService;
+    private Mock<ILogger<GraphService>> _mockLogger;
 
     [SetUp]
     public void SetUp()
     {
-        _mockProjectService = Substitute.For<IProjectService>();
-        _mockDataStore = Substitute.For<IDataStore>();
-        _mockBeadsDatabaseService = Substitute.For<IBeadsDatabaseService>();
-        _mockGitHubService = Substitute.For<IGitHubService>();
-        _mockLogger = Substitute.For<ILogger<GraphService>>();
+        _mockProjectService = new Mock<ProjectService>();
+        _mockDataStore = new Mock<IDataStore>();
+        _mockBeadsDatabaseService = new Mock<IBeadsDatabaseService>();
+        _mockGitHubService = new Mock<IGitHubService>();
+        _mockLogger = new Mock<ILogger<GraphService>>();
 
         _graphService = new GraphService(
-            _mockProjectService,
-            _mockDataStore,
-            _mockBeadsDatabaseService,
-            _mockGitHubService,
-            _mockLogger);
+            _mockProjectService.Object,
+            _mockDataStore.Object,
+            _mockBeadsDatabaseService.Object,
+            _mockGitHubService.Object,
+            _mockLogger.Object);
     }
 
     [Test]
@@ -53,15 +53,15 @@ public class GraphServiceTests
             GitHubRepo = "repo"
         };
 
-        _mockProjectService.GetByIdAsync(projectId).Returns(project);
-        _mockDataStore.GetPullRequestsByProject(projectId).Returns(new List<PullRequest>());
-        _mockGitHubService.GetOpenPullRequestsAsync(projectId).Returns(Task.FromResult(new List<PullRequestInfo>()));
-        _mockGitHubService.GetClosedPullRequestsAsync(projectId).Returns(Task.FromResult(new List<PullRequestInfo>()));
+        _mockProjectService.Setup(p => p.GetByIdAsync(projectId)).ReturnsAsync(project);
+        _mockDataStore.Setup(d => d.GetPullRequestsByProject(projectId)).Returns(new List<PullRequest>());
+        _mockGitHubService.Setup(g => g.GetOpenPullRequestsAsync(projectId)).ReturnsAsync(new List<PullRequestInfo>());
+        _mockGitHubService.Setup(g => g.GetClosedPullRequestsAsync(projectId)).ReturnsAsync(new List<PullRequestInfo>());
 
         // Return empty lists for beads issues
-        _mockBeadsDatabaseService.ListIssues(project.LocalPath, Arg.Any<BeadsListOptions>())
+        _mockBeadsDatabaseService.Setup(b => b.ListIssues(project.LocalPath, It.IsAny<BeadsListOptions>()))
             .Returns(new List<Features.Beads.Data.BeadsIssue>());
-        _mockBeadsDatabaseService.GetDependencies(project.LocalPath)
+        _mockBeadsDatabaseService.Setup(b => b.GetDependencies(project.LocalPath))
             .Returns(new List<Features.Beads.Data.BeadsDependency>());
 
         // Act
@@ -69,11 +69,11 @@ public class GraphServiceTests
 
         // Assert
         Assert.That(result, Is.Not.Null);
-        await _mockProjectService.Received(1).GetByIdAsync(projectId);
-        await _mockGitHubService.Received(1).GetOpenPullRequestsAsync(projectId);
-        await _mockGitHubService.Received(1).GetClosedPullRequestsAsync(projectId);
-        _mockBeadsDatabaseService.Received(2).ListIssues(project.LocalPath, Arg.Any<BeadsListOptions>());
-        _mockBeadsDatabaseService.Received(1).GetDependencies(project.LocalPath);
+        _mockProjectService.Verify(p => p.GetByIdAsync(projectId), Times.Once);
+        _mockGitHubService.Verify(g => g.GetOpenPullRequestsAsync(projectId), Times.Once);
+        _mockGitHubService.Verify(g => g.GetClosedPullRequestsAsync(projectId), Times.Once);
+        _mockBeadsDatabaseService.Verify(b => b.ListIssues(project.LocalPath, It.IsAny<BeadsListOptions>()), Times.AtLeastOnce);
+        _mockBeadsDatabaseService.Verify(b => b.GetDependencies(project.LocalPath), Times.Once);
     }
 
     [Test]
@@ -90,8 +90,8 @@ public class GraphServiceTests
             GitHubRepo = "repo"
         };
 
-        _mockProjectService.GetByIdAsync(projectId).Returns(project);
-        _mockDataStore.GetPullRequestsByProject(projectId).Returns(new List<PullRequest>());
+        _mockProjectService.Setup(p => p.GetByIdAsync(projectId)).ReturnsAsync(project);
+        _mockDataStore.Setup(d => d.GetPullRequestsByProject(projectId)).Returns(new List<PullRequest>());
 
         // Create 5 closed PRs with different merge dates
         var closedPRs = new List<PullRequestInfo>
@@ -103,12 +103,12 @@ public class GraphServiceTests
             new() { Number = 5, Title = "PR 5", MergedAt = DateTime.UtcNow.AddDays(-1) }
         };
 
-        _mockGitHubService.GetOpenPullRequestsAsync(projectId).Returns(Task.FromResult(new List<PullRequestInfo>()));
-        _mockGitHubService.GetClosedPullRequestsAsync(projectId).Returns(Task.FromResult(closedPRs));
+        _mockGitHubService.Setup(g => g.GetOpenPullRequestsAsync(projectId)).ReturnsAsync(new List<PullRequestInfo>());
+        _mockGitHubService.Setup(g => g.GetClosedPullRequestsAsync(projectId)).ReturnsAsync(closedPRs);
 
-        _mockBeadsDatabaseService.ListIssues(project.LocalPath, Arg.Any<BeadsListOptions>())
+        _mockBeadsDatabaseService.Setup(b => b.ListIssues(project.LocalPath, It.IsAny<BeadsListOptions>()))
             .Returns(new List<Features.Beads.Data.BeadsIssue>());
-        _mockBeadsDatabaseService.GetDependencies(project.LocalPath)
+        _mockBeadsDatabaseService.Setup(b => b.GetDependencies(project.LocalPath))
             .Returns(new List<Features.Beads.Data.BeadsDependency>());
 
         // Act
@@ -150,14 +150,14 @@ public class GraphServiceTests
             Title = "GitHub PR"
         };
 
-        _mockProjectService.GetByIdAsync(projectId).Returns(project);
-        _mockDataStore.GetPullRequestsByProject(projectId).Returns(new List<PullRequest> { localPR });
-        _mockGitHubService.GetOpenPullRequestsAsync(projectId).Returns(Task.FromResult(new List<PullRequestInfo> { githubPR }));
-        _mockGitHubService.GetClosedPullRequestsAsync(projectId).Returns(Task.FromResult(new List<PullRequestInfo>()));
+        _mockProjectService.Setup(p => p.GetByIdAsync(projectId)).ReturnsAsync(project);
+        _mockDataStore.Setup(d => d.GetPullRequestsByProject(projectId)).Returns(new List<PullRequest> { localPR });
+        _mockGitHubService.Setup(g => g.GetOpenPullRequestsAsync(projectId)).ReturnsAsync(new List<PullRequestInfo> { githubPR });
+        _mockGitHubService.Setup(g => g.GetClosedPullRequestsAsync(projectId)).ReturnsAsync(new List<PullRequestInfo>());
 
-        _mockBeadsDatabaseService.ListIssues(project.LocalPath, Arg.Any<BeadsListOptions>())
+        _mockBeadsDatabaseService.Setup(b => b.ListIssues(project.LocalPath, It.IsAny<BeadsListOptions>()))
             .Returns(new List<Features.Beads.Data.BeadsIssue>());
-        _mockBeadsDatabaseService.GetDependencies(project.LocalPath)
+        _mockBeadsDatabaseService.Setup(b => b.GetDependencies(project.LocalPath))
             .Returns(new List<Features.Beads.Data.BeadsDependency>());
 
         // Act
@@ -174,7 +174,7 @@ public class GraphServiceTests
     {
         // Arrange
         var projectId = "non-existent";
-        _mockProjectService.GetByIdAsync(projectId).Returns((Project?)null);
+        _mockProjectService.Setup(p => p.GetByIdAsync(projectId)).ReturnsAsync((Project?)null);
 
         // Act & Assert
         var ex = Assert.ThrowsAsync<InvalidOperationException>(
@@ -196,14 +196,14 @@ public class GraphServiceTests
             GitHubRepo = "repo"
         };
 
-        _mockProjectService.GetByIdAsync(projectId).Returns(project);
-        _mockDataStore.GetPullRequestsByProject(projectId).Returns(new List<PullRequest>());
-        _mockGitHubService.GetOpenPullRequestsAsync(projectId).Returns(Task.FromResult(new List<PullRequestInfo>()));
-        _mockGitHubService.GetClosedPullRequestsAsync(projectId).Returns(Task.FromResult(new List<PullRequestInfo>()));
+        _mockProjectService.Setup(p => p.GetByIdAsync(projectId)).ReturnsAsync(project);
+        _mockDataStore.Setup(d => d.GetPullRequestsByProject(projectId)).Returns(new List<PullRequest>());
+        _mockGitHubService.Setup(g => g.GetOpenPullRequestsAsync(projectId)).ReturnsAsync(new List<PullRequestInfo>());
+        _mockGitHubService.Setup(g => g.GetClosedPullRequestsAsync(projectId)).ReturnsAsync(new List<PullRequestInfo>());
 
         // Simulate beads service throwing an exception
-        _mockBeadsDatabaseService.ListIssues(project.LocalPath, Arg.Any<BeadsListOptions>())
-            .Returns(x => throw new Exception("Beads service error"));
+        _mockBeadsDatabaseService.Setup(b => b.ListIssues(project.LocalPath, It.IsAny<BeadsListOptions>()))
+            .Throws(new Exception("Beads service error"));
 
         // Act
         var result = await _graphService.BuildGraphJsonAsync(projectId, 5);
