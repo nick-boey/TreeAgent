@@ -32,11 +32,14 @@ The project follows Vertical Slice Architecture, organizing code by feature rath
 ```
 src/Homespun/
 ├── Features/                    # Feature slices (all business logic)
-│   ├── Agents/                  # Claude Code agent management
-│   │   ├── Components/Pages/    # Agent UI pages
-│   │   ├── Data/                # Agent, AgentStatus, Message entities
-│   │   ├── Hubs/                # SignalR hub for real-time updates
-│   │   └── Services/            # AgentService, ClaudeCodeProcessManager, etc.
+│   ├── Beads/                   # Beads issue tracking integration
+│   │   ├── Data/                # BeadsIssue, BeadsIssueMetadata entities
+│   │   └── Services/            # BeadsDatabaseService, BeadsQueueService
+│   ├── ClaudeCode/              # Claude Code SDK session management
+│   │   ├── Components/Pages/    # Session.razor chat UI
+│   │   ├── Data/                # ClaudeSession, ClaudeMessage, SessionMode
+│   │   ├── Hubs/                # ClaudeCodeHub for real-time streaming
+│   │   └── Services/            # ClaudeSessionService, SessionOptionsFactory
 │   ├── Commands/                # Shell command execution
 │   ├── Git/                     # Git worktree operations
 │   ├── GitHub/                  # GitHub API integration (Octokit)
@@ -44,34 +47,34 @@ src/Homespun/
 │   ├── PullRequests/            # PR workflow and data entities
 │   │   └── Data/                # Feature, Project, HomespunDbContext
 │   │       └── Entities/        # EF Core entities
-│   └── Roadmap/                 # Roadmap parsing and management
+│   └── Notifications/           # Toast notifications via SignalR
 ├── Components/                  # Shared Blazor components
 │   ├── Layout/                  # Layout components
 │   ├── Pages/                   # Page components
 │   └── Shared/                  # Reusable components
 ├── HealthChecks/                # Health check implementations
-├── Migrations/                  # EF Core migrations
 └── Program.cs                   # Application entry point
 
 tests/Homespun.Tests/
 ├── Features/                    # Tests organized by feature (mirrors src structure)
-│   ├── Agents/                  # Agent unit tests, fixtures, and integration tests
+│   ├── Beads/                   # Beads service tests
+│   ├── ClaudeCode/              # ClaudeCode service and hub tests
 │   ├── Git/                     # Git worktree tests
 │   ├── GitHub/                  # GitHub service tests
-│   ├── PullRequests/            # PR model and workflow tests
-│   └── Roadmap/                 # Roadmap parser and service tests
+│   └── PullRequests/            # PR model and workflow tests
 └── Helpers/                     # Shared test utilities and fixtures
 ```
 
 ### Feature Slices
 
-- **Agents**: Claude Code agent orchestration, process management, message streaming, system prompts
+- **Beads**: Integration with beads issue tracking system - direct SQLite database access for fast reads, queued writes
+- **ClaudeCode**: Claude Code SDK session management using ClaudeAgentSdk NuGet package - supports Plan (read-only) and Build (full access) modes
 - **Commands**: Shell command execution abstraction
 - **Git**: Git worktree creation, management, and rebase operations
 - **GitHub**: GitHub PR synchronization and API operations using Octokit
+- **Notifications**: Real-time toast notifications via SignalR
 - **Projects**: Project CRUD operations
-- **PullRequests**: PR workflow, feature management, and core data entities (Feature, Project, DbContext)
-- **Roadmap**: Roadmap file parsing and change tracking
+- **PullRequests**: PR workflow, feature management, and core data entities (Feature, Project, PullRequest)
 
 ### Running the Application
 
@@ -99,15 +102,18 @@ dotnet test
 
 ## Key Services
 
-### Agents (Features/Agents/)
-- **AgentService**: Agent lifecycle management with Claude Code process orchestration
-- **AgentWorkflowService**: Orchestrates agent workflow from feature creation to completion
-- **ClaudeCodeProcessManager**: Process pool management for Claude Code instances
-- **ClaudeCodeProcess**: Individual Claude Code process wrapper
-- **ClaudeCodePathResolver**: Platform-aware Claude Code executable discovery
-- **MessageParser**: JSON message parser for Claude Code output
-- **SystemPromptService**: Template processing for agent system prompts
-- **AgentHub**: SignalR hub for real-time agent updates
+### Beads (Features/Beads/)
+- **BeadsDatabaseService**: Direct SQLite access for fast issue reads and writes
+- **BeadsQueueService**: Queued async database operations
+- **BeadsService**: CLI-based beads integration (fallback)
+- **BeadsIssueTransitionService**: Issue status transitions
+
+### ClaudeCode (Features/ClaudeCode/)
+- **ClaudeSessionService**: Session lifecycle management using ClaudeAgentSdk
+- **ClaudeSessionStore**: In-memory storage for active sessions
+- **SessionOptionsFactory**: Creates ClaudeAgentOptions based on session mode (Plan/Build)
+- **AgentStartupTracker**: Tracks session startup state for UI feedback
+- **ClaudeCodeHub**: SignalR hub for real-time message streaming
 
 ### Commands (Features/Commands/)
 - **CommandRunner**: Shell command execution with output capture
@@ -118,18 +124,18 @@ dotnet test
 ### GitHub (Features/GitHub/)
 - **GitHubService**: GitHub PR synchronization using Octokit
 - **GitHubClientWrapper**: Octokit abstraction for testability
+- **IssuePrLinkingService**: Links beads issues to GitHub PRs
+
+### Notifications (Features/Notifications/)
+- **NotificationService**: Toast notification management
+- **NotificationHub**: SignalR hub for notification delivery
 
 ### Projects (Features/Projects/)
 - **ProjectService**: CRUD operations for projects
 
 ### PullRequests (Features/PullRequests/)
-- **FeatureService**: Feature management with tree structure and worktree integration
+- **PullRequestDataService**: PR CRUD operations
 - **PullRequestWorkflowService**: PR creation and management workflow
-- **HomespunDbContext**: EF Core database context
-
-### Roadmap (Features/Roadmap/)
-- **RoadmapService**: Roadmap file loading and future change calculations
-- **RoadmapParser**: YAML roadmap file parsing
 
 ## Configuration
 
@@ -146,6 +152,5 @@ The application exposes a health check endpoint at `/health` that monitors:
 ## Real-time Updates
 
 SignalR is used for real-time updates:
-- Agent message streaming
-- Agent status changes
-- Connect to `/hubs/agent` for agent-related updates
+- `/hubs/claudecode` - Claude Code session message streaming, content blocks, session status
+- `/hubs/notifications` - Toast notifications for system events
