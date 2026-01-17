@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
-using Homespun.Features.Notifications;
+using Homespun.Features.ClaudeCode.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.ClaudeCode.Services;
@@ -14,7 +14,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly IClaudeSessionStore _sessionStore;
     private readonly SessionOptionsFactory _optionsFactory;
     private readonly ILogger<ClaudeSessionService> _logger;
-    private readonly IHubContext<NotificationHub> _hubContext;
+    private readonly IHubContext<ClaudeCodeHub> _hubContext;
     private readonly ConcurrentDictionary<string, ClaudeSdkClient> _clients = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
 
@@ -22,7 +22,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         IClaudeSessionStore sessionStore,
         SessionOptionsFactory optionsFactory,
         ILogger<ClaudeSessionService> logger,
-        IHubContext<NotificationHub> hubContext)
+        IHubContext<ClaudeCodeHub> hubContext)
     {
         _sessionStore = sessionStore;
         _optionsFactory = optionsFactory;
@@ -78,7 +78,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             _logger.LogInformation("Session {SessionId} connected and running", sessionId);
 
             // Notify clients about the new session
-            await _hubContext.Clients.All.SendAsync("SessionStarted", session, cancellationToken);
+            await _hubContext.BroadcastSessionStarted(session);
         }
         catch (Exception ex)
         {
@@ -127,7 +127,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         session.Status = ClaudeSessionStatus.Processing;
 
         // Notify clients about the user message
-        await _hubContext.Clients.All.SendAsync("MessageReceived", sessionId, userMessage, cancellationToken);
+        await _hubContext.BroadcastMessageReceived(sessionId, userMessage);
 
         try
         {
@@ -191,8 +191,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                     if (content != null)
                     {
                         assistantMessage.Content.Add(content);
-                        await _hubContext.Clients.All.SendAsync(
-                            "ContentBlockReceived", sessionId, content, cancellationToken);
+                        await _hubContext.BroadcastContentBlockReceived(sessionId, content);
                     }
                 }
                 break;
@@ -200,8 +199,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             case ResultMessage resultMsg:
                 session.TotalCostUsd = (decimal)(resultMsg.TotalCostUsd ?? 0);
                 session.TotalDurationMs = resultMsg.DurationMs;
-                await _hubContext.Clients.All.SendAsync(
-                    "SessionResultReceived", sessionId, session.TotalCostUsd, resultMsg.DurationMs, cancellationToken);
+                await _hubContext.BroadcastSessionResultReceived(sessionId, session.TotalCostUsd, resultMsg.DurationMs);
                 break;
 
             case SystemMessage systemMsg:
@@ -276,7 +274,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         _sessionStore.Remove(sessionId);
 
         // Notify clients
-        await _hubContext.Clients.All.SendAsync("SessionStopped", sessionId, cancellationToken);
+        await _hubContext.BroadcastSessionStopped(sessionId);
     }
 
     /// <inheritdoc />

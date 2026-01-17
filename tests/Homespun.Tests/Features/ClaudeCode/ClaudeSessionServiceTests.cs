@@ -14,7 +14,7 @@ public class ClaudeSessionServiceTests
     private IClaudeSessionStore _sessionStore = null!;
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
-    private Mock<IHubContext<Homespun.Features.Notifications.NotificationHub>> _hubContextMock = null!;
+    private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -22,12 +22,13 @@ public class ClaudeSessionServiceTests
         _sessionStore = new ClaudeSessionStore();
         _optionsFactory = new SessionOptionsFactory();
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
-        _hubContextMock = new Mock<IHubContext<Homespun.Features.Notifications.NotificationHub>>();
+        _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
 
         // Setup mock hub clients
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
         clientsMock.Setup(c => c.All).Returns(clientProxyMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
         _service = new ClaudeSessionService(_sessionStore, _optionsFactory, _loggerMock.Object, _hubContextMock.Object);
@@ -291,7 +292,7 @@ public class ClaudeSessionServiceMessageTests
     private IClaudeSessionStore _sessionStore = null!;
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
-    private Mock<IHubContext<Homespun.Features.Notifications.NotificationHub>> _hubContextMock = null!;
+    private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
 
     [SetUp]
     public void SetUp()
@@ -299,11 +300,12 @@ public class ClaudeSessionServiceMessageTests
         _sessionStore = new ClaudeSessionStore();
         _optionsFactory = new SessionOptionsFactory();
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
-        _hubContextMock = new Mock<IHubContext<Homespun.Features.Notifications.NotificationHub>>();
+        _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
         clientsMock.Setup(c => c.All).Returns(clientProxyMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
         _service = new ClaudeSessionService(_sessionStore, _optionsFactory, _loggerMock.Object, _hubContextMock.Object);

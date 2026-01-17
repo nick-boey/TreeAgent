@@ -1,4 +1,5 @@
 using Homespun.Features.Beads.Services;
+using Homespun.Features.ClaudeCode.Hubs;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Commands;
 using Homespun.Features.Git;
@@ -82,6 +83,7 @@ builder.Services.AddSingleton<INotificationService, NotificationService>();
 // Claude Code SDK services
 builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
 builder.Services.AddSingleton<SessionOptionsFactory>();
+builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
 builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
 
 // GitHub sync polling service (PR sync, review polling, issue linking)
@@ -116,6 +118,7 @@ app.MapRazorComponents<App>()
 
 // Map SignalR hubs
 app.MapHub<NotificationHub>("/hubs/notifications");
+app.MapHub<ClaudeCodeHub>("/hubs/claudecode");
 
 // Map health check endpoint
 app.MapHealthChecks("/health");
