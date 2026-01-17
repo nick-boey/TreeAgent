@@ -64,4 +64,19 @@ public class ClaudeSession
     /// The conversation ID from the Claude SDK, if available.
     /// </summary>
     public string? ConversationId { get; set; }
+
+    /// <summary>
+    /// Optional system prompt for the session.
+    /// </summary>
+    public string? SystemPrompt { get; set; }
+
+    /// <summary>
+    /// Total cost in USD for this session.
+    /// </summary>
+    public decimal TotalCostUsd { get; set; }
+
+    /// <summary>
+    /// Total duration in milliseconds for this session.
+    /// </summary>
+    public long TotalDurationMs { get; set; }
 }
