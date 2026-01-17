@@ -1,0 +1,518 @@
+@page "/session/{SessionId}"
+@using Homespun.Features.ClaudeCode.Data
+@using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.ClaudeCode.Hubs
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.SignalR.Client
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+@inject IClaudeSessionService SessionService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Session - Homespun</PageTitle>
+
+<div class="session-page">
+    @if (_session == null)
+    {
+        <div class="session-not-found">
+            <h2>Session Not Found</h2>
+            <p>The session you're looking for doesn't exist or has ended.</p>
+            <a href="/agents" class="btn btn-primary">Back to Sessions</a>
+        </div>
+    }
+    else
+    {
+        <div class="session-header">
+            <div class="session-info">
+                <h1>Claude Code Session</h1>
+                <div class="session-meta">
+                    <span class="badge @GetModeBadgeClass(_session.Mode)">@_session.Mode</span>
+                    <span class="badge @GetStatusBadgeClass(_session.Status)">@_session.Status</span>
+                    <code class="model-name">@_session.Model</code>
+                </div>
+            </div>
+            <div class="session-actions">
+                <button class="btn btn-outline-danger btn-sm" @onclick="StopSession"
+                        disabled="@(_session.Status == ClaudeSessionStatus.Stopped)">
+                    Stop Session
+                </button>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div class="messages-area" @ref="_messagesContainer">
+                @if (_session.Messages.Count == 0 && _session.Status != ClaudeSessionStatus.Processing)
+                {
+                    <div class="empty-state">
+                        <p>Start the conversation by typing a message below.</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var message in _session.Messages)
+                    {
+                        <div class="message @(message.Role == ClaudeMessageRole.User ? "user-message" : "assistant-message")">
+                            <div class="message-header">
+                                <span class="message-role">@(message.Role == ClaudeMessageRole.User ? "You" : "Claude")</span>
+                                <span class="message-time">@message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
+                            </div>
+                            <div class="message-content">
+                                @foreach (var content in message.Content)
+                                {
+                                    <div class="content-block @GetContentBlockClass(content.Type)">
+                                        @switch (content.Type)
+                                        {
+                                            case ClaudeContentType.Text:
+                                                <div class="text-content">@content.Text</div>
+                                                break;
+
+                                            case ClaudeContentType.Thinking:
+                                                <details class="thinking-block">
+                                                    <summary>Thinking...</summary>
+                                                    <div class="thinking-content">@content.Text</div>
+                                                </details>
+                                                break;
+
+                                            case ClaudeContentType.ToolUse:
+                                                <div class="tool-use-block">
+                                                    <div class="tool-header">
+                                                        <span class="tool-icon">🔧</span>
+                                                        <span class="tool-name">@content.ToolName</span>
+                                                    </div>
+                                                    @if (!string.IsNullOrEmpty(content.ToolInput))
+                                                    {
+                                                        <pre class="tool-input">@content.ToolInput</pre>
+                                                    }
+                                                </div>
+                                                break;
+
+                                            case ClaudeContentType.ToolResult:
+                                                <div class="tool-result-block">
+                                                    <pre class="tool-result">@content.Text</pre>
+                                                </div>
+                                                break;
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (_session.Status == ClaudeSessionStatus.Processing)
+                    {
+                        <div class="processing-indicator">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            <span>Processing...</span>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="input-area">
+                <textarea @bind="_inputMessage"
+                          @bind:event="oninput"
+                          @onkeydown="HandleKeyDown"
+                          placeholder="Type a message..."
+                          rows="3"
+                          disabled="@(_session.Status == ClaudeSessionStatus.Processing || _session.Status == ClaudeSessionStatus.Stopped)">
+                </textarea>
+                <button class="btn btn-primary send-button"
+                        @onclick="SendMessage"
+                        disabled="@(string.IsNullOrWhiteSpace(_inputMessage) || _session.Status == ClaudeSessionStatus.Processing || _session.Status == ClaudeSessionStatus.Stopped)">
+                    Send
+                </button>
+            </div>
+        </div>
+
+        @if (_session.TotalCostUsd > 0)
+        {
+            <div class="session-stats">
+                <span>Cost: $@_session.TotalCostUsd.ToString("F6")</span>
+                <span>Duration: @FormatDuration(_session.TotalDurationMs)</span>
+            </div>
+        }
+    }
+</div>
+
+<style>
+    .session-page {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 100px);
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: var(--spacing-lg);
+    }
+
+    .session-not-found {
+        text-align: center;
+        padding: var(--spacing-xl);
+    }
+
+    .session-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: var(--spacing-lg);
+        padding-bottom: var(--spacing-md);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .session-info h1 {
+        margin: 0 0 var(--spacing-sm) 0;
+        font-size: 1.5rem;
+    }
+
+    .session-meta {
+        display: flex;
+        gap: var(--spacing-sm);
+        align-items: center;
+    }
+
+    .model-name {
+        font-size: 0.875rem;
+        padding: 0.25rem 0.5rem;
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-sm);
+    }
+
+    .chat-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+    }
+
+    .messages-area {
+        flex: 1;
+        overflow-y: auto;
+        padding: var(--spacing-md);
+    }
+
+    .empty-state {
+        text-align: center;
+        color: var(--text-muted);
+        padding: var(--spacing-xl);
+    }
+
+    .message {
+        margin-bottom: var(--spacing-md);
+        padding: var(--spacing-md);
+        border-radius: var(--radius-md);
+    }
+
+    .user-message {
+        background: var(--bg-tertiary);
+        margin-left: 20%;
+    }
+
+    .assistant-message {
+        background: var(--bg-primary);
+        margin-right: 10%;
+        border: 1px solid var(--border-color);
+    }
+
+    .message-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: var(--spacing-sm);
+        font-size: 0.875rem;
+    }
+
+    .message-role {
+        font-weight: 600;
+    }
+
+    .message-time {
+        color: var(--text-muted);
+    }
+
+    .content-block {
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .content-block:last-child {
+        margin-bottom: 0;
+    }
+
+    .text-content {
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .thinking-block {
+        background: var(--bg-secondary);
+        padding: var(--spacing-sm);
+        border-radius: var(--radius-sm);
+        font-size: 0.875rem;
+    }
+
+    .thinking-block summary {
+        cursor: pointer;
+        color: var(--text-muted);
+    }
+
+    .thinking-content {
+        margin-top: var(--spacing-sm);
+        white-space: pre-wrap;
+        color: var(--text-secondary);
+    }
+
+    .tool-use-block, .tool-result-block {
+        background: var(--bg-tertiary);
+        padding: var(--spacing-sm);
+        border-radius: var(--radius-sm);
+        font-family: monospace;
+        font-size: 0.875rem;
+    }
+
+    .tool-header {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .tool-name {
+        font-weight: 600;
+    }
+
+    .tool-input, .tool-result {
+        margin: 0;
+        padding: var(--spacing-sm);
+        background: var(--bg-primary);
+        border-radius: var(--radius-sm);
+        overflow-x: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .processing-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-md);
+        color: var(--text-muted);
+    }
+
+    .input-area {
+        display: flex;
+        gap: var(--spacing-sm);
+        padding: var(--spacing-md);
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-primary);
+    }
+
+    .input-area textarea {
+        flex: 1;
+        resize: none;
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: var(--spacing-sm);
+        font-family: inherit;
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+
+    .input-area textarea:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    .send-button {
+        align-self: flex-end;
+    }
+
+    .session-stats {
+        display: flex;
+        gap: var(--spacing-lg);
+        padding: var(--spacing-sm) 0;
+        font-size: 0.875rem;
+        color: var(--text-muted);
+    }
+</style>
+
+@code {
+    [Parameter] public string SessionId { get; set; } = string.Empty;
+
+    private ClaudeSession? _session;
+    private string _inputMessage = string.Empty;
+    private ElementReference _messagesContainer;
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _session = SessionService.GetSession(SessionId);
+
+        if (_session != null)
+        {
+            await SetupSignalR();
+        }
+    }
+
+    private async Task SetupSignalR()
+    {
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On<ClaudeMessage>("MessageReceived", (message) =>
+        {
+            InvokeAsync(() =>
+            {
+                // Find and update the message in the session
+                var existingMessage = _session?.Messages.FirstOrDefault(m => m.Id == message.Id);
+                if (existingMessage == null && _session != null)
+                {
+                    _session.Messages.Add(message);
+                }
+                StateHasChanged();
+            });
+        });
+
+        _hubConnection.On<ClaudeMessageContent>("ContentBlockReceived", (content) =>
+        {
+            InvokeAsync(() =>
+            {
+                // Update the last assistant message with the new content block
+                var lastMessage = _session?.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.Assistant);
+                if (lastMessage != null && !lastMessage.Content.Contains(content))
+                {
+                    lastMessage.Content.Add(content);
+                }
+                StateHasChanged();
+            });
+        });
+
+        _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", (sessionId, status) =>
+        {
+            InvokeAsync(() =>
+            {
+                if (_session != null && _session.Id == sessionId)
+                {
+                    _session.Status = status;
+                    StateHasChanged();
+                }
+            });
+        });
+
+        _hubConnection.On<string>("SessionStopped", (sessionId) =>
+        {
+            InvokeAsync(() =>
+            {
+                if (_session != null && _session.Id == sessionId)
+                {
+                    _session.Status = ClaudeSessionStatus.Stopped;
+                    StateHasChanged();
+                }
+            });
+        });
+
+        _hubConnection.On<string, decimal, long>("SessionResultReceived", (sessionId, cost, duration) =>
+        {
+            InvokeAsync(() =>
+            {
+                if (_session != null && _session.Id == sessionId)
+                {
+                    _session.TotalCostUsd = cost;
+                    _session.TotalDurationMs = duration;
+                    StateHasChanged();
+                }
+            });
+        });
+
+        await _hubConnection.StartAsync();
+        await _hubConnection.SendAsync("JoinSession", SessionId);
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_inputMessage) || _session == null)
+            return;
+
+        var message = _inputMessage;
+        _inputMessage = string.Empty;
+
+        try
+        {
+            await SessionService.SendMessageAsync(SessionId, message);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error sending message: {ex.Message}");
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task StopSession()
+    {
+        if (_session == null) return;
+
+        try
+        {
+            await SessionService.StopSessionAsync(SessionId);
+            _session.Status = ClaudeSessionStatus.Stopped;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error stopping session: {ex.Message}");
+        }
+    }
+
+    private static string GetModeBadgeClass(SessionMode mode) => mode switch
+    {
+        SessionMode.Plan => "bg-info",
+        SessionMode.Build => "bg-success",
+        _ => "bg-secondary"
+    };
+
+    private static string GetStatusBadgeClass(ClaudeSessionStatus status) => status switch
+    {
+        ClaudeSessionStatus.Running => "bg-success",
+        ClaudeSessionStatus.Processing => "bg-primary",
+        ClaudeSessionStatus.WaitingForInput => "bg-warning",
+        ClaudeSessionStatus.Starting => "bg-info",
+        ClaudeSessionStatus.Stopped => "bg-secondary",
+        ClaudeSessionStatus.Error => "bg-danger",
+        _ => "bg-secondary"
+    };
+
+    private static string GetContentBlockClass(ClaudeContentType type) => type switch
+    {
+        ClaudeContentType.Text => "text-block",
+        ClaudeContentType.Thinking => "thinking-block",
+        ClaudeContentType.ToolUse => "tool-use-block",
+        ClaudeContentType.ToolResult => "tool-result-block",
+        _ => ""
+    };
+
+    private static string FormatDuration(long ms)
+    {
+        if (ms < 1000) return $"{ms}ms";
+        if (ms < 60000) return $"{ms / 1000.0:F1}s";
+        return $"{ms / 60000.0:F1}m";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            await _hubConnection.SendAsync("LeaveSession", SessionId);
+            await _hubConnection.DisposeAsync();
+        }
+    }
+}
