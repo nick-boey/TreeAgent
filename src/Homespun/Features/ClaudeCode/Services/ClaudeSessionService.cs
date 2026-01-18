@@ -1,5 +1,5 @@
 using System.Collections.Concurrent;
-using ClaudeAgentSdk;
+using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
 using Microsoft.AspNetCore.SignalR;
