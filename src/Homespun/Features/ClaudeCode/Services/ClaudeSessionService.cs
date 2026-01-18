@@ -66,7 +66,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         try
         {
             var options = _optionsFactory.Create(mode, workingDirectory, model, systemPrompt);
-            options.PermissionMode = PermissionMode.AcceptEdits; // Allow file operations
+            options.PermissionMode = PermissionMode.BypassPermissions; // Allow all tools without prompting
             options.IncludePartialMessages = true; // Enable streaming
 
             var client = new ClaudeSdkClient(options);
