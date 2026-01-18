@@ -16,7 +16,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly SessionOptionsFactory _optionsFactory;
     private readonly ILogger<ClaudeSessionService> _logger;
     private readonly IHubContext<ClaudeCodeHub> _hubContext;
-    private readonly ConcurrentDictionary<string, ClaudeSdkClient> _clients = new();
+    private readonly ConcurrentDictionary<string, ClaudeAgentOptions> _sessionOptions = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
 
     public ClaudeSessionService(
@@ -63,35 +63,17 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         var cts = new CancellationTokenSource();
         _sessionCts[sessionId] = cts;
 
-        // Create and connect the SDK client
-        try
-        {
-            var options = _optionsFactory.Create(mode, workingDirectory, model, systemPrompt);
-            options.PermissionMode = PermissionMode.BypassPermissions; // Allow all tools without prompting
-            options.IncludePartialMessages = true; // Enable streaming
+        // Create and store the SDK options (we'll create clients per-query for streaming support)
+        var options = _optionsFactory.Create(mode, workingDirectory, model, systemPrompt);
+        options.PermissionMode = PermissionMode.BypassPermissions; // Allow all tools without prompting
+        options.IncludePartialMessages = true; // Enable streaming with --print mode
+        _sessionOptions[sessionId] = options;
 
-            var client = new ClaudeSdkClient(options);
-            _clients[sessionId] = client;
+        session.Status = ClaudeSessionStatus.Running;
+        _logger.LogInformation("Session {SessionId} initialized and ready", sessionId);
 
-            await client.ConnectAsync();
-
-            session.Status = ClaudeSessionStatus.Running;
-            _logger.LogInformation("Session {SessionId} connected and running", sessionId);
-
-            // Notify clients about the new session
-            await _hubContext.BroadcastSessionStarted(session);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to start session {SessionId}", sessionId);
-            session.Status = ClaudeSessionStatus.Error;
-            session.ErrorMessage = ex.Message;
-
-            // Clean up
-            _clients.TryRemove(sessionId, out _);
-            _sessionCts.TryRemove(sessionId, out var removedCts);
-            removedCts?.Dispose();
-        }
+        // Notify clients about the new session
+        await _hubContext.BroadcastSessionStarted(session);
 
         return session;
     }
@@ -110,9 +92,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             throw new InvalidOperationException($"Session {sessionId} is not active (status: {session.Status})");
         }
 
-        if (!_clients.TryGetValue(sessionId, out var client))
+        if (!_sessionOptions.TryGetValue(sessionId, out var baseOptions))
         {
-            throw new InvalidOperationException($"No client found for session {sessionId}");
+            throw new InvalidOperationException($"No options found for session {sessionId}");
         }
 
         _logger.LogInformation("Sending message to session {SessionId}", sessionId);
@@ -138,8 +120,31 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token)
                 : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-            // Send query and process streaming response
-            await client.QueryAsync(message);
+            // Create options for this query, using Resume if we have a conversation ID from previous query
+            var queryOptions = new ClaudeAgentOptions
+            {
+                AllowedTools = baseOptions.AllowedTools,
+                SystemPrompt = baseOptions.SystemPrompt,
+                McpServers = baseOptions.McpServers,
+                PermissionMode = baseOptions.PermissionMode,
+                MaxTurns = baseOptions.MaxTurns,
+                DisallowedTools = baseOptions.DisallowedTools,
+                Model = baseOptions.Model,
+                Cwd = baseOptions.Cwd,
+                Settings = baseOptions.Settings,
+                AddDirs = baseOptions.AddDirs,
+                Env = baseOptions.Env,
+                ExtraArgs = baseOptions.ExtraArgs,
+                IncludePartialMessages = true, // Enable streaming
+                SettingSources = baseOptions.SettingSources,
+                // Resume from previous conversation if we have a ConversationId
+                Resume = session.ConversationId
+            };
+
+            // Create a new client for this query with the message as prompt
+            // This uses --print mode which supports --include-partial-messages for streaming
+            await using var client = new ClaudeSdkClient(queryOptions);
+            await client.ConnectAsync(message, linkedCts.Token);
 
             var assistantMessage = new ClaudeMessage
             {
@@ -148,9 +153,14 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 Content = []
             };
 
-            await foreach (var msg in client.ReceiveResponseAsync().WithCancellation(linkedCts.Token))
+            await foreach (var msg in client.ReceiveMessagesAsync().WithCancellation(linkedCts.Token))
             {
+                _logger.LogDebug("Received SDK message type: {MessageType}", msg.GetType().Name);
                 await ProcessSdkMessageAsync(sessionId, session, assistantMessage, msg, linkedCts.Token);
+
+                // Stop processing after receiving the result message
+                if (msg is ResultMessage)
+                    break;
             }
 
             // Add completed assistant message
@@ -222,6 +232,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             case ResultMessage resultMsg:
                 session.TotalCostUsd = (decimal)(resultMsg.TotalCostUsd ?? 0);
                 session.TotalDurationMs = resultMsg.DurationMs;
+                // Store the Claude CLI session ID for use with --resume in subsequent messages
+                session.ConversationId = resultMsg.SessionId;
+                _logger.LogDebug("Stored ConversationId {ConversationId} for session resumption", resultMsg.SessionId);
                 await _hubContext.BroadcastSessionResultReceived(sessionId, session.TotalCostUsd, resultMsg.DurationMs);
                 break;
 
@@ -242,6 +255,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             return;
 
         var eventType = typeObj is JsonElement typeElement ? typeElement.GetString() : typeObj?.ToString();
+        _logger.LogDebug("Processing stream event type: {EventType}", eventType);
 
         switch (eventType)
         {
@@ -417,18 +431,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             cts.Dispose();
         }
 
-        // Dispose the client
-        if (_clients.TryRemove(sessionId, out var client))
-        {
-            try
-            {
-                await client.DisposeAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error disposing client for session {SessionId}", sessionId);
-            }
-        }
+        // Remove stored options
+        _sessionOptions.TryRemove(sessionId, out _);
 
         // Update session status and remove from store
         session.Status = ClaudeSessionStatus.Stopped;
@@ -481,15 +485,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         }
         _sessionCts.Clear();
 
-        // Dispose all clients
-        foreach (var client in _clients.Values)
-        {
-            try
-            {
-                await client.DisposeAsync();
-            }
-            catch { }
-        }
-        _clients.Clear();
+        // Clear stored options
+        _sessionOptions.Clear();
     }
 }
