@@ -11,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{0AB3BF05
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Homespun.Tests", "tests\Homespun.Tests\Homespun.Tests.csproj", "{A5D086BC-A0C3-43B1-BCA4-8B94DF3DBCBE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Homespun.ClaudeAgentSdk", "src\Homespun.ClaudeAgentSdk\Homespun.ClaudeAgentSdk.csproj", "{136C9F9B-1E6B-4169-868E-9A511DF17621}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,6 +47,18 @@ Global
 		{A5D086BC-A0C3-43B1-BCA4-8B94DF3DBCBE}.Release|x64.Build.0 = Release|Any CPU
 		{A5D086BC-A0C3-43B1-BCA4-8B94DF3DBCBE}.Release|x86.ActiveCfg = Release|Any CPU
 		{A5D086BC-A0C3-43B1-BCA4-8B94DF3DBCBE}.Release|x86.Build.0 = Release|Any CPU
+		{136C9F9B-1E6B-4169-868E-9A511DF17621}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{136C9F9B-1E6B-4169-868E-9A511DF17621}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{136C9F9B-1E6B-4169-868E-9A511DF17621}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{136C9F9B-1E6B-4169-868E-9A511DF17621}.Debug|x64.Build.0 = Debug|Any CPU
+		{136C9F9B-1E6B-4169-868E-9A511DF17621}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{136C9F9B-1E6B-4169-868E-9A511DF17621}.Debug|x86.Build.0 = Debug|Any CPU
+		{136C9F9B-1E6B-4169-868E-9A511DF17621}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{136C9F9B-1E6B-4169-868E-9A511DF17621}.Release|Any CPU.Build.0 = Release|Any CPU
+		{136C9F9B-1E6B-4169-868E-9A511DF17621}.Release|x64.ActiveCfg = Release|Any CPU
+		{136C9F9B-1E6B-4169-868E-9A511DF17621}.Release|x64.Build.0 = Release|Any CPU
+		{136C9F9B-1E6B-4169-868E-9A511DF17621}.Release|x86.ActiveCfg = Release|Any CPU
+		{136C9F9B-1E6B-4169-868E-9A511DF17621}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -52,5 +66,6 @@ Global
 	GlobalSection(NestedProjects) = preSolution
 		{5756C50B-8537-436A-8AC5-8EBD407505E5} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{A5D086BC-A0C3-43B1-BCA4-8B94DF3DBCBE} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{136C9F9B-1E6B-4169-868E-9A511DF17621} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

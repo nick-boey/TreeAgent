@@ -13,10 +13,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="ClaudeAgentSdk" Version="0.2.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.1" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.1" />
     <PackageReference Include="Octokit" Version="14.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Homespun.ClaudeAgentSdk\Homespun.ClaudeAgentSdk.csproj" />
   </ItemGroup>
 
   <ItemGroup>
