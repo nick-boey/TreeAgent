@@ -492,7 +492,7 @@ public class GraphBuilderTests
         var graph = _builder.Build([], issues, []);
 
         // Assert - Within frontend group, order should be: bd-003 (P1, oldest), bd-002 (P1, older), bd-001 (P3, newer)
-        var orphanNodes = graph.Nodes.OfType<BeadsIssueNode>().OrderBy(n => n.Id).ToList();
+        var orphanNodes = graph.Nodes.OfType<BeadsIssueNode>().ToList();
         var nodeOrder = orphanNodes.Select(n => n.Issue.Id).ToList();
 
         Assert.That(nodeOrder[0], Is.EqualTo("bd-003"));
