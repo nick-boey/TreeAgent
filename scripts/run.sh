@@ -28,14 +28,17 @@ set -e
 # Environment Variables:
 #   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
 #   HSP_CLAUDE_CODE_OAUTH_TOKEN Claude Code OAuth token (preferred for VM secrets)
+#   HSP_TAILSCALE_AUTH_KEY      Tailscale auth key (preferred for VM secrets)
 #   HSP_EXTERNAL_HOSTNAME       External hostname for agent URLs
 #   GITHUB_TOKEN                GitHub token (fallback)
 #   CLAUDE_CODE_OAUTH_TOKEN     Claude Code OAuth token (fallback)
+#   TAILSCALE_AUTH_KEY          Tailscale auth key (fallback)
 #
 # Configuration File:
 #   Place credentials in ~/.homespun/env to auto-load them:
 #     export GITHUB_TOKEN=ghp_...
 #     export CLAUDE_CODE_OAUTH_TOKEN=...
+#     export TAILSCALE_AUTH_KEY=tskey-auth-...
 #
 # Volume Mounts:
 #   Claude Code config (~/.claude) is automatically mounted for OAuth authentication
@@ -202,6 +205,24 @@ else
     log_success "      Claude Code OAuth token found: $MASKED_CC_TOKEN"
 fi
 
+# Tailscale Auth Key: Check environment variables
+# 1. HSP_TAILSCALE_AUTH_KEY (for VM secrets)
+# 2. TAILSCALE_AUTH_KEY (standard)
+TAILSCALE_AUTH_KEY="${HSP_TAILSCALE_AUTH_KEY:-${TAILSCALE_AUTH_KEY:-}}"
+
+# Try reading from .env file
+if [ -z "$TAILSCALE_AUTH_KEY" ] && [ -f "$REPO_ROOT/.env" ]; then
+    TAILSCALE_AUTH_KEY=$(grep -E "^TAILSCALE_AUTH_KEY=" "$REPO_ROOT/.env" 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || true)
+fi
+
+if [ -z "$TAILSCALE_AUTH_KEY" ]; then
+    log_warn "      Tailscale auth key not found (Tailscale will be disabled)."
+    log_warn "      Set TAILSCALE_AUTH_KEY in ~/.homespun/env for VPN access."
+else
+    MASKED_TS_KEY="${TAILSCALE_AUTH_KEY:0:15}..."
+    log_success "      Tailscale auth key found: $MASKED_TS_KEY"
+fi
+
 # Step 4: Set up directories
 log_info "[4/5] Setting up directories..."
 
@@ -268,6 +289,9 @@ fi
 if [ -n "$CLAUDE_MOUNT" ]; then
     echo "  Claude auth: $CLAUDE_DIR (read-only)"
 fi
+if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+    echo "  Tailscale:   Enabled (will connect on startup)"
+fi
 if [ -n "$EXTERNAL_HOSTNAME" ]; then
     echo "  Agent URLs:  https://$EXTERNAL_HOSTNAME:<port>"
 fi
@@ -304,6 +328,10 @@ fi
 
 if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
     DOCKER_CMD="$DOCKER_CMD -e CLAUDE_CODE_OAUTH_TOKEN=$CLAUDE_CODE_OAUTH_TOKEN"
+fi
+
+if [ -n "$TAILSCALE_AUTH_KEY" ]; then
+    DOCKER_CMD="$DOCKER_CMD -e TAILSCALE_AUTH_KEY=$TAILSCALE_AUTH_KEY"
 fi
 
 if [ -n "$EXTERNAL_HOSTNAME" ]; then

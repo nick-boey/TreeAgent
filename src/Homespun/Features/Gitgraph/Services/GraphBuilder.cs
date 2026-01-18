@@ -1,3 +1,4 @@
+using Homespun.Features.Beads;
 using Homespun.Features.Beads.Data;
 using Homespun.Features.Gitgraph.Data;
 using Homespun.Features.PullRequests;

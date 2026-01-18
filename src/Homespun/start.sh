@@ -31,6 +31,8 @@ git config --global user.name "${GIT_AUTHOR_NAME:-Homespun Bot}" 2>/dev/null || 
 git config --global user.email "${GIT_AUTHOR_EMAIL:-homespun@localhost}" 2>/dev/null || true
 
 # Start Tailscale if auth key is provided
+# Accept both TAILSCALE_AUTH_KEY (preferred) and TS_AUTHKEY for compatibility
+TS_AUTHKEY="${TAILSCALE_AUTH_KEY:-$TS_AUTHKEY}"
 if [ -n "$TS_AUTHKEY" ]; then
     echo "Starting Tailscale..."
 

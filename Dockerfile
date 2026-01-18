@@ -5,6 +5,7 @@
 # Environment Variables (passed at runtime via scripts/run.sh):
 #   GITHUB_TOKEN              - GitHub personal access token for PR operations
 #   CLAUDE_CODE_OAUTH_TOKEN   - Claude Code OAuth token for authentication
+#   TAILSCALE_AUTH_KEY        - Tailscale auth key for VPN access (optional)
 
 # =============================================================================
 # Stage 1: Build
@@ -76,6 +77,13 @@ RUN npm install -g @beads/bd opencode-ai@latest @anthropic-ai/claude-code @siteb
 RUN apt-get update && apt-get remove -y build-essential && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Tailscale for VPN access
+RUN curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null \
+    && curl -fsSL https://pkgs.tailscale.com/stable/debian/bookworm.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list \
+    && apt-get update \
+    && apt-get install -y tailscale \
+    && rm -rf /var/lib/apt/lists/*
+
 # Create non-root user for security
 RUN useradd --create-home --shell /bin/bash homespun
 
@@ -87,10 +95,13 @@ RUN mkdir -p /data \
 # This is needed because docker-compose may override the runtime user (HOST_UID/HOST_GID)
 # for proper file ownership on mounted volumes, but HOME still points to /home/homespun
 # Also create .claude directory structure for Claude Code runtime data (todos, debug, sessions)
+# Create Tailscale state directory for userspace networking
 RUN chmod 777 /home/homespun \
     && mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
     && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig \
-    && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude
+    && mkdir -p /var/lib/tailscale \
+    && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude \
+    && chmod 777 /var/lib/tailscale
 
 # Configure git to trust mounted directories (avoids "dubious ownership" errors)
 RUN git config --global --add safe.directory '*'
