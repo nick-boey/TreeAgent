@@ -1,0 +1,387 @@
+@page "/projects/{ProjectId}/issues/{IssueId}/edit"
+@using Homespun.Features.Beads
+@using Homespun.Features.Beads.Data
+@using Homespun.Features.Beads.Services
+@using Homespun.Features.Projects
+@rendermode InteractiveServer
+
+@inject IBeadsDatabaseService BeadsDatabaseService
+@inject ProjectService ProjectService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Edit Issue</PageTitle>
+
+<div class="container-fluid" @onkeydown="HandleKeyDown" tabindex="0">
+    <div class="row">
+        <div class="col-lg-8 col-xl-6">
+            @if (_loading)
+            {
+                <p>Loading...</p>
+            }
+            else if (_notFound)
+            {
+                <p>Issue not found.</p>
+                <a href="projects/@ProjectId">Back to Project</a>
+            }
+            else
+            {
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1 class="h3 mb-0">Edit Issue</h1>
+                    <span class="badge bg-secondary">@_issue!.Id</span>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Title <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" @bind="_editModel.Title" />
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Group</label>
+                                <input type="text" class="form-control"
+                                       list="editGroupList"
+                                       @bind="_editModel.Group"
+                                       placeholder="e.g., frontend" />
+                                <datalist id="editGroupList">
+                                    @foreach (var group in _existingGroups)
+                                    {
+                                        <option value="@group" />
+                                    }
+                                </datalist>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Branch ID</label>
+                                <input type="text" class="form-control font-monospace"
+                                       @bind="_editModel.BranchId"
+                                       placeholder="e.g., update-page" />
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(_editModel.Group) || !string.IsNullOrWhiteSpace(_editModel.BranchId))
+                        {
+                            <div class="mb-3 p-2 bg-light rounded">
+                                <strong>Branch:</strong> <code>@GetEditBranchPreview()</code>
+                                <br />
+                                <strong>Label:</strong> <code>@GetEditHspLabelPreview()</code>
+                            </div>
+                        }
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Type</label>
+                                <select class="form-select" @bind="_editModel.Type">
+                                    @foreach (var type in Enum.GetValues<BeadsIssueType>())
+                                    {
+                                        <option value="@type">@type</option>
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Priority</label>
+                                <select class="form-select" @bind="_editModel.Priority">
+                                    <option value="">Not set</option>
+                                    <option value="0">P0 - Critical</option>
+                                    <option value="1">P1 - High</option>
+                                    <option value="2">P2 - Medium</option>
+                                    <option value="3">P3 - Low</option>
+                                    <option value="4">P4 - Backlog</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea class="form-control" rows="6" @bind="_editModel.Description"
+                                      placeholder="Implementation details, acceptance criteria..."></textarea>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Parent Issue</label>
+                            <input type="text" class="form-control" @bind="_editModel.ParentId"
+                                   placeholder="bd-XXXX" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Additional Labels</label>
+                            <input type="text" class="form-control" @bind="_editModel.Labels"
+                                   placeholder="label1, label2" />
+                            <div class="form-text">Comma-separated list (hsp: label managed separately)</div>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-primary" @onclick="SaveChanges" disabled="@_isSaving">
+                                    @if (_isSaving)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"></span>
+                                    }
+                                    Save Changes
+                                </button>
+                                <button class="btn btn-secondary" @onclick="Cancel" disabled="@_isSaving">
+                                    Cancel
+                                </button>
+                            </div>
+                            <span class="text-muted small">
+                                Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to save, <kbd>Esc</kbd> to cancel
+                            </span>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(_errorMessage))
+                        {
+                            <div class="alert alert-danger mt-3 mb-0">@_errorMessage</div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+<style>
+    kbd {
+        background-color: var(--bg-tertiary, #e9ecef);
+        border: 1px solid var(--border-color);
+        border-radius: 3px;
+        padding: 0.1rem 0.3rem;
+        font-size: 0.75rem;
+    }
+</style>
+
+@code {
+    [Parameter] public string ProjectId { get; set; } = "";
+    [Parameter] public string IssueId { get; set; } = "";
+
+    private bool _loading = true;
+    private bool _notFound;
+    private bool _isSaving;
+    private string? _errorMessage;
+    private string? _projectLocalPath;
+    private BeadsIssue? _issue;
+    private (string Group, string BranchId)? _branchInfo;
+    private EditModel _editModel = new();
+    private List<string> _existingGroups = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load project info for local path
+        var project = await ProjectService.GetByIdAsync(ProjectId);
+        if (project == null)
+        {
+            _notFound = true;
+            _loading = false;
+            return;
+        }
+
+        _projectLocalPath = project.LocalPath;
+
+        // Load existing groups for autocomplete
+        try
+        {
+            _existingGroups = BeadsDatabaseService.GetUniqueGroups(_projectLocalPath).ToList();
+        }
+        catch
+        {
+            _existingGroups = [];
+        }
+
+        // Load the issue
+        _issue = await BeadsDatabaseService.GetIssueAsync(_projectLocalPath, IssueId);
+        if (_issue == null)
+        {
+            _notFound = true;
+            _loading = false;
+            return;
+        }
+
+        // Parse group and branch ID from hsp: label
+        _branchInfo = BeadsBranchLabel.Parse(_issue.Labels);
+
+        // Initialize edit model from current issue
+        InitializeEditModel();
+
+        _loading = false;
+    }
+
+    private void InitializeEditModel()
+    {
+        if (_issue == null) return;
+
+        _editModel = new EditModel
+        {
+            Title = _issue.Title,
+            Description = _issue.Description ?? "",
+            Type = _issue.Type,
+            Priority = _issue.Priority?.ToString() ?? "",
+            ParentId = _issue.ParentId ?? "",
+            Group = _branchInfo?.Group ?? "",
+            BranchId = _branchInfo?.BranchId ?? "",
+            Labels = string.Join(", ", _issue.Labels.Where(l => !BeadsBranchLabel.IsHomespunLabel(l)))
+        };
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && e.CtrlKey)
+        {
+            await SaveChanges();
+        }
+        else if (e.Key == "Escape")
+        {
+            Cancel();
+        }
+    }
+
+    private void Cancel()
+    {
+        NavigationManager.NavigateTo($"projects/{ProjectId}");
+    }
+
+    private async Task SaveChanges()
+    {
+        if (string.IsNullOrWhiteSpace(_editModel.Title))
+        {
+            _errorMessage = "Title is required.";
+            return;
+        }
+
+        if (_projectLocalPath == null || _issue == null)
+        {
+            _errorMessage = "Project or issue not available.";
+            return;
+        }
+
+        _isSaving = true;
+        _errorMessage = null;
+
+        try
+        {
+            var group = _editModel.Group.Trim().ToLowerInvariant();
+            var branchId = _editModel.BranchId.Trim().ToLowerInvariant();
+
+            // Validate group and branch ID if provided
+            if (!string.IsNullOrWhiteSpace(group) && !BeadsBranchLabel.IsValidGroup(group))
+            {
+                _errorMessage = "Group must be lowercase alphanumeric with hyphens.";
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(branchId) && !BeadsBranchLabel.IsValidBranchId(branchId))
+            {
+                _errorMessage = "Branch ID must be lowercase alphanumeric with hyphens.";
+                return;
+            }
+
+            // Build update options
+            var updateOptions = new BeadsUpdateOptions
+            {
+                Title = _editModel.Title.Trim() != _issue.Title ? _editModel.Title.Trim() : null,
+                Description = _editModel.Description.Trim() != (_issue.Description ?? "") ? _editModel.Description.Trim() : null,
+                Type = _editModel.Type != _issue.Type ? _editModel.Type : null,
+                Priority = int.TryParse(_editModel.Priority, out var p) ? (p != _issue.Priority ? p : null) : null,
+                ParentId = _editModel.ParentId.Trim() != (_issue.ParentId ?? "") ? _editModel.ParentId.Trim() : null
+            };
+
+            // Handle hsp: label changes
+            var newHspLabel = !string.IsNullOrWhiteSpace(group) && !string.IsNullOrWhiteSpace(branchId)
+                ? BeadsBranchLabel.Create(group, branchId)
+                : null;
+            var oldHspLabel = _branchInfo != null
+                ? BeadsBranchLabel.Create(_branchInfo.Value.Group, _branchInfo.Value.BranchId)
+                : null;
+
+            // Determine labels to add/remove
+            var labelsToAdd = new List<string>();
+            var labelsToRemove = new List<string>();
+
+            // Handle hsp: label
+            if (newHspLabel != oldHspLabel)
+            {
+                if (oldHspLabel != null)
+                    labelsToRemove.Add(oldHspLabel);
+                if (newHspLabel != null)
+                    labelsToAdd.Add(newHspLabel);
+            }
+
+            // Handle other labels
+            var currentOtherLabels = _issue.Labels.Where(l => !BeadsBranchLabel.IsHomespunLabel(l)).ToHashSet();
+            var newOtherLabels = _editModel.Labels
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet();
+
+            foreach (var label in newOtherLabels.Except(currentOtherLabels))
+            {
+                labelsToAdd.Add(label);
+            }
+
+            foreach (var label in currentOtherLabels.Except(newOtherLabels))
+            {
+                labelsToRemove.Add(label);
+            }
+
+            if (labelsToAdd.Count > 0)
+                updateOptions.LabelsToAdd = labelsToAdd;
+            if (labelsToRemove.Count > 0)
+                updateOptions.LabelsToRemove = labelsToRemove;
+
+            // Perform update (updates cache immediately, queues DB write)
+            var success = await BeadsDatabaseService.UpdateIssueAsync(_projectLocalPath, _issue.Id, updateOptions);
+
+            if (!success)
+            {
+                _errorMessage = "Failed to update issue.";
+                return;
+            }
+
+            // Navigate back to project detail page
+            NavigationManager.NavigateTo($"projects/{ProjectId}");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to save: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private string GetEditBranchPreview()
+    {
+        if (_issue == null) return "";
+
+        var group = _editModel.Group.Trim().ToLowerInvariant();
+        var branchId = _editModel.BranchId.Trim().ToLowerInvariant();
+        var type = _editModel.Type.ToString().ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(group)) group = "<group>";
+        if (string.IsNullOrWhiteSpace(branchId)) branchId = "<branch-id>";
+
+        return $"{group}/{type}/{branchId}+{_issue.Id}";
+    }
+
+    private string GetEditHspLabelPreview()
+    {
+        var group = _editModel.Group.Trim().ToLowerInvariant();
+        var branchId = _editModel.BranchId.Trim().ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(group)) group = "<group>";
+        if (string.IsNullOrWhiteSpace(branchId)) branchId = "<branch-id>";
+
+        return $"hsp:{group}/-/{branchId}";
+    }
+
+    private class EditModel
+    {
+        public string Title { get; set; } = "";
+        public string Description { get; set; } = "";
+        public BeadsIssueType Type { get; set; } = BeadsIssueType.Feature;
+        public string Priority { get; set; } = "";
+        public string ParentId { get; set; } = "";
+        public string Group { get; set; } = "";
+        public string BranchId { get; set; } = "";
+        public string Labels { get; set; } = "";
+    }
+}
