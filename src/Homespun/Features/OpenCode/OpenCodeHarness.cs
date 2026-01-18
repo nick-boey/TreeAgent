@@ -105,6 +105,26 @@ public class OpenCodeHarness : IAgentHarness
     }
 
     /// <inheritdoc />
+    public async IAsyncEnumerable<AgentEvent> SendPromptStreamingAsync(
+        string agentId,
+        AgentPrompt prompt,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var server = _serverManager.GetServerForEntity(agentId)
+            ?? throw new InvalidOperationException($"No agent running for entity {agentId}");
+
+        if (server.ActiveSessionId == null)
+            throw new InvalidOperationException($"Agent {agentId} has no active session");
+
+        var request = MapToPromptRequest(prompt);
+
+        await foreach (var evt in _client.SendPromptStreamingAsync(server.BaseUrl, server.ActiveSessionId, request, ct))
+        {
+            yield return MapToAgentEvent(agentId, evt);
+        }
+    }
+
+    /// <inheritdoc />
     public Task<AgentInstanceStatus?> GetAgentStatusAsync(string agentId, CancellationToken ct = default)
     {
         var server = _serverManager.GetServerForEntity(agentId);

@@ -46,6 +46,16 @@ public interface IAgentHarness : IAsyncDisposable
     Task SendPromptNoWaitAsync(string agentId, AgentPrompt prompt, CancellationToken ct = default);
 
     /// <summary>
+    /// Sends a prompt and streams events as the agent processes it.
+    /// This allows real-time streaming of responses including tool calls.
+    /// </summary>
+    /// <param name="agentId">The agent ID to send to.</param>
+    /// <param name="prompt">The prompt to send.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Async enumerable of agent events as they occur.</returns>
+    IAsyncEnumerable<AgentEvent> SendPromptStreamingAsync(string agentId, AgentPrompt prompt, CancellationToken ct = default);
+
+    /// <summary>
     /// Gets the current status of an agent.
     /// </summary>
     /// <param name="agentId">The agent ID.</param>

@@ -106,6 +106,29 @@ public class ClaudeCodeUIHarness : IAgentHarness
     }
 
     /// <inheritdoc />
+    public async IAsyncEnumerable<AgentEvent> SendPromptStreamingAsync(
+        string agentId,
+        AgentPrompt prompt,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var server = _serverManager.GetServerForEntity(agentId)
+            ?? throw new InvalidOperationException($"No agent running for entity {agentId}");
+
+        var request = MapToPromptRequest(prompt, server.WorkingDirectory, server.ActiveSessionId);
+
+        await foreach (var evt in _client.SendPromptStreamingAsync(server.BaseUrl, request, ct))
+        {
+            // Update session ID if this is a session created event
+            if (evt.Type == ClaudeCodeUIEventTypes.SessionCreated && !string.IsNullOrEmpty(evt.SessionId))
+            {
+                server.ActiveSessionId = evt.SessionId;
+            }
+
+            yield return MapToAgentEvent(agentId, evt);
+        }
+    }
+
+    /// <inheritdoc />
     public Task<AgentInstanceStatus?> GetAgentStatusAsync(string agentId, CancellationToken ct = default)
     {
         var server = _serverManager.GetServerForEntity(agentId);

@@ -21,6 +21,14 @@ public interface IClaudeCodeUIClient
         CancellationToken ct = default);
 
     /// <summary>
+    /// Sends a prompt and streams events as they occur via SSE.
+    /// </summary>
+    IAsyncEnumerable<ClaudeCodeUIEvent> SendPromptStreamingAsync(
+        string baseUrl,
+        ClaudeCodeUIPromptRequest request,
+        CancellationToken ct = default);
+
+    /// <summary>
     /// Sends a prompt without waiting for the full response.
     /// </summary>
     Task SendPromptNoWaitAsync(

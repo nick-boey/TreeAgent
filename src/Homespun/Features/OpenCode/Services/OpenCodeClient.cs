@@ -97,16 +97,78 @@ public class OpenCodeClient(HttpClient httpClient, ILogger<OpenCodeClient> logge
         logger.LogInformation(
             "OpenCodeClient.SendPromptAsyncNoWait: POST {Url}/session/{SessionId}/prompt_async. Request body: {RequestBody}",
             baseUrl, sessionId, requestJson);
-        
+
         var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
-        
+
         var response = await httpClient.PostAsync($"{baseUrl}/session/{sessionId}/prompt_async", content, ct);
-        
+
         logger.LogInformation(
             "OpenCodeClient.SendPromptAsyncNoWait: Response status {StatusCode} for session {SessionId}",
             (int)response.StatusCode, sessionId);
-        
+
         response.EnsureSuccessStatusCode();
+    }
+
+    public async IAsyncEnumerable<OpenCodeEvent> SendPromptStreamingAsync(
+        string baseUrl,
+        string sessionId,
+        PromptRequest request,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var requestJson = JsonSerializer.Serialize(request, JsonOptions);
+        logger.LogInformation(
+            "OpenCodeClient.SendPromptStreamingAsync: POST {Url}/session/{SessionId}/message (streaming). Request body: {RequestBody}",
+            baseUrl, sessionId, requestJson);
+
+        // First, send the prompt without waiting (fire and forget to initiate the request)
+        var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+        var postResponse = await httpClient.PostAsync($"{baseUrl}/session/{sessionId}/prompt_async", content, ct);
+
+        logger.LogInformation(
+            "OpenCodeClient.SendPromptStreamingAsync: Initial POST response status {StatusCode} for session {SessionId}",
+            (int)postResponse.StatusCode, sessionId);
+
+        postResponse.EnsureSuccessStatusCode();
+
+        // Track if we've seen the session become idle (indicates completion)
+        var seenMessageCreated = false;
+        var messageCompleted = false;
+
+        // Then subscribe to events and yield them as they arrive
+        await foreach (var evt in SubscribeToEventsAsync(baseUrl, ct))
+        {
+            // Filter to only relevant events for this session
+            if (evt.Properties?.SessionId != null && evt.Properties.SessionId != sessionId)
+            {
+                continue;
+            }
+
+            // Track message lifecycle
+            if (evt.Type == OpenCodeEventTypes.MessageCreated)
+            {
+                seenMessageCreated = true;
+            }
+
+            yield return evt;
+
+            // Check if the session has returned to idle state after processing started
+            // This indicates the response is complete
+            if (seenMessageCreated && evt.Type == OpenCodeEventTypes.SessionUpdated)
+            {
+                var status = evt.Properties?.StatusValue;
+                if (status == "idle")
+                {
+                    logger.LogDebug("Session {SessionId} returned to idle, streaming complete", sessionId);
+                    messageCompleted = true;
+                    break;
+                }
+            }
+        }
+
+        if (!messageCompleted)
+        {
+            logger.LogWarning("SendPromptStreamingAsync: Event stream ended without session becoming idle for session {SessionId}", sessionId);
+        }
     }
 
     public async IAsyncEnumerable<OpenCodeEvent> SubscribeToEventsAsync(

@@ -126,6 +126,55 @@ public class ClaudeCodeUIClient : IClaudeCodeUIClient
         }
     }
 
+    public async IAsyncEnumerable<ClaudeCodeUIEvent> SendPromptStreamingAsync(
+        string baseUrl,
+        ClaudeCodeUIPromptRequest request,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/agent")
+        {
+            Content = JsonContent.Create(request, options: _jsonOptions)
+        };
+        httpRequest.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("text/event-stream"));
+
+        using var httpResponse = await _httpClient.SendAsync(
+            httpRequest,
+            HttpCompletionOption.ResponseHeadersRead,
+            ct);
+
+        httpResponse.EnsureSuccessStatusCode();
+
+        using var stream = await httpResponse.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+
+        while (!reader.EndOfStream && !ct.IsCancellationRequested)
+        {
+            var line = await reader.ReadLineAsync(ct);
+            if (string.IsNullOrEmpty(line)) continue;
+
+            if (line.StartsWith("data: "))
+            {
+                var data = line[6..];
+                if (data == "[DONE]") break;
+
+                ClaudeCodeUIEvent? evt = null;
+                try
+                {
+                    evt = JsonSerializer.Deserialize<ClaudeCodeUIEvent>(data, _jsonOptions);
+                }
+                catch (JsonException ex)
+                {
+                    _logger.LogDebug(ex, "Failed to parse SSE event: {Data}", data);
+                }
+
+                if (evt != null)
+                {
+                    yield return evt;
+                }
+            }
+        }
+    }
+
     public async Task<List<ClaudeCodeUIProject>> GetProjectsAsync(string baseUrl, CancellationToken ct = default)
     {
         try

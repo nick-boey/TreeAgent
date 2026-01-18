@@ -134,6 +134,43 @@ public class AgentWorkflowServiceTests
 
     #endregion
 
+    #region Planning Mode Tests
+
+    [Test]
+    public void BuildInitialPromptForBeadsIssue_PlanningMode_IncludesClarifyingQuestionInstructions()
+    {
+        var issue = CreateTestIssue();
+        var branchName = "core/feature/add-auth+bd-a3f8";
+
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main", AgentMode.Planning);
+
+        Assert.That(prompt, Does.Contain("clarifying questions").IgnoreCase);
+    }
+
+    [Test]
+    public void BuildInitialPromptForBeadsIssue_PlanningMode_DoesNotIncludePrCreation()
+    {
+        var issue = CreateTestIssue();
+        var branchName = "core/feature/add-auth+bd-a3f8";
+
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main", AgentMode.Planning);
+
+        Assert.That(prompt, Does.Not.Contain("gh pr create"));
+    }
+
+    [Test]
+    public void BuildInitialPromptForBeadsIssue_PlanningMode_InstructsToWaitForApproval()
+    {
+        var issue = CreateTestIssue();
+        var branchName = "core/feature/add-auth+bd-a3f8";
+
+        var prompt = AgentWorkflowService.BuildInitialPromptForBeadsIssue(issue, branchName, "main", AgentMode.Planning);
+
+        Assert.That(prompt, Does.Contain("approval").IgnoreCase);
+    }
+
+    #endregion
+
     #region Helper Methods
 
     private static BeadsIssue CreateTestIssue()

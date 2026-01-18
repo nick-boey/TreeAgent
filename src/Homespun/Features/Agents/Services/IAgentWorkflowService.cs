@@ -77,6 +77,16 @@ public interface IAgentWorkflowService
     Task<AgentMessage> SendPromptAsync(string entityId, string prompt, CancellationToken ct = default);
 
     /// <summary>
+    /// Sends a prompt to the agent's active session and streams events as they occur.
+    /// This allows real-time streaming of responses including tool calls.
+    /// </summary>
+    /// <param name="entityId">The entity ID (PR ID, change ID, or beads issue ID)</param>
+    /// <param name="prompt">The prompt text</param>
+    /// <param name="ct">Cancellation token</param>
+    /// <returns>Async enumerable of agent events as they occur</returns>
+    IAsyncEnumerable<AgentEvent> SendPromptStreamingAsync(string entityId, string prompt, CancellationToken ct = default);
+
+    /// <summary>
     /// Handles agent completion for a beads issue.
     /// Checks GitHub for a PR on the branch and either creates a tracked PR (closing the issue)
     /// or transitions to AwaitingPR status.

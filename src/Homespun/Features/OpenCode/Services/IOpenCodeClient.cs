@@ -53,6 +53,12 @@ public interface IOpenCodeClient
     Task SendPromptAsyncNoWait(string baseUrl, string sessionId, PromptRequest request, CancellationToken ct = default);
 
     /// <summary>
+    /// Sends a prompt to a session and streams events as they arrive.
+    /// Returns events including message.created, part.updated, message.updated, etc.
+    /// </summary>
+    IAsyncEnumerable<OpenCodeEvent> SendPromptStreamingAsync(string baseUrl, string sessionId, PromptRequest request, CancellationToken ct = default);
+
+    /// <summary>
     /// Subscribes to server events via SSE.
     /// </summary>
     IAsyncEnumerable<OpenCodeEvent> SubscribeToEventsAsync(string baseUrl, CancellationToken ct = default);

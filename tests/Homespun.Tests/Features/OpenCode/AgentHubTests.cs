@@ -176,6 +176,73 @@ public class AgentHubTests
         // Assert
         Assert.That(result, Is.EqualTo("claudeui"));
     }
+
+    [Test]
+    public async Task SendPromptStreaming_YieldsEventsFromWorkflowService()
+    {
+        // Arrange
+        var expectedEvents = new List<AgentEvent>
+        {
+            new() { Type = AgentEventTypes.MessageCreated, AgentId = "agent-1", Content = "Hello" },
+            new() { Type = AgentEventTypes.ToolStarted, AgentId = "agent-1", ToolName = "Bash" },
+            new() { Type = AgentEventTypes.ToolCompleted, AgentId = "agent-1", ToolName = "Bash" }
+        };
+
+        _workflowServiceMock.Setup(m => m.SendPromptStreamingAsync("entity-1", "test prompt", It.IsAny<CancellationToken>()))
+            .Returns(expectedEvents.ToAsyncEnumerable());
+
+        // Setup clients mock for broadcasting
+        var clientsMock = new Mock<IHubCallerClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+        clientsMock.Setup(c => c.Group("entity-1")).Returns(clientProxyMock.Object);
+        _hub.Clients = clientsMock.Object;
+
+        // Act
+        var receivedEvents = new List<AgentEvent>();
+        await foreach (var evt in _hub.SendPromptStreaming("entity-1", "test prompt"))
+        {
+            receivedEvents.Add(evt);
+        }
+
+        // Assert
+        Assert.That(receivedEvents, Has.Count.EqualTo(3));
+        Assert.That(receivedEvents[0].Type, Is.EqualTo(AgentEventTypes.MessageCreated));
+        Assert.That(receivedEvents[1].Type, Is.EqualTo(AgentEventTypes.ToolStarted));
+        Assert.That(receivedEvents[2].Type, Is.EqualTo(AgentEventTypes.ToolCompleted));
+    }
+
+    [Test]
+    public async Task SendPromptStreaming_BroadcastsEachEventToGroup()
+    {
+        // Arrange
+        var expectedEvents = new List<AgentEvent>
+        {
+            new() { Type = AgentEventTypes.MessageCreated, AgentId = "agent-1" },
+            new() { Type = AgentEventTypes.ToolCompleted, AgentId = "agent-1" }
+        };
+
+        _workflowServiceMock.Setup(m => m.SendPromptStreamingAsync("entity-1", "test prompt", It.IsAny<CancellationToken>()))
+            .Returns(expectedEvents.ToAsyncEnumerable());
+
+        // Setup clients mock for broadcasting
+        var clientsMock = new Mock<IHubCallerClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+        clientsMock.Setup(c => c.Group("entity-1")).Returns(clientProxyMock.Object);
+        _hub.Clients = clientsMock.Object;
+
+        // Act
+        await foreach (var _ in _hub.SendPromptStreaming("entity-1", "test prompt"))
+        {
+            // Consume the stream
+        }
+
+        // Assert - verify broadcast was called for each event
+        clientProxyMock.Verify(c => c.SendCoreAsync(
+            "AgentEvent",
+            It.IsAny<object?[]>(),
+            It.IsAny<CancellationToken>()),
+            Times.Exactly(2));
+    }
 }
 
 [TestFixture]

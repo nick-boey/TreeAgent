@@ -342,6 +342,34 @@ public class AgentWorkflowService : IAgentWorkflowService
         return response;
     }
 
+    public async IAsyncEnumerable<AgentEvent> SendPromptStreamingAsync(
+        string entityId,
+        string prompt,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
+    {
+        _logger.LogInformation(
+            "SendPromptStreamingAsync called for entity {EntityId}. Prompt length: {PromptLength} chars",
+            entityId, prompt.Length);
+
+        var harness = FindHarnessForEntity(entityId)
+            ?? throw new InvalidOperationException($"No agent running for entity {entityId}");
+
+        var agentPrompt = AgentPrompt.FromText(prompt);
+
+        await foreach (var evt in harness.SendPromptStreamingAsync(entityId, agentPrompt, ct))
+        {
+            _logger.LogDebug(
+                "Streaming event from entity {EntityId}: Type={EventType}, ToolName={ToolName}",
+                entityId, evt.Type, evt.ToolName);
+
+            yield return evt;
+        }
+
+        _logger.LogInformation(
+            "Streaming completed for entity {EntityId}",
+            entityId);
+    }
+
     public async Task HandleAgentCompletionForBeadsIssueAsync(string projectId, string issueId, CancellationToken ct = default)
     {
         var project = _dataStore.GetProject(projectId);

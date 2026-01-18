@@ -74,13 +74,31 @@ public class AgentHub : Hub
     }
 
     /// <summary>
-    /// Send a prompt to the agent.
+    /// Send a prompt to the agent and wait for the complete response.
     /// </summary>
     public async Task<AgentMessage> SendPrompt(string entityId, string prompt)
     {
         var response = await _workflowService.SendPromptAsync(entityId, prompt);
         await Clients.Group(entityId).SendAsync("MessageReceived", entityId, response);
         return response;
+    }
+
+    /// <summary>
+    /// Send a prompt to the agent and stream events as they occur.
+    /// This allows real-time display of tool calls and responses as they happen.
+    /// </summary>
+    public async IAsyncEnumerable<AgentEvent> SendPromptStreaming(
+        string entityId,
+        string prompt,
+        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await foreach (var evt in _workflowService.SendPromptStreamingAsync(entityId, prompt, cancellationToken))
+        {
+            // Also broadcast to the group so other clients watching can see the events
+            await Clients.Group(entityId).SendAsync("AgentEvent", entityId, evt, cancellationToken);
+
+            yield return evt;
+        }
     }
 
     /// <summary>
