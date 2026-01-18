@@ -10,6 +10,13 @@
 # Claude Code temp files
 tmpclaude-*
 
+# Test agent artifacts (HTTP header files from curl testing)
+Accept:
+GET
+Host:
+User-Agent:
+src/Homespun/test/
+
 # User-specific files
 *.rsuser
 *.suo
