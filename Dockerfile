@@ -40,7 +40,9 @@ RUN dotnet publish src/Homespun/Homespun.csproj \
 # =============================================================================
 # Stage 2: Runtime
 # =============================================================================
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+# Use SDK image instead of aspnet runtime to support Claude Code agents
+# that need to run dotnet build, test, and other SDK commands via Bash tool
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS runtime
 WORKDIR /app
 
 # Install dependencies: git, gh CLI, Node.js (for beads)
