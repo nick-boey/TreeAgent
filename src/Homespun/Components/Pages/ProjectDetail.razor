@@ -900,6 +900,10 @@ else
 
             Logger.LogInformation("Started test agent session {SessionId}", session.Id);
 
+            // Send initial message to kick off the agent's task
+            // Claude CLI with --input-format stream-json waits for input before acting
+            await SessionService.SendMessageAsync(session.Id, "Please complete your task.");
+
             // Navigate to the session chat page
             NavigationManager.NavigateTo($"/session/{session.Id}");
         }
