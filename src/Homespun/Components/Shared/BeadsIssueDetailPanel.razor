@@ -3,14 +3,18 @@
 @using Homespun.Features.Beads.Services
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Git
 @using Homespun.Features.Projects
+@using Homespun.Features.PullRequests.Data.Entities
 
 @inject IClaudeSessionStore SessionStore
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
 @inject IBeadsDatabaseService BeadsDatabaseService
+@inject IGitWorktreeService GitWorktreeService
 @inject ProjectService ProjectService
 @inject NavigationManager NavigationManager
+@inject ILogger<BeadsIssueDetailPanel> Logger
 
 <div class="card beads-issue-detail-panel" @onkeydown="HandleKeyDown" tabindex="0">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -410,27 +414,26 @@
     private (string Group, string BranchId)? _branchInfo;
     private EditModel _editModel = new();
     private List<string> _existingGroups = [];
-    private string? _projectLocalPath;
+    private Project? _project;
     private string _selectedModel = "sonnet";
 
     protected override async Task OnInitializedAsync()
     {
-        // Load project info for local path
-        var project = await ProjectService.GetByIdAsync(ProjectId);
-        _projectLocalPath = project?.LocalPath;
+        // Load project info
+        _project = await ProjectService.GetByIdAsync(ProjectId);
 
         // Set default model from project if available
-        if (project?.DefaultModel != null)
+        if (_project?.DefaultModel != null)
         {
-            _selectedModel = project.DefaultModel;
+            _selectedModel = _project.DefaultModel;
         }
 
         // Load existing groups for autocomplete (from cache - synchronous)
-        if (_projectLocalPath != null)
+        if (_project?.LocalPath != null)
         {
             try
             {
-                _existingGroups = BeadsDatabaseService.GetUniqueGroups(_projectLocalPath).ToList();
+                _existingGroups = BeadsDatabaseService.GetUniqueGroups(_project.LocalPath).ToList();
             }
             catch
             {
@@ -670,9 +673,15 @@
 
     private async Task StartSession(SessionMode mode)
     {
-        if (_projectLocalPath == null)
+        if (_project == null)
         {
-            _errorMessage = "Project path not available.";
+            _errorMessage = "Project not available.";
+            return;
+        }
+
+        if (_branchInfo == null)
+        {
+            _errorMessage = "Issue must have branch information (hsp: label) before starting an agent.";
             return;
         }
 
@@ -681,11 +690,30 @@
 
         try
         {
+            // Create worktree for the issue's branch
+            var branchName = GetBranchPreview();
+            Logger.LogInformation("Creating worktree for branch {BranchName} from {ProjectPath}", branchName, _project.LocalPath);
+
+            var worktreePath = await GitWorktreeService.CreateWorktreeAsync(
+                _project.LocalPath,
+                branchName,
+                createBranch: true,
+                baseBranch: _project.DefaultBranch);
+
+            if (string.IsNullOrEmpty(worktreePath))
+            {
+                _errorMessage = "Failed to create worktree for issue branch.";
+                StartupTracker.MarkAsFailed(Issue.Id, _errorMessage);
+                return;
+            }
+
+            Logger.LogInformation("Created worktree at {WorktreePath} for issue {IssueId}", worktreePath, Issue.Id);
+
             var systemPrompt = GenerateSystemPrompt();
             _session = await SessionService.StartSessionAsync(
                 Issue.Id,
                 ProjectId,
-                _projectLocalPath,
+                worktreePath,
                 mode,
                 _selectedModel,
                 systemPrompt);
@@ -697,6 +725,7 @@
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "Failed to start session for issue {IssueId}", Issue.Id);
             StartupTracker.MarkAsFailed(Issue.Id, ex.Message);
             _errorMessage = $"Failed to start session: {ex.Message}";
             _session = null;
