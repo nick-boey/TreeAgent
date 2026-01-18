@@ -473,7 +473,9 @@ else
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Failed to setup SignalR connection");
+            // SignalR connection can fail when accessing via external hostname that the container can't resolve.
+            // This is expected - real-time updates won't work but the page will still function.
+            Logger.LogWarning("SignalR connection failed (real-time updates unavailable): {Message}", ex.Message);
         }
     }
 
