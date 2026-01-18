@@ -2,6 +2,7 @@
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 @using Homespun.Components.Shared
+@using System.Reflection
 
 <div class="page @(_sidebarOpen ? "sidebar-open" : "sidebar-closed")" @onkeydown="HandleKeyDown" tabindex="-1">
     <header class="top-bar">
@@ -24,6 +25,7 @@
             }
         </nav>
         <div class="top-bar-spacer"></div>
+        <span class="version-display" title="Homespun v@_version">v@_version</span>
         <button class="theme-toggle" @onclick="CycleTheme" title="@GetThemeTooltip()">
             <span class="theme-icon @_currentTheme"></span>
         </button>
@@ -56,6 +58,8 @@
     private bool _sidebarOpen = false;
     private List<Breadcrumb> _breadcrumbs = new();
     private string _currentTheme = "auto";
+    private string _version = Assembly.GetExecutingAssembly()
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
 
     protected override void OnInitialized()
     {
