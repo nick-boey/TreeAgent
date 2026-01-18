@@ -342,6 +342,137 @@ public class AgentTestController : ControllerBase
             });
         }
     }
+
+    /// <summary>
+    /// Test tool call streaming - verifies messages are received incrementally.
+    /// Creates a test file and asks Claude to read it, tracking each message received.
+    /// </summary>
+    [HttpGet("tool-call")]
+    public async Task<IActionResult> TestToolCallStreaming()
+    {
+        _logger.LogInformation("Testing tool call streaming");
+
+        var messageLog = new List<object>();
+        var testDir = Path.Combine(Directory.GetCurrentDirectory(), "test");
+        var testFile = Path.Combine(testDir, "streaming-test.txt");
+
+        try
+        {
+            // Create test directory and file
+            if (!Directory.Exists(testDir))
+                Directory.CreateDirectory(testDir);
+
+            var testContent = $"Test file created at {DateTime.UtcNow:O}\nThis is line 2.\nThis is line 3.";
+            await System.IO.File.WriteAllTextAsync(testFile, testContent);
+
+            var options = new ClaudeAgentOptions
+            {
+                Model = "sonnet",
+                PermissionMode = PermissionMode.BypassPermissions,
+                IncludePartialMessages = true,
+                SettingSources = [],
+                Cwd = testDir
+            };
+
+            var prompt = $"Read the file at {testFile} and tell me what's in it. Use the Read tool.";
+
+            await using var client = new ClaudeSdkClient(options);
+            await client.ConnectAsync(prompt);
+
+            var messageIndex = 0;
+            var streamEventCount = 0;
+            var assistantMessageCount = 0;
+            var toolUseCount = 0;
+
+            await foreach (var msg in client.ReceiveMessagesAsync())
+            {
+                var timestamp = DateTime.UtcNow.ToString("HH:mm:ss.fff");
+                var msgType = msg.GetType().Name;
+
+                if (msg is StreamEvent streamEvent)
+                {
+                    streamEventCount++;
+                    // Extract event type from the stream event
+                    string? eventType = null;
+                    if (streamEvent.Event?.TryGetValue("type", out var typeObj) == true)
+                    {
+                        eventType = typeObj is System.Text.Json.JsonElement je ? je.GetString() : typeObj?.ToString();
+                    }
+
+                    messageLog.Add(new
+                    {
+                        Index = messageIndex++,
+                        Timestamp = timestamp,
+                        Type = msgType,
+                        EventType = eventType
+                    });
+                }
+                else if (msg is AssistantMessage assistantMsg)
+                {
+                    assistantMessageCount++;
+                    var contentTypes = assistantMsg.Content?.Select(c => c?.GetType().Name).ToList();
+                    var hasToolUse = assistantMsg.Content?.Any(c => c is ToolUseBlock) ?? false;
+                    if (hasToolUse) toolUseCount++;
+
+                    messageLog.Add(new
+                    {
+                        Index = messageIndex++,
+                        Timestamp = timestamp,
+                        Type = msgType,
+                        ContentTypes = contentTypes,
+                        HasToolUse = hasToolUse
+                    });
+                }
+                else
+                {
+                    messageLog.Add(new
+                    {
+                        Index = messageIndex++,
+                        Timestamp = timestamp,
+                        Type = msgType
+                    });
+                }
+
+                if (msg is ResultMessage)
+                    break;
+            }
+
+            // Clean up test file
+            if (System.IO.File.Exists(testFile))
+                System.IO.File.Delete(testFile);
+
+            var isStreaming = streamEventCount > 5; // Should have many stream events if streaming works
+
+            return Ok(new
+            {
+                Success = true,
+                IsStreaming = isStreaming,
+                TotalMessages = messageLog.Count,
+                StreamEventCount = streamEventCount,
+                AssistantMessageCount = assistantMessageCount,
+                ToolUseCount = toolUseCount,
+                StreamingVerdict = isStreaming
+                    ? "STREAMING WORKING - Multiple stream events received"
+                    : "NOT STREAMING - Few stream events, messages may be batched",
+                Messages = messageLog
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Tool call streaming test failed");
+
+            // Clean up on error
+            if (System.IO.File.Exists(testFile))
+                System.IO.File.Delete(testFile);
+
+            return Ok(new
+            {
+                Success = false,
+                Error = ex.Message,
+                StackTrace = ex.StackTrace
+            });
+        }
+    }
 }
 
 public class SessionTestRequest

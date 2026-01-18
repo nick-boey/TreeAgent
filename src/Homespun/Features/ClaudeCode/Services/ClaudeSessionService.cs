@@ -255,7 +255,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             return;
 
         var eventType = typeObj is JsonElement typeElement ? typeElement.GetString() : typeObj?.ToString();
-        _logger.LogDebug("Processing stream event type: {EventType}", eventType);
+        _logger.LogDebug("Processing stream event type: {EventType} for session {SessionId}", eventType, sessionId);
 
         switch (eventType)
         {
