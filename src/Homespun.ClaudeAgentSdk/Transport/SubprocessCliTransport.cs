@@ -300,9 +300,9 @@ public class SubprocessCliTransport : ITransport
         }
         else
         {
+            // Use --print mode - we'll pass the prompt via stdin
+            // This is more reliable than passing as a positional argument
             cmd.Add("--print");
-            cmd.Add("--");
-            cmd.Add(_prompt.ToString()!);
         }
 
         return cmd;
@@ -364,6 +364,8 @@ public class SubprocessCliTransport : ITransport
             }
             else
             {
+                // Write the prompt to stdin for --print mode, then close
+                _process.StandardInput.WriteLine(_prompt.ToString());
                 _process.StandardInput.Close();
             }
 

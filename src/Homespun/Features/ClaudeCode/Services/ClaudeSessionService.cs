@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Hubs;
@@ -15,7 +16,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     private readonly SessionOptionsFactory _optionsFactory;
     private readonly ILogger<ClaudeSessionService> _logger;
     private readonly IHubContext<ClaudeCodeHub> _hubContext;
-    private readonly ConcurrentDictionary<string, ClaudeSdkClient> _clients = new();
+    private readonly ConcurrentDictionary<string, ClaudeAgentOptions> _sessionOptions = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _sessionCts = new();
 
     public ClaudeSessionService(
@@ -62,35 +63,17 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         var cts = new CancellationTokenSource();
         _sessionCts[sessionId] = cts;
 
-        // Create and connect the SDK client
-        try
-        {
-            var options = _optionsFactory.Create(mode, workingDirectory, model, systemPrompt);
-            options.PermissionMode = PermissionMode.BypassPermissions; // Allow all tools without prompting
-            options.IncludePartialMessages = true; // Enable streaming
+        // Create and store the SDK options (we'll create clients per-query for streaming support)
+        var options = _optionsFactory.Create(mode, workingDirectory, model, systemPrompt);
+        options.PermissionMode = PermissionMode.BypassPermissions; // Allow all tools without prompting
+        options.IncludePartialMessages = true; // Enable streaming with --print mode
+        _sessionOptions[sessionId] = options;
 
-            var client = new ClaudeSdkClient(options);
-            _clients[sessionId] = client;
+        session.Status = ClaudeSessionStatus.Running;
+        _logger.LogInformation("Session {SessionId} initialized and ready", sessionId);
 
-            await client.ConnectAsync();
-
-            session.Status = ClaudeSessionStatus.Running;
-            _logger.LogInformation("Session {SessionId} connected and running", sessionId);
-
-            // Notify clients about the new session
-            await _hubContext.BroadcastSessionStarted(session);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to start session {SessionId}", sessionId);
-            session.Status = ClaudeSessionStatus.Error;
-            session.ErrorMessage = ex.Message;
-
-            // Clean up
-            _clients.TryRemove(sessionId, out _);
-            _sessionCts.TryRemove(sessionId, out var removedCts);
-            removedCts?.Dispose();
-        }
+        // Notify clients about the new session
+        await _hubContext.BroadcastSessionStarted(session);
 
         return session;
     }
@@ -109,9 +92,9 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             throw new InvalidOperationException($"Session {sessionId} is not active (status: {session.Status})");
         }
 
-        if (!_clients.TryGetValue(sessionId, out var client))
+        if (!_sessionOptions.TryGetValue(sessionId, out var baseOptions))
         {
-            throw new InvalidOperationException($"No client found for session {sessionId}");
+            throw new InvalidOperationException($"No options found for session {sessionId}");
         }
 
         _logger.LogInformation("Sending message to session {SessionId}", sessionId);
@@ -137,8 +120,31 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cts.Token)
                 : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-            // Send query and process streaming response
-            await client.QueryAsync(message);
+            // Create options for this query, using Resume if we have a conversation ID from previous query
+            var queryOptions = new ClaudeAgentOptions
+            {
+                AllowedTools = baseOptions.AllowedTools,
+                SystemPrompt = baseOptions.SystemPrompt,
+                McpServers = baseOptions.McpServers,
+                PermissionMode = baseOptions.PermissionMode,
+                MaxTurns = baseOptions.MaxTurns,
+                DisallowedTools = baseOptions.DisallowedTools,
+                Model = baseOptions.Model,
+                Cwd = baseOptions.Cwd,
+                Settings = baseOptions.Settings,
+                AddDirs = baseOptions.AddDirs,
+                Env = baseOptions.Env,
+                ExtraArgs = baseOptions.ExtraArgs,
+                IncludePartialMessages = true, // Enable streaming
+                SettingSources = baseOptions.SettingSources,
+                // Resume from previous conversation if we have a ConversationId
+                Resume = session.ConversationId
+            };
+
+            // Create a new client for this query with the message as prompt
+            // This uses --print mode which supports --include-partial-messages for streaming
+            await using var client = new ClaudeSdkClient(queryOptions);
+            await client.ConnectAsync(message, linkedCts.Token);
 
             var assistantMessage = new ClaudeMessage
             {
@@ -147,9 +153,14 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 Content = []
             };
 
-            await foreach (var msg in client.ReceiveResponseAsync().WithCancellation(linkedCts.Token))
+            await foreach (var msg in client.ReceiveMessagesAsync().WithCancellation(linkedCts.Token))
             {
+                _logger.LogDebug("Received SDK message type: {MessageType}", msg.GetType().Name);
                 await ProcessSdkMessageAsync(sessionId, session, assistantMessage, msg, linkedCts.Token);
+
+                // Stop processing after receiving the result message
+                if (msg is ResultMessage)
+                    break;
             }
 
             // Add completed assistant message
@@ -184,21 +195,26 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     {
         switch (sdkMessage)
         {
+            case StreamEvent streamEvent:
+                // Handle partial streaming updates for real-time display
+                await ProcessStreamEventAsync(sessionId, session, assistantMessage, streamEvent, cancellationToken);
+                break;
+
             case AssistantMessage assistantMsg:
-                foreach (var block in assistantMsg.Content)
+                // Content already processed by streaming events (content_block_start/delta/stop)
+                // Just ensure all blocks are finalized - don't add duplicates or broadcast again
+                foreach (var block in assistantMessage.Content)
                 {
-                    var content = ConvertContentBlock(block);
-                    if (content != null)
-                    {
-                        assistantMessage.Content.Add(content);
-                        await _hubContext.BroadcastContentBlockReceived(sessionId, content);
-                    }
+                    block.IsStreaming = false;
                 }
                 break;
 
             case ResultMessage resultMsg:
                 session.TotalCostUsd = (decimal)(resultMsg.TotalCostUsd ?? 0);
                 session.TotalDurationMs = resultMsg.DurationMs;
+                // Store the Claude CLI session ID for use with --resume in subsequent messages
+                session.ConversationId = resultMsg.SessionId;
+                _logger.LogDebug("Stored ConversationId {ConversationId} for session resumption", resultMsg.SessionId);
                 await _hubContext.BroadcastSessionResultReceived(sessionId, session.TotalCostUsd, resultMsg.DurationMs);
                 break;
 
@@ -206,6 +222,176 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 _logger.LogDebug("System message received: {Subtype}", systemMsg.Subtype);
                 break;
         }
+    }
+
+    private async Task ProcessStreamEventAsync(
+        string sessionId,
+        ClaudeSession session,
+        ClaudeMessage assistantMessage,
+        StreamEvent streamEvent,
+        CancellationToken cancellationToken)
+    {
+        if (streamEvent.Event == null || !streamEvent.Event.TryGetValue("type", out var typeObj))
+            return;
+
+        var eventType = typeObj is JsonElement typeElement ? typeElement.GetString() : typeObj?.ToString();
+        _logger.LogDebug("Processing stream event type: {EventType} for session {SessionId}", eventType, sessionId);
+
+        switch (eventType)
+        {
+            case "content_block_start":
+                await HandleContentBlockStart(sessionId, assistantMessage, streamEvent.Event, cancellationToken);
+                break;
+
+            case "content_block_delta":
+                await HandleContentBlockDelta(sessionId, assistantMessage, streamEvent.Event, cancellationToken);
+                break;
+
+            case "content_block_stop":
+                await HandleContentBlockStop(sessionId, assistantMessage, streamEvent.Event, cancellationToken);
+                break;
+
+            default:
+                _logger.LogDebug("Unhandled stream event type: {EventType}", eventType);
+                break;
+        }
+    }
+
+    private async Task HandleContentBlockStart(
+        string sessionId,
+        ClaudeMessage assistantMessage,
+        Dictionary<string, object> eventData,
+        CancellationToken cancellationToken)
+    {
+        if (!eventData.TryGetValue("content_block", out var blockObj))
+            return;
+
+        // Extract the index from the event data
+        var index = GetIntValue(eventData, "index") ?? -1;
+
+        var blockJson = blockObj is JsonElement element ? element.GetRawText() : JsonSerializer.Serialize(blockObj);
+        var blockData = JsonSerializer.Deserialize<Dictionary<string, object>>(blockJson);
+        if (blockData == null) return;
+
+        var blockType = GetStringValue(blockData, "type");
+        ClaudeMessageContent? content = blockType switch
+        {
+            "text" => new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Text,
+                Text = "",
+                IsStreaming = true,
+                Index = index
+            },
+            "thinking" => new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.Thinking,
+                Text = "",
+                IsStreaming = true,
+                Index = index
+            },
+            "tool_use" => new ClaudeMessageContent
+            {
+                Type = ClaudeContentType.ToolUse,
+                ToolName = GetStringValue(blockData, "name") ?? "unknown",
+                ToolInput = "",
+                IsStreaming = true,
+                Index = index
+            },
+            _ => null
+        };
+
+        if (content != null)
+        {
+            assistantMessage.Content.Add(content);
+            _logger.LogDebug("Broadcasting content_block_start for index {Index}, type {Type}", index, blockType);
+            await _hubContext.BroadcastStreamingContentStarted(sessionId, content, index);
+        }
+    }
+
+    private async Task HandleContentBlockDelta(
+        string sessionId,
+        ClaudeMessage assistantMessage,
+        Dictionary<string, object> eventData,
+        CancellationToken cancellationToken)
+    {
+        if (!eventData.TryGetValue("delta", out var deltaObj))
+            return;
+
+        // Extract the index from the event data
+        var index = GetIntValue(eventData, "index") ?? -1;
+
+        var deltaJson = deltaObj is JsonElement element ? element.GetRawText() : JsonSerializer.Serialize(deltaObj);
+        var deltaData = JsonSerializer.Deserialize<Dictionary<string, object>>(deltaJson);
+        if (deltaData == null) return;
+
+        var deltaType = GetStringValue(deltaData, "type");
+
+        // Find the streaming content block by index, or fall back to last streaming block
+        var streamingBlock = index >= 0
+            ? assistantMessage.Content.FirstOrDefault(c => c.IsStreaming && c.Index == index)
+            : assistantMessage.Content.LastOrDefault(c => c.IsStreaming);
+
+        if (streamingBlock == null) return;
+
+        switch (deltaType)
+        {
+            case "text_delta":
+                var textDelta = GetStringValue(deltaData, "text") ?? "";
+                streamingBlock.Text = (streamingBlock.Text ?? "") + textDelta;
+                await _hubContext.BroadcastStreamingContentDelta(sessionId, streamingBlock, textDelta, index);
+                break;
+
+            case "thinking_delta":
+                var thinkingDelta = GetStringValue(deltaData, "thinking") ?? "";
+                streamingBlock.Text = (streamingBlock.Text ?? "") + thinkingDelta;
+                await _hubContext.BroadcastStreamingContentDelta(sessionId, streamingBlock, thinkingDelta, index);
+                break;
+
+            case "input_json_delta":
+                var inputDelta = GetStringValue(deltaData, "partial_json") ?? "";
+                streamingBlock.ToolInput = (streamingBlock.ToolInput ?? "") + inputDelta;
+                await _hubContext.BroadcastStreamingContentDelta(sessionId, streamingBlock, inputDelta, index);
+                break;
+        }
+    }
+
+    private async Task HandleContentBlockStop(
+        string sessionId,
+        ClaudeMessage assistantMessage,
+        Dictionary<string, object> eventData,
+        CancellationToken cancellationToken)
+    {
+        // Extract the index from the event data
+        var index = GetIntValue(eventData, "index") ?? -1;
+
+        // Find the streaming content block by index, or fall back to last streaming block
+        var streamingBlock = index >= 0
+            ? assistantMessage.Content.FirstOrDefault(c => c.IsStreaming && c.Index == index)
+            : assistantMessage.Content.LastOrDefault(c => c.IsStreaming);
+
+        if (streamingBlock != null)
+        {
+            streamingBlock.IsStreaming = false;
+            _logger.LogDebug("Broadcasting content_block_stop for index {Index}", index);
+            await _hubContext.BroadcastStreamingContentStopped(sessionId, streamingBlock, index);
+        }
+    }
+
+    private static string? GetStringValue(Dictionary<string, object> data, string key)
+    {
+        if (!data.TryGetValue(key, out var value)) return null;
+        return value is JsonElement element ? element.GetString() : value?.ToString();
+    }
+
+    private static int? GetIntValue(Dictionary<string, object> data, string key)
+    {
+        if (!data.TryGetValue(key, out var value)) return null;
+        if (value is JsonElement element)
+        {
+            return element.ValueKind == JsonValueKind.Number ? element.GetInt32() : null;
+        }
+        return value is int intValue ? intValue : null;
     }
 
     private static ClaudeMessageContent? ConvertContentBlock(object block)
@@ -256,18 +442,8 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             cts.Dispose();
         }
 
-        // Dispose the client
-        if (_clients.TryRemove(sessionId, out var client))
-        {
-            try
-            {
-                await client.DisposeAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error disposing client for session {SessionId}", sessionId);
-            }
-        }
+        // Remove stored options
+        _sessionOptions.TryRemove(sessionId, out _);
 
         // Update session status and remove from store
         session.Status = ClaudeSessionStatus.Stopped;
@@ -320,15 +496,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
         }
         _sessionCts.Clear();
 
-        // Dispose all clients
-        foreach (var client in _clients.Values)
-        {
-            try
-            {
-                await client.DisposeAsync();
-            }
-            catch { }
-        }
-        _clients.Clear();
+        // Clear stored options
+        _sessionOptions.Clear();
     }
 }

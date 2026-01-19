@@ -145,4 +145,44 @@ public static class ClaudeCodeHubExtensions
         await hubContext.Clients.Group($"session-{sessionId}")
             .SendAsync("SessionResultReceived", sessionId, totalCostUsd, durationMs);
     }
+
+    /// <summary>
+    /// Broadcasts when a new streaming content block starts.
+    /// </summary>
+    public static async Task BroadcastStreamingContentStarted(
+        this IHubContext<ClaudeCodeHub> hubContext,
+        string sessionId,
+        ClaudeMessageContent content,
+        int index = -1)
+    {
+        await hubContext.Clients.Group($"session-{sessionId}")
+            .SendAsync("StreamingContentStarted", content, index);
+    }
+
+    /// <summary>
+    /// Broadcasts a streaming content delta (partial text update).
+    /// </summary>
+    public static async Task BroadcastStreamingContentDelta(
+        this IHubContext<ClaudeCodeHub> hubContext,
+        string sessionId,
+        ClaudeMessageContent content,
+        string delta,
+        int index = -1)
+    {
+        await hubContext.Clients.Group($"session-{sessionId}")
+            .SendAsync("StreamingContentDelta", content, delta, index);
+    }
+
+    /// <summary>
+    /// Broadcasts when a streaming content block finishes.
+    /// </summary>
+    public static async Task BroadcastStreamingContentStopped(
+        this IHubContext<ClaudeCodeHub> hubContext,
+        string sessionId,
+        ClaudeMessageContent content,
+        int index = -1)
+    {
+        await hubContext.Clients.Group($"session-{sessionId}")
+            .SendAsync("StreamingContentStopped", content, index);
+    }
 }

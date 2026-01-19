@@ -94,6 +94,7 @@ builder.Services.AddHostedService<GitHubSyncPollingService>();
 
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
+builder.Services.AddControllers(); // Add API controller support
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -123,6 +124,9 @@ app.MapHub<ClaudeCodeHub>("/hubs/claudecode");
 
 // Map health check endpoint
 app.MapHealthChecks("/health");
+
+// Map API controllers
+app.MapControllers();
 
 // Map test agent endpoint for curl-based testing
 app.MapGet("/test-agent", async (ILogger<Program> logger) =>

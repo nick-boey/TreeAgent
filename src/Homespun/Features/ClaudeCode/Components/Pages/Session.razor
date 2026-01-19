@@ -4,11 +4,13 @@
 @using Homespun.Features.ClaudeCode.Hubs
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.JSInterop
 @using static Microsoft.AspNetCore.Components.Web.RenderMode
 @implements IAsyncDisposable
 @rendermode InteractiveServer
 @inject IClaudeSessionService SessionService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Session - Homespun</PageTitle>
 
@@ -60,17 +62,39 @@
                             <div class="message-content">
                                 @foreach (var content in message.Content)
                                 {
-                                    <div class="content-block @GetContentBlockClass(content.Type)">
+                                    <div class="content-block @GetContentBlockClass(content.Type) @(content.IsStreaming ? "streaming" : "")">
                                         @switch (content.Type)
                                         {
                                             case ClaudeContentType.Text:
-                                                <div class="text-content">@content.Text</div>
+                                                <div class="text-content">
+                                                    @content.Text
+                                                    @if (content.IsStreaming)
+                                                    {
+                                                        <span class="streaming-cursor">▌</span>
+                                                    }
+                                                </div>
                                                 break;
 
                                             case ClaudeContentType.Thinking:
-                                                <details class="thinking-block">
-                                                    <summary>Thinking...</summary>
-                                                    <div class="thinking-content">@content.Text</div>
+                                                <details class="thinking-block" open="@content.IsStreaming">
+                                                    <summary>
+                                                        @if (content.IsStreaming)
+                                                        {
+                                                            <span>Thinking</span>
+                                                            <span class="streaming-dots">...</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>Thinking...</span>
+                                                        }
+                                                    </summary>
+                                                    <div class="thinking-content">
+                                                        @content.Text
+                                                        @if (content.IsStreaming)
+                                                        {
+                                                            <span class="streaming-cursor">▌</span>
+                                                        }
+                                                    </div>
                                                 </details>
                                                 break;
 
@@ -79,10 +103,16 @@
                                                     <div class="tool-header">
                                                         <span class="tool-icon">🔧</span>
                                                         <span class="tool-name">@content.ToolName</span>
+                                                        @if (content.IsStreaming)
+                                                        {
+                                                            <span class="tool-streaming-indicator">
+                                                                <span class="spinner-border spinner-border-sm ms-2" role="status"></span>
+                                                            </span>
+                                                        }
                                                     </div>
                                                     @if (!string.IsNullOrEmpty(content.ToolInput))
                                                     {
-                                                        <pre class="tool-input">@content.ToolInput</pre>
+                                                        <pre class="tool-input">@content.ToolInput@(content.IsStreaming ? "▌" : "")</pre>
                                                     }
                                                 </div>
                                                 break;
@@ -132,6 +162,40 @@
                 <span>Duration: @FormatDuration(_session.TotalDurationMs)</span>
             </div>
         }
+
+        <!-- Debug Panel -->
+        <details class="debug-panel">
+            <summary @onclick="ToggleDebugMode" @onclick:preventDefault @onclick:stopPropagation>
+                <span>Debug SignalR Events</span>
+                @if (_debugMode)
+                {
+                    <span class="debug-count">(@_debugLog.Count events)</span>
+                }
+            </summary>
+            @if (_debugMode)
+            {
+                <div class="debug-controls">
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="ClearDebugLog">Clear Log</button>
+                </div>
+                <div class="debug-log">
+                    @if (_debugLog.Count == 0)
+                    {
+                        <div class="debug-empty">No events logged yet. Interact with the session to see SignalR events.</div>
+                    }
+                    else
+                    {
+                        @foreach (var entry in _debugLog.AsEnumerable().Reverse().Take(50))
+                        {
+                            <div class="debug-entry @(entry.EventType == "ERROR" ? "error" : "")">
+                                <span class="debug-time">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                                <span class="debug-type">@entry.EventType</span>
+                                <span class="debug-message">@entry.Message</span>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </details>
     }
 </div>
 
@@ -301,6 +365,32 @@
         color: var(--text-muted);
     }
 
+    /* Streaming content indicators */
+    .streaming-cursor {
+        animation: blink 1s step-end infinite;
+        color: var(--primary);
+    }
+
+    .streaming-dots {
+        animation: dots 1.5s ease-in-out infinite;
+    }
+
+    .content-block.streaming {
+        border-left: 2px solid var(--primary);
+        padding-left: var(--spacing-sm);
+    }
+
+    @@keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+    }
+
+    @@keyframes dots {
+        0%, 20% { content: '.'; }
+        40% { content: '..'; }
+        60%, 100% { content: '...'; }
+    }
+
     .input-area {
         display: flex;
         gap: var(--spacing-sm);
@@ -336,6 +426,87 @@
         font-size: 0.875rem;
         color: var(--text-muted);
     }
+
+    /* Debug Panel Styles */
+    .debug-panel {
+        margin-top: var(--spacing-md);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+    }
+
+    .debug-panel summary {
+        padding: var(--spacing-sm) var(--spacing-md);
+        cursor: pointer;
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    .debug-panel summary:hover {
+        color: var(--text-primary);
+    }
+
+    .debug-count {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    .debug-controls {
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .debug-log {
+        max-height: 300px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 0.75rem;
+    }
+
+    .debug-empty {
+        padding: var(--spacing-md);
+        color: var(--text-muted);
+        text-align: center;
+    }
+
+    .debug-entry {
+        padding: var(--spacing-xs) var(--spacing-md);
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        gap: var(--spacing-sm);
+    }
+
+    .debug-entry:last-child {
+        border-bottom: none;
+    }
+
+    .debug-entry.error {
+        background: rgba(220, 53, 69, 0.1);
+        color: var(--danger);
+    }
+
+    .debug-time {
+        color: var(--text-muted);
+        min-width: 100px;
+    }
+
+    .debug-type {
+        font-weight: 600;
+        min-width: 180px;
+        color: var(--primary);
+    }
+
+    .debug-entry.error .debug-type {
+        color: var(--danger);
+    }
+
+    .debug-message {
+        flex: 1;
+        word-break: break-word;
+    }
 </style>
 
 @code {
@@ -346,6 +517,141 @@
     private ElementReference _messagesContainer;
     private HubConnection? _hubConnection;
     private string? _signalRError;
+
+    // Debug mode for SignalR event logging
+    private bool _debugMode = false;
+    private List<DebugLogEntry> _debugLog = new();
+    private const int MaxDebugLogEntries = 100;
+
+    private void LogDebug(string eventType, string message)
+    {
+        if (_debugMode)
+        {
+            _debugLog.Add(new DebugLogEntry
+            {
+                Timestamp = DateTime.Now,
+                EventType = eventType,
+                Message = message
+            });
+            // Keep log size bounded
+            while (_debugLog.Count > MaxDebugLogEntries)
+            {
+                _debugLog.RemoveAt(0);
+            }
+        }
+    }
+
+    private void ToggleDebugMode()
+    {
+        _debugMode = !_debugMode;
+        if (!_debugMode)
+        {
+            _debugLog.Clear();
+        }
+        StateHasChanged();
+    }
+
+    private void ClearDebugLog()
+    {
+        _debugLog.Clear();
+        StateHasChanged();
+    }
+
+    private class DebugLogEntry
+    {
+        public DateTime Timestamp { get; init; }
+        public required string EventType { get; init; }
+        public required string Message { get; init; }
+    }
+
+    /// <summary>
+    /// Gets the assistant message for the current turn (the one that comes after the last real user message).
+    /// Creates a new assistant message if one doesn't exist for the current turn.
+    /// Note: Tool result messages (role=user but only ToolResult content) are NOT turn boundaries.
+    /// </summary>
+    private ClaudeMessage? GetOrCreateCurrentTurnAssistantMessage()
+    {
+        if (_session == null) return null;
+
+        // Find the index of the last REAL user message (not a tool_result message)
+        // A real user message has text content, while tool_result messages only have ToolResult content
+        var lastUserMessageIndex = -1;
+        for (int i = _session.Messages.Count - 1; i >= 0; i--)
+        {
+            var msg = _session.Messages[i];
+            if (msg.Role == ClaudeMessageRole.User && IsRealUserMessage(msg))
+            {
+                lastUserMessageIndex = i;
+                break;
+            }
+        }
+
+        // Look for an assistant message AFTER the last real user message
+        ClaudeMessage? currentAssistantMessage = null;
+        if (lastUserMessageIndex >= 0)
+        {
+            for (int i = lastUserMessageIndex + 1; i < _session.Messages.Count; i++)
+            {
+                if (_session.Messages[i].Role == ClaudeMessageRole.Assistant)
+                {
+                    currentAssistantMessage = _session.Messages[i];
+                    break;
+                }
+            }
+        }
+        else
+        {
+            // No user message yet, so any assistant message is for the current turn (initial response)
+            currentAssistantMessage = _session.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.Assistant);
+        }
+
+        // If no assistant message for this turn exists, create one
+        if (currentAssistantMessage == null)
+        {
+            currentAssistantMessage = new ClaudeMessage
+            {
+                SessionId = SessionId,
+                Role = ClaudeMessageRole.Assistant,
+                Content = []
+            };
+            _session.Messages.Add(currentAssistantMessage);
+            LogDebug("CreateMessage", "Created new assistant message for current turn");
+        }
+
+        return currentAssistantMessage;
+    }
+
+    /// <summary>
+    /// Determines if a user message is a "real" user message (with text input) vs a tool_result message.
+    /// Tool result messages have role=user but only contain ToolResult content blocks.
+    /// </summary>
+    private static bool IsRealUserMessage(ClaudeMessage message)
+    {
+        if (message.Role != ClaudeMessageRole.User) return false;
+
+        // If the message has no content, treat it as a real user message (edge case)
+        if (message.Content.Count == 0) return true;
+
+        // If all content blocks are ToolResult, this is NOT a real user message
+        var hasOnlyToolResults = message.Content.All(c => c.Type == ClaudeContentType.ToolResult);
+        return !hasOnlyToolResults;
+    }
+
+    /// <summary>
+    /// Scrolls the messages container to the bottom.
+    /// </summary>
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("eval",
+                $"document.querySelector('.messages-container')?.scrollTo(0, document.querySelector('.messages-container')?.scrollHeight || 0)");
+        }
+        catch
+        {
+            // Ignore scroll errors
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -376,71 +682,324 @@
 
         _hubConnection.On<ClaudeMessage>("MessageReceived", (message) =>
         {
-            InvokeAsync(() =>
+            _ = InvokeAsync(async () =>
             {
-                // Find and update the message in the session
-                var existingMessage = _session?.Messages.FirstOrDefault(m => m.Id == message.Id);
-                if (existingMessage == null && _session != null)
+                try
                 {
-                    _session.Messages.Add(message);
+                    LogDebug("MessageReceived", $"Role: {message.Role}, ContentBlocks: {message.Content.Count}");
+
+                    if (_session == null) return;
+
+                    // For user messages, check by ID
+                    if (message.Role == ClaudeMessageRole.User)
+                    {
+                        var existingUser = _session.Messages.FirstOrDefault(m => m.Id == message.Id);
+                        if (existingUser == null)
+                        {
+                            _session.Messages.Add(message);
+                        }
+                    }
+                    else if (message.Role == ClaudeMessageRole.Assistant)
+                    {
+                        // For assistant messages, check if we already have one for this turn
+                        // (created by streaming events). If so, don't add duplicate.
+                        // Note: tool_result messages (role=user but only ToolResult content) are NOT turn boundaries.
+                        var lastUserIndex = -1;
+                        for (int i = _session.Messages.Count - 1; i >= 0; i--)
+                        {
+                            var msg = _session.Messages[i];
+                            if (msg.Role == ClaudeMessageRole.User && IsRealUserMessage(msg))
+                            {
+                                lastUserIndex = i;
+                                break;
+                            }
+                        }
+
+                        ClaudeMessage? existingAssistant = null;
+                        if (lastUserIndex >= 0)
+                        {
+                            for (int i = lastUserIndex + 1; i < _session.Messages.Count; i++)
+                            {
+                                if (_session.Messages[i].Role == ClaudeMessageRole.Assistant)
+                                {
+                                    existingAssistant = _session.Messages[i];
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (existingAssistant == null)
+                        {
+                            // No existing assistant message for this turn, add the new one
+                            _session.Messages.Add(message);
+                        }
+                        // If existingAssistant exists, we keep it (it has streaming content) and ignore this duplicate
+                    }
+                    StateHasChanged();
+                    await ScrollToBottom();
                 }
-                StateHasChanged();
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"MessageReceived: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in MessageReceived: {ex.Message}");
+                }
             });
         });
 
         _hubConnection.On<ClaudeMessageContent>("ContentBlockReceived", (content) =>
         {
-            InvokeAsync(() =>
+            _ = InvokeAsync(async () =>
             {
-                // Update the last assistant message with the new content block
-                var lastMessage = _session?.Messages.LastOrDefault(m => m.Role == ClaudeMessageRole.Assistant);
-                if (lastMessage != null && !lastMessage.Content.Contains(content))
+                try
                 {
-                    lastMessage.Content.Add(content);
+                    LogDebug("ContentBlockReceived", $"Type: {content.Type}, Index: {content.Index}, TextLen: {content.Text?.Length ?? 0}");
+
+                    // Get the assistant message for the current turn
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+                    if (currentMessage != null)
+                    {
+                        // Check if we already have a block with this index (from streaming)
+                        var existingBlock = content.Index >= 0
+                            ? currentMessage.Content.FirstOrDefault(c => c.Index == content.Index)
+                            : currentMessage.Content.FirstOrDefault(c => c.Type == content.Type && c.Text == content.Text);
+
+                        if (existingBlock == null)
+                        {
+                            // No existing block, add this one
+                            currentMessage.Content.Add(content);
+                        }
+                        else
+                        {
+                            // Block exists from streaming, just mark it as not streaming anymore
+                            existingBlock.IsStreaming = false;
+                        }
+                    }
+                    StateHasChanged();
+                    await ScrollToBottom();
                 }
-                StateHasChanged();
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"ContentBlockReceived: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in ContentBlockReceived: {ex.Message}");
+                }
+            });
+        });
+
+        // Handle streaming content events - now with index tracking for robust block management
+        _hubConnection.On<ClaudeMessageContent, int>("StreamingContentStarted", (content, index) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("StreamingContentStarted", $"Type: {content.Type}, Index: {index}");
+                    Console.WriteLine($"[SignalR] StreamingContentStarted: Type={content.Type}, Index={index}");
+
+                    // Get or create the assistant message for the current turn
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+
+                    // Add the streaming content block with its index
+                    if (currentMessage != null)
+                    {
+                        // Check if we already have a block with this index
+                        var existingBlock = index >= 0
+                            ? currentMessage.Content.FirstOrDefault(c => c.Index == index)
+                            : currentMessage.Content.FirstOrDefault(c => c.IsStreaming && c.Type == content.Type);
+
+                        if (existingBlock == null)
+                        {
+                            content.Index = index;
+                            currentMessage.Content.Add(content);
+                        }
+                    }
+                    StateHasChanged();
+                    await ScrollToBottom();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"StreamingContentStarted: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in StreamingContentStarted: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<ClaudeMessageContent, string, int>("StreamingContentDelta", (content, delta, index) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("StreamingContentDelta", $"Type: {content.Type}, Index: {index}, DeltaLen: {delta.Length}");
+
+                    // Get the assistant message for the current turn
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+
+                    // Find and update the streaming content block by index (more robust than type matching)
+                    var streamingBlock = index >= 0
+                        ? currentMessage?.Content.FirstOrDefault(c => c.IsStreaming && c.Index == index)
+                        : currentMessage?.Content.LastOrDefault(c => c.IsStreaming && c.Type == content.Type);
+
+                    if (streamingBlock != null)
+                    {
+                        // Apply the delta
+                        switch (content.Type)
+                        {
+                            case ClaudeContentType.Text:
+                            case ClaudeContentType.Thinking:
+                                streamingBlock.Text = (streamingBlock.Text ?? "") + delta;
+                                break;
+                            case ClaudeContentType.ToolUse:
+                                streamingBlock.ToolInput = (streamingBlock.ToolInput ?? "") + delta;
+                                break;
+                        }
+                    }
+                    StateHasChanged();
+                    await ScrollToBottom();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"StreamingContentDelta: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in StreamingContentDelta: {ex.Message}");
+                }
+            });
+        });
+
+        _hubConnection.On<ClaudeMessageContent, int>("StreamingContentStopped", (content, index) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("StreamingContentStopped", $"Type: {content.Type}, Index: {index}");
+                    Console.WriteLine($"[SignalR] StreamingContentStopped: Type={content.Type}, Index={index}");
+
+                    // Get the assistant message for the current turn
+                    var currentMessage = GetOrCreateCurrentTurnAssistantMessage();
+
+                    // Mark the content block as no longer streaming (find by index for robustness)
+                    var streamingBlock = index >= 0
+                        ? currentMessage?.Content.FirstOrDefault(c => c.IsStreaming && c.Index == index)
+                        : currentMessage?.Content.LastOrDefault(c => c.IsStreaming && c.Type == content.Type);
+
+                    if (streamingBlock != null)
+                    {
+                        streamingBlock.IsStreaming = false;
+                    }
+                    StateHasChanged();
+                    await ScrollToBottom();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"StreamingContentStopped: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in StreamingContentStopped: {ex.Message}");
+                }
             });
         });
 
         _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", (sessionId, status) =>
         {
-            InvokeAsync(() =>
+            _ = InvokeAsync(async () =>
             {
-                if (_session != null && _session.Id == sessionId)
+                try
                 {
-                    _session.Status = status;
-                    StateHasChanged();
+                    LogDebug("SessionStatusChanged", $"Status: {status}");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _session.Status = status;
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionStatusChanged: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionStatusChanged: {ex.Message}");
                 }
             });
         });
 
         _hubConnection.On<string>("SessionStopped", (sessionId) =>
         {
-            InvokeAsync(() =>
+            _ = InvokeAsync(async () =>
             {
-                if (_session != null && _session.Id == sessionId)
+                try
                 {
-                    _session.Status = ClaudeSessionStatus.Stopped;
-                    StateHasChanged();
+                    LogDebug("SessionStopped", $"SessionId: {sessionId}");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _session.Status = ClaudeSessionStatus.Stopped;
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionStopped: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionStopped: {ex.Message}");
                 }
             });
         });
 
         _hubConnection.On<string, decimal, long>("SessionResultReceived", (sessionId, cost, duration) =>
         {
-            InvokeAsync(() =>
+            _ = InvokeAsync(async () =>
             {
-                if (_session != null && _session.Id == sessionId)
+                try
                 {
-                    _session.TotalCostUsd = cost;
-                    _session.TotalDurationMs = duration;
+                    LogDebug("SessionResultReceived", $"Cost: ${cost:F6}, Duration: {duration}ms");
+
+                    if (_session != null && _session.Id == sessionId)
+                    {
+                        _session.TotalCostUsd = cost;
+                        _session.TotalDurationMs = duration;
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionResultReceived: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionResultReceived: {ex.Message}");
+                }
+            });
+        });
+
+        // Handle session state sync - sent when joining a session to catch up on any missed events
+        _hubConnection.On<ClaudeSession>("SessionState", (session) =>
+        {
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    LogDebug("SessionState", $"Messages: {session.Messages.Count}, Status: {session.Status}");
+
+                    if (_session != null && session.Id == _session.Id)
+                    {
+                        // Sync state from server - this handles the race condition where
+                        // events may have been sent between StartAsync and JoinSession
+                        // Messages is init-only, so we clear and add instead of reassigning
+                        _session.Messages.Clear();
+                        foreach (var msg in session.Messages)
+                        {
+                            _session.Messages.Add(msg);
+                        }
+                        _session.Status = session.Status;
+                        _session.TotalCostUsd = session.TotalCostUsd;
+                        _session.TotalDurationMs = session.TotalDurationMs;
+                        Console.WriteLine($"[SignalR] SessionState received: {session.Messages.Count} messages, status: {session.Status}");
+                    }
                     StateHasChanged();
+                }
+                catch (Exception ex)
+                {
+                    LogDebug("ERROR", $"SessionState: {ex.Message}");
+                    Console.WriteLine($"[SignalR] Error in SessionState: {ex.Message}");
                 }
             });
         });
 
         await _hubConnection.StartAsync();
         await _hubConnection.SendAsync("JoinSession", SessionId);
+        // Server sends SessionState after JoinSession, which we now handle above
     }
 
     private async Task SendMessage()

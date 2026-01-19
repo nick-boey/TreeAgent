@@ -44,6 +44,11 @@ public class ClaudeMessageContent
     /// Whether this content block is still being streamed.
     /// </summary>
     public bool IsStreaming { get; set; }
+
+    /// <summary>
+    /// The index of this content block within the message (used for precise streaming block tracking).
+    /// </summary>
+    public int Index { get; set; } = -1;
 }
 
 /// <summary>
