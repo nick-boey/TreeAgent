@@ -470,7 +470,6 @@ public class GraphBuilder
         IssueType.Bug => "#ef4444",      // Red
         IssueType.Feature => "#a855f7",  // Purple
         IssueType.Task => "#3b82f6",     // Blue
-        IssueType.Idea => "#f97316",     // Orange
         IssueType.Chore => "#6b7280",    // Gray
         _ => "#6b7280"                   // Gray
     };

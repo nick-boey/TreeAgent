@@ -62,9 +62,9 @@ public sealed class FleeceService : IFleeceService, IDisposable
             return await service.FilterAsync(status, type, priority, cancellationToken: ct);
         }
 
-        // Get all issues and exclude deleted
+        // Get all issues and exclude deleted/archived/closed/complete
         var issues = await service.GetAllAsync(ct);
-        return issues.Where(i => i.Status != IssueStatus.Deleted).ToList();
+        return issues.Where(i => i.Status is not (IssueStatus.Deleted or IssueStatus.Archived or IssueStatus.Closed or IssueStatus.Complete)).ToList();
     }
 
     public async Task<IReadOnlyList<Issue>> GetReadyIssuesAsync(string projectPath, CancellationToken ct = default)
@@ -72,10 +72,11 @@ public sealed class FleeceService : IFleeceService, IDisposable
         var service = GetOrCreateIssueService(projectPath);
 
         // Get all open issues
-        var openIssues = await service.FilterAsync(status: IssueStatus.Open, cancellationToken: ct);
+        // Get all issues in open statuses (Idea, Spec, Next, Progress, Review)
+        var allIssues = await service.GetAllAsync(ct);
+        var openIssues = allIssues.Where(i => i.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review).ToList();
 
         // Filter to issues that have no blocking parent issues (parents that are not Complete/Closed)
-        var allIssues = await service.GetAllAsync(ct);
         var issueMap = allIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
 
         return openIssues

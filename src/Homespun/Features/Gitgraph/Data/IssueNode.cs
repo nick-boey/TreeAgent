@@ -39,9 +39,13 @@ public class IssueNode : IGraphNode
     {
         IssueStatus.Closed => GraphNodeStatus.Completed,
         IssueStatus.Complete => GraphNodeStatus.Completed,
-        IssueStatus.Open => GraphNodeStatus.Open,
         IssueStatus.Archived => GraphNodeStatus.Abandoned,
         IssueStatus.Deleted => GraphNodeStatus.Abandoned,
+        IssueStatus.Idea => GraphNodeStatus.Open,
+        IssueStatus.Spec => GraphNodeStatus.Open,
+        IssueStatus.Next => GraphNodeStatus.Open,
+        IssueStatus.Progress => GraphNodeStatus.Open,
+        IssueStatus.Review => GraphNodeStatus.Open,
         _ => GraphNodeStatus.Open
     };
 
@@ -87,7 +91,6 @@ public class IssueNode : IGraphNode
         IssueType.Bug => "#ef4444",      // Red
         IssueType.Feature => "#a855f7",  // Purple
         IssueType.Task => "#3b82f6",     // Blue
-        IssueType.Idea => "#f97316",     // Orange
         IssueType.Chore => "#6b7280",    // Gray
         _ => "#6b7280"                   // Gray
     };

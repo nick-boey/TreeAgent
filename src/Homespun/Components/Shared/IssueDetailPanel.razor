@@ -134,7 +134,7 @@
                         Stop Session
                     </button>
                 }
-                else if (Issue.Status == IssueStatus.Open)
+                else if (Issue.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
                 {
                     <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" title="Start a read-only planning session">
                         Start Planning
@@ -144,7 +144,7 @@
                     </button>
                 }
 
-                @if (Issue.Status == IssueStatus.Open)
+                @if (Issue.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
                 {
                     <button class="btn btn-sm btn-outline-primary" @onclick="CloseIssue" disabled="@_isLoading" title="Mark issue as completed">
                         Close Issue
@@ -460,15 +460,18 @@
         IssueType.Feature => "bg-primary",
         IssueType.Bug => "bg-danger",
         IssueType.Task => "bg-info",
-        IssueType.Idea => "bg-purple",
         IssueType.Chore => "bg-dark",
         _ => "bg-secondary"
     };
 
     private string GetStatusBadgeClass() => Issue.Status switch
     {
-        IssueStatus.Open => "bg-secondary",
-        IssueStatus.Complete => "bg-primary",
+        IssueStatus.Idea => "bg-purple",
+        IssueStatus.Spec => "bg-info",
+        IssueStatus.Next => "bg-warning text-dark",
+        IssueStatus.Progress => "bg-primary",
+        IssueStatus.Review => "bg-info",
+        IssueStatus.Complete => "bg-success",
         IssueStatus.Closed => "bg-success",
         IssueStatus.Archived => "bg-light text-dark",
         IssueStatus.Deleted => "bg-danger",

@@ -695,7 +695,7 @@ public class GraphBuilderTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Open,
+        Status = IssueStatus.Next,
         Type = IssueType.Task,
         Priority = priority,
         CreatedAt = createdAt ?? DateTimeOffset.UtcNow,
@@ -706,7 +706,7 @@ public class GraphBuilderTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Open,
+        Status = IssueStatus.Next,
         Type = IssueType.Task,
         Priority = priority,
         Group = group,
@@ -718,7 +718,7 @@ public class GraphBuilderTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Open,
+        Status = IssueStatus.Next,
         Type = IssueType.Task,
         Priority = priority,
         ParentIssues = [parentId],
@@ -730,7 +730,7 @@ public class GraphBuilderTests
     {
         Id = id,
         Title = $"Issue {id}",
-        Status = IssueStatus.Open,
+        Status = IssueStatus.Next,
         Type = IssueType.Task,
         Priority = priority,
         ParentIssues = parentIds,

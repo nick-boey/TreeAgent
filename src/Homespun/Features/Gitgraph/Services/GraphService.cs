@@ -94,9 +94,11 @@ public class GraphService(
                 return [];
             }
 
-            // Get open issues only
-            var issues = await fleeceService.ListIssuesAsync(workingDirectory, IssueStatus.Open);
-            return issues.ToList();
+            // Get open issues only (all non-completed statuses)
+            var issues = await fleeceService.ListIssuesAsync(workingDirectory);
+            return issues
+                .Where(i => i.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
+                .ToList();
         }
         catch (Exception ex)
         {
