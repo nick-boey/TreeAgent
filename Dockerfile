@@ -76,7 +76,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN npm install -g opencode-ai@latest @anthropic-ai/claude-code @siteboon/claude-code-ui
 
 # Install Fleece CLI for issue tracking
-RUN dotnet tool install Fleece.Cli -g
+# Install as root, then make tools accessible to all users
+RUN dotnet tool install Fleece.Cli -g \
+    && chmod 755 /root \
+    && chmod -R 755 /root/.dotnet
 
 # Clean up build dependencies to reduce image size
 RUN apt-get update && apt-get remove -y build-essential && apt-get autoremove -y \
@@ -129,6 +132,7 @@ ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:8080
 ENV HOMESPUN_DATA_PATH=/data/homespun-data.json
 ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false
+ENV PATH="${PATH}:/root/.dotnet/tools"
 
 # Expose port
 EXPOSE 8080
