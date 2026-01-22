@@ -487,9 +487,9 @@ else
                 // Load all issues from Fleece
                 var allIssues = await FleeceService.ListIssuesAsync(_project.LocalPath);
 
-                // Get open issues
+                // Get open issues (all non-completed statuses)
                 _openIssues = allIssues
-                    .Where(i => i.Status == IssueStatus.Open)
+                    .Where(i => i.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
                     .ToList();
 
                 // In-progress issues could be tracked separately if needed
@@ -724,7 +724,6 @@ else
         IssueType.Bug => "status-bug",
         IssueType.Chore => "status-chore",
         IssueType.Task => "status-task",
-        IssueType.Idea => "status-idea",
         _ => "status-default"
     };
 

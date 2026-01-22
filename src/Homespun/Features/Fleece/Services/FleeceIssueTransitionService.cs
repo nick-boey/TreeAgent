@@ -44,7 +44,7 @@ public class FleeceIssueTransitionService(
         var updated = await fleeceService.UpdateIssueAsync(
             project.LocalPath,
             issueId,
-            status: IssueStatus.Open);
+            status: IssueStatus.Progress);
 
         if (updated == null)
         {
@@ -55,9 +55,9 @@ public class FleeceIssueTransitionService(
             "Issue '{IssueId}' transitioned from {PreviousStatus} to Open (InProgress)",
             issueId, previousStatus);
 
-        await BroadcastStatusChangeAsync(projectId, issueId, IssueStatus.Open);
+        await BroadcastStatusChangeAsync(projectId, issueId, IssueStatus.Progress);
 
-        return FleeceTransitionResult.Ok(previousStatus, IssueStatus.Open);
+        return FleeceTransitionResult.Ok(previousStatus, IssueStatus.Progress);
     }
 
     public async Task<FleeceTransitionResult> TransitionToAwaitingPRAsync(string projectId, string issueId)
@@ -88,7 +88,7 @@ public class FleeceIssueTransitionService(
         var updated = await fleeceService.UpdateIssueAsync(
             project.LocalPath,
             issueId,
-            status: IssueStatus.Open);
+            status: IssueStatus.Progress);
 
         if (updated == null)
         {
@@ -99,9 +99,9 @@ public class FleeceIssueTransitionService(
             "Issue '{IssueId}' transitioned from {PreviousStatus} to AwaitingPR (Open)",
             issueId, previousStatus);
 
-        await BroadcastStatusChangeAsync(projectId, issueId, IssueStatus.Open);
+        await BroadcastStatusChangeAsync(projectId, issueId, IssueStatus.Progress);
 
-        return FleeceTransitionResult.Ok(previousStatus, IssueStatus.Open);
+        return FleeceTransitionResult.Ok(previousStatus, IssueStatus.Progress);
     }
 
     public async Task<FleeceTransitionResult> TransitionToCompleteAsync(string projectId, string issueId, int? prNumber = null)
@@ -171,19 +171,19 @@ public class FleeceIssueTransitionService(
         var previousStatus = issue.Status;
 
         // If already open, just log and return success
-        if (issue.Status == IssueStatus.Open)
+        if (issue.Status == IssueStatus.Progress)
         {
             logger.LogWarning(
                 "Agent failure handled for issue '{IssueId}' but it was already Open. Error: {Error}",
                 issueId, error);
 
-            return FleeceTransitionResult.Ok(previousStatus, IssueStatus.Open);
+            return FleeceTransitionResult.Ok(previousStatus, IssueStatus.Progress);
         }
 
         var updated = await fleeceService.UpdateIssueAsync(
             project.LocalPath,
             issueId,
-            status: IssueStatus.Open);
+            status: IssueStatus.Progress);
 
         if (updated == null)
         {
@@ -194,9 +194,9 @@ public class FleeceIssueTransitionService(
             "Issue '{IssueId}' reverted from {PreviousStatus} to Open due to agent failure: {Error}",
             issueId, previousStatus, error);
 
-        await BroadcastStatusChangeAsync(projectId, issueId, IssueStatus.Open);
+        await BroadcastStatusChangeAsync(projectId, issueId, IssueStatus.Progress);
 
-        return FleeceTransitionResult.Ok(previousStatus, IssueStatus.Open);
+        return FleeceTransitionResult.Ok(previousStatus, IssueStatus.Progress);
     }
 
     public async Task<IssueStatus?> GetStatusAsync(string projectId, string issueId)
