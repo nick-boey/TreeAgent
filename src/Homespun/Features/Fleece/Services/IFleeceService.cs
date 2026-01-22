@@ -55,6 +55,7 @@ public interface IFleeceService
     /// <param name="type">Issue type.</param>
     /// <param name="description">Optional description.</param>
     /// <param name="priority">Optional priority (1-5).</param>
+    /// <param name="group">Optional group for categorization.</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The created issue.</returns>
     Task<Issue> CreateIssueAsync(
@@ -63,6 +64,7 @@ public interface IFleeceService
         IssueType type,
         string? description = null,
         int? priority = null,
+        string? group = null,
         CancellationToken ct = default);
 
     /// <summary>

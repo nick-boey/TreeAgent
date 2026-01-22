@@ -5,6 +5,14 @@
 
 <div class="quick-issue-bar">
     <div class="quick-issue-container">
+        <input type="text"
+               class="quick-input group-input"
+               placeholder="Group"
+               @bind="_group"
+               @bind:event="oninput"
+               @onkeydown="HandleKeyDown"
+               disabled="@_isSubmitting" />
+
         <select class="quick-input type-select"
                 @bind="_type"
                 disabled="@_isSubmitting">
@@ -34,6 +42,20 @@
             else
             {
                 <span>+</span>
+            }
+        </button>
+
+        <button class="quick-submit-btn quick-edit-btn"
+                @onclick="HandleSubmitAndEdit"
+                disabled="@(_isSubmitting || string.IsNullOrWhiteSpace(_title))"
+                title="Create and open for editing">
+            @if (_isSubmitting)
+            {
+                <span class="spinner-border spinner-border-sm"></span>
+            }
+            else
+            {
+                <span class="edit-icon">&#9998;</span>
             }
         </button>
     </div>
@@ -97,6 +119,11 @@
         cursor: pointer;
     }
 
+    .group-input {
+        width: 120px;
+        flex-shrink: 0;
+    }
+
     .title-input {
         flex: 1;
         min-width: 200px;
@@ -131,6 +158,18 @@
         transform: none;
     }
 
+    .quick-edit-btn {
+        background: var(--color-forest, #10b981);
+    }
+
+    .quick-edit-btn:hover:not(:disabled) {
+        background: var(--color-forest-dark, #059669);
+    }
+
+    .edit-icon {
+        font-size: 1rem;
+    }
+
     .quick-issue-error {
         color: var(--color-danger, #dc3545);
         font-size: 0.75rem;
@@ -144,7 +183,11 @@
         }
 
         .type-select {
-            width: 50%;
+            width: calc(50% - var(--spacing-sm) / 2);
+        }
+
+        .group-input {
+            width: calc(50% - var(--spacing-sm) / 2);
         }
 
         .title-input {
@@ -161,8 +204,11 @@
 
     [Parameter] public EventCallback OnIssueCreated { get; set; }
 
+    [Parameter] public EventCallback<string> OnIssueCreatedForEdit { get; set; }
+
     private IssueType _type = IssueType.Feature;
     private string _title = "";
+    private string _group = "";
     private bool _isSubmitting;
     private string? _errorMessage;
     private ElementReference _titleInput;
@@ -177,6 +223,16 @@
 
     private async Task HandleSubmit()
     {
+        await CreateIssue(openForEdit: false);
+    }
+
+    private async Task HandleSubmitAndEdit()
+    {
+        await CreateIssue(openForEdit: true);
+    }
+
+    private async Task CreateIssue(bool openForEdit)
+    {
         if (string.IsNullOrWhiteSpace(_title))
             return;
 
@@ -186,19 +242,29 @@
         try
         {
             var title = _title.Trim();
+            var group = string.IsNullOrWhiteSpace(_group) ? null : _group.Trim();
 
             // Create issue via Fleece service
-            await FleeceService.CreateIssueAsync(
+            var issue = await FleeceService.CreateIssueAsync(
                 LocalPath,
                 title,
-                _type);
+                _type,
+                group: group);
 
             // Clear inputs for next entry
             _title = "";
+            _group = "";
             _type = IssueType.Feature;
 
-            // Notify parent to refresh
-            await OnIssueCreated.InvokeAsync();
+            // Notify parent to refresh or open for editing
+            if (openForEdit)
+            {
+                await OnIssueCreatedForEdit.InvokeAsync(issue.Id);
+            }
+            else
+            {
+                await OnIssueCreated.InvokeAsync();
+            }
         }
         catch (Exception ex)
         {

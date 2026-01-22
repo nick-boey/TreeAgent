@@ -156,7 +156,8 @@ else
 
     <QuickIssueCreateBar ProjectId="@Id"
                          LocalPath="@_project.LocalPath"
-                         OnIssueCreated="RefreshData"/>
+                         OnIssueCreated="RefreshData"
+                         OnIssueCreatedForEdit="NavigateToIssueEdit"/>
 }
 
 <style>
@@ -618,6 +619,12 @@ else
             _isRefreshing = false;
             StateHasChanged();
         }
+    }
+
+    private async Task NavigateToIssueEdit(string issueId)
+    {
+        await RefreshData();
+        NavigationManager.NavigateTo($"/projects/{Id}/issues/{issueId}/edit");
     }
 
     private async Task SelectPullRequest(string pullRequestId)

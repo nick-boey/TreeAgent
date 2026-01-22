@@ -111,16 +111,27 @@ public sealed class FleeceService : IFleeceService, IDisposable
         IssueType type,
         string? description = null,
         int? priority = null,
+        string? group = null,
         CancellationToken ct = default)
     {
         var service = GetOrCreateIssueService(projectPath);
 
-        return await service.CreateAsync(
+        var issue = await service.CreateAsync(
             title: title,
             type: type,
             description: description,
             priority: priority,
+            group: group,
             cancellationToken: ct);
+
+        _logger.LogInformation(
+            "Created issue '{IssueId}' ({Type}): {Title}{Group}",
+            issue.Id,
+            type,
+            title,
+            group != null ? $" [Group: {group}]" : "");
+
+        return issue;
     }
 
     public async Task<Issue?> UpdateIssueAsync(
@@ -137,7 +148,7 @@ public sealed class FleeceService : IFleeceService, IDisposable
 
         try
         {
-            return await service.UpdateAsync(
+            var issue = await service.UpdateAsync(
                 id: issueId,
                 title: title,
                 status: status,
@@ -145,6 +156,20 @@ public sealed class FleeceService : IFleeceService, IDisposable
                 description: description,
                 priority: priority,
                 cancellationToken: ct);
+
+            var changes = new List<string>();
+            if (title != null) changes.Add($"title='{title}'");
+            if (status != null) changes.Add($"status={status}");
+            if (type != null) changes.Add($"type={type}");
+            if (description != null) changes.Add("description updated");
+            if (priority != null) changes.Add($"priority={priority}");
+
+            _logger.LogInformation(
+                "Updated issue '{IssueId}': {Changes}",
+                issueId,
+                string.Join(", ", changes));
+
+            return issue;
         }
         catch (KeyNotFoundException)
         {
@@ -156,7 +181,18 @@ public sealed class FleeceService : IFleeceService, IDisposable
     public async Task<bool> DeleteIssueAsync(string projectPath, string issueId, CancellationToken ct = default)
     {
         var service = GetOrCreateIssueService(projectPath);
-        return await service.DeleteAsync(issueId, ct);
+        var deleted = await service.DeleteAsync(issueId, ct);
+
+        if (deleted)
+        {
+            _logger.LogInformation("Deleted issue '{IssueId}'", issueId);
+        }
+        else
+        {
+            _logger.LogWarning("Failed to delete issue '{IssueId}' - not found", issueId);
+        }
+
+        return deleted;
     }
 
     #endregion

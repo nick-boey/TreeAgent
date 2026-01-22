@@ -58,8 +58,17 @@
     private bool _sidebarOpen = false;
     private List<Breadcrumb> _breadcrumbs = new();
     private string _currentTheme = "auto";
-    private string _version = Assembly.GetExecutingAssembly()
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
+    private string _version = GetShortVersion();
+
+    private static string GetShortVersion()
+    {
+        var fullVersion = Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0";
+
+        // Strip the +hash suffix if present (e.g., "0.1.0+abc123" -> "0.1.0")
+        var plusIndex = fullVersion.IndexOf('+');
+        return plusIndex > 0 ? fullVersion[..plusIndex] : fullVersion;
+    }
 
     protected override void OnInitialized()
     {
