@@ -1,4 +1,5 @@
 @page "/session/{SessionId}"
+@using Homespun.ClaudeAgentSdk
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.ClaudeCode.Hubs
@@ -140,6 +141,14 @@
             </div>
 
             <div class="input-area">
+                <select class="permission-select"
+                        @bind="_selectedPermissionMode"
+                        disabled="@(_session.Status == ClaudeSessionStatus.Processing || _session.Status == ClaudeSessionStatus.Stopped)">
+                    <option value="@PermissionMode.BypassPermissions">Bypass permissions</option>
+                    <option value="@PermissionMode.AcceptEdits">Accept edits</option>
+                    <option value="@PermissionMode.Plan">Plan</option>
+                    <option value="@PermissionMode.Default">Default</option>
+                </select>
                 <textarea @bind="_inputMessage"
                           @bind:event="oninput"
                           @onkeydown="HandleKeyDown"
@@ -397,6 +406,30 @@
         padding: var(--spacing-md);
         border-top: 1px solid var(--border-color);
         background: var(--bg-primary);
+        align-items: flex-start;
+    }
+
+    .permission-select {
+        flex-shrink: 0;
+        padding: var(--spacing-sm);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        font-family: inherit;
+        font-size: 0.875rem;
+        cursor: pointer;
+        min-width: 140px;
+    }
+
+    .permission-select:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    .permission-select:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 
     .input-area textarea {
@@ -514,6 +547,7 @@
 
     private ClaudeSession? _session;
     private string _inputMessage = string.Empty;
+    private PermissionMode _selectedPermissionMode = PermissionMode.BypassPermissions;
     private ElementReference _messagesContainer;
     private HubConnection? _hubConnection;
     private string? _signalRError;
@@ -1012,7 +1046,7 @@
 
         try
         {
-            await SessionService.SendMessageAsync(SessionId, message);
+            await SessionService.SendMessageAsync(SessionId, message, _selectedPermissionMode);
         }
         catch (Exception ex)
         {

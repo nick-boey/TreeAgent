@@ -1,3 +1,4 @@
+using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Microsoft.AspNetCore.SignalR;
@@ -35,9 +36,9 @@ public class ClaudeCodeHub(IClaudeSessionService sessionService) : Hub
     /// <summary>
     /// Send a message to a session.
     /// </summary>
-    public async Task SendMessage(string sessionId, string message)
+    public async Task SendMessage(string sessionId, string message, PermissionMode permissionMode = PermissionMode.BypassPermissions)
     {
-        await sessionService.SendMessageAsync(sessionId, message);
+        await sessionService.SendMessageAsync(sessionId, message, permissionMode);
     }
 
     /// <summary>

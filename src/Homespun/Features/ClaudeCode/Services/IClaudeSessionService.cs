@@ -1,3 +1,4 @@
+using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 
 namespace Homespun.Features.ClaudeCode.Services;
@@ -23,6 +24,11 @@ public interface IClaudeSessionService
     /// Sends a message to an existing session.
     /// </summary>
     Task SendMessageAsync(string sessionId, string message, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Sends a message to an existing session with a specific permission mode.
+    /// </summary>
+    Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Stops an existing session.

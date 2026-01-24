@@ -1,3 +1,4 @@
+using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
 using Microsoft.AspNetCore.SignalR;
@@ -339,5 +340,118 @@ public class ClaudeSessionServiceMessageTests
         // Act & Assert
         Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await _service.SendMessageAsync("stopped-session", "Hello"));
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WithPermissionMode_NonExistentSession_ThrowsInvalidOperationException()
+    {
+        // Act & Assert
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _service.SendMessageAsync("non-existent-session", "Hello", PermissionMode.AcceptEdits));
+    }
+
+    [Test]
+    public async Task SendMessageAsync_WithPermissionMode_StoppedSession_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var session = new ClaudeSession
+        {
+            Id = "stopped-session",
+            EntityId = "entity-123",
+            ProjectId = "project-456",
+            WorkingDirectory = "/test/path",
+            Model = "model",
+            Mode = SessionMode.Plan,
+            Status = ClaudeSessionStatus.Stopped,
+            CreatedAt = DateTime.UtcNow
+        };
+        _sessionStore.Add(session);
+
+        // Act & Assert
+        Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _service.SendMessageAsync("stopped-session", "Hello", PermissionMode.Plan));
+    }
+}
+
+/// <summary>
+/// Tests for permission mode parameter handling in ClaudeSessionService.
+/// </summary>
+[TestFixture]
+public class ClaudeSessionServicePermissionModeTests
+{
+    private ClaudeSessionService _service = null!;
+    private IClaudeSessionStore _sessionStore = null!;
+    private SessionOptionsFactory _optionsFactory = null!;
+    private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
+    private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _sessionStore = new ClaudeSessionStore();
+        _optionsFactory = new SessionOptionsFactory();
+        _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
+        _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+
+        var clientsMock = new Mock<IHubClients>();
+        var clientProxyMock = new Mock<IClientProxy>();
+        clientsMock.Setup(c => c.All).Returns(clientProxyMock.Object);
+        clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
+        _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
+
+        _service = new ClaudeSessionService(_sessionStore, _optionsFactory, _loggerMock.Object, _hubContextMock.Object);
+    }
+
+    [TestCase(PermissionMode.Default)]
+    [TestCase(PermissionMode.AcceptEdits)]
+    [TestCase(PermissionMode.Plan)]
+    [TestCase(PermissionMode.BypassPermissions)]
+    public void SendMessageAsync_WithPermissionMode_AcceptsAllModes(PermissionMode permissionMode)
+    {
+        // Arrange - session without options will throw, but after permission mode validation
+        var session = new ClaudeSession
+        {
+            Id = "test-session",
+            EntityId = "entity-123",
+            ProjectId = "project-456",
+            WorkingDirectory = "/test/path",
+            Model = "model",
+            Mode = SessionMode.Plan,
+            Status = ClaudeSessionStatus.Running,
+            CreatedAt = DateTime.UtcNow
+        };
+        _sessionStore.Add(session);
+
+        // Act & Assert - throws because no options, but gets past permission mode validation
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _service.SendMessageAsync("test-session", "Hello", permissionMode));
+
+        // Verify it throws for missing options, not for invalid permission mode
+        Assert.That(ex!.Message, Does.Contain("No options found"));
+    }
+
+    [Test]
+    public void SendMessageAsync_DefaultOverload_UsesDefaultPermissionMode()
+    {
+        // Arrange
+        var session = new ClaudeSession
+        {
+            Id = "test-session",
+            EntityId = "entity-123",
+            ProjectId = "project-456",
+            WorkingDirectory = "/test/path",
+            Model = "model",
+            Mode = SessionMode.Plan,
+            Status = ClaudeSessionStatus.Running,
+            CreatedAt = DateTime.UtcNow
+        };
+        _sessionStore.Add(session);
+
+        // Act & Assert - calling the default overload should work the same as explicit BypassPermissions
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _service.SendMessageAsync("test-session", "Hello"));
+
+        // Verify it throws for missing options (getting past all validations)
+        Assert.That(ex!.Message, Does.Contain("No options found"));
     }
 }

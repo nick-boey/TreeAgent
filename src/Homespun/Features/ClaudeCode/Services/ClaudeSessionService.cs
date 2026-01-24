@@ -79,7 +79,13 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
     }
 
     /// <inheritdoc />
-    public async Task SendMessageAsync(string sessionId, string message, CancellationToken cancellationToken = default)
+    public Task SendMessageAsync(string sessionId, string message, CancellationToken cancellationToken = default)
+    {
+        return SendMessageAsync(sessionId, message, PermissionMode.BypassPermissions, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task SendMessageAsync(string sessionId, string message, PermissionMode permissionMode, CancellationToken cancellationToken = default)
     {
         var session = _sessionStore.GetById(sessionId);
         if (session == null)
@@ -97,7 +103,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             throw new InvalidOperationException($"No options found for session {sessionId}");
         }
 
-        _logger.LogInformation("Sending message to session {SessionId}", sessionId);
+        _logger.LogInformation("Sending message to session {SessionId} with permission mode {PermissionMode}", sessionId, permissionMode);
 
         // Add user message to session
         var userMessage = new ClaudeMessage
@@ -126,7 +132,7 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
                 AllowedTools = baseOptions.AllowedTools,
                 SystemPrompt = baseOptions.SystemPrompt,
                 McpServers = baseOptions.McpServers,
-                PermissionMode = baseOptions.PermissionMode,
+                PermissionMode = permissionMode,
                 MaxTurns = baseOptions.MaxTurns,
                 DisallowedTools = baseOptions.DisallowedTools,
                 Model = baseOptions.Model,
