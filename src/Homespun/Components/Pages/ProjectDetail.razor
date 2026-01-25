@@ -11,6 +11,7 @@
 @using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data
 @using Homespun.Features.PullRequests.Data.Entities
+@using Homespun.Features.SignalR
 @using Microsoft.AspNetCore.SignalR.Client
 @inject ProjectService ProjectService
 @inject PullRequestDataService PullRequestDataService
@@ -21,6 +22,7 @@
 @inject ICommandRunner CommandRunner
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
+@inject ISignalRUrlProvider SignalRUrlProvider
 @inject ILogger<ProjectDetail> Logger
 @inject NavigationManager NavigationManager
 @rendermode InteractiveServer
@@ -444,7 +446,7 @@ else
         try
         {
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/agent"))
+                .WithUrl(SignalRUrlProvider.GetHubUrl("/hubs/agent"))
                 .Build();
 
             // Listen for pull request sync events

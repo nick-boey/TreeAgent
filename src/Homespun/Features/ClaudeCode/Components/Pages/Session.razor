@@ -3,6 +3,7 @@
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.ClaudeCode.Hubs
+@using Homespun.Features.SignalR
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.SignalR.Client
 @using Microsoft.JSInterop
@@ -10,6 +11,7 @@
 @implements IAsyncDisposable
 @rendermode InteractiveServer
 @inject IClaudeSessionService SessionService
+@inject ISignalRUrlProvider SignalRUrlProvider
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
 
@@ -710,7 +712,7 @@
     private async Task SetupSignalR()
     {
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+            .WithUrl(SignalRUrlProvider.GetHubUrl("/hubs/claudecode"))
             .WithAutomaticReconnect()
             .Build();
 

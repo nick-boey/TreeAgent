@@ -349,6 +349,21 @@ public class SubprocessCliTransport : ITransport
             if (_cwd != null)
                 startInfo.Environment["PWD"] = _cwd;
 
+            // Ensure HOME is set for Claude CLI to find/create its config directory
+            // If HOME is not already in Env options, set from the current environment
+            if (!_options.Env.ContainsKey("HOME"))
+            {
+                var home = Environment.GetEnvironmentVariable("HOME");
+                if (string.IsNullOrEmpty(home))
+                {
+                    home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                }
+                if (!string.IsNullOrEmpty(home))
+                {
+                    startInfo.Environment["HOME"] = home;
+                }
+            }
+
             _process = Process.Start(startInfo);
             if (_process == null)
                 throw new CliConnectionException("Failed to start Claude Code process");

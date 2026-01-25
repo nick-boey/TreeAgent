@@ -1,6 +1,7 @@
 using Homespun.ClaudeAgentSdk;
 using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.SignalR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR.Client;
 
@@ -15,15 +16,18 @@ public class AgentTestController : ControllerBase
 {
     private readonly IClaudeSessionService _sessionService;
     private readonly SessionOptionsFactory _optionsFactory;
+    private readonly ISignalRUrlProvider _signalRUrlProvider;
     private readonly ILogger<AgentTestController> _logger;
 
     public AgentTestController(
         IClaudeSessionService sessionService,
         SessionOptionsFactory optionsFactory,
+        ISignalRUrlProvider signalRUrlProvider,
         ILogger<AgentTestController> logger)
     {
         _sessionService = sessionService;
         _optionsFactory = optionsFactory;
+        _signalRUrlProvider = signalRUrlProvider;
         _logger = logger;
     }
 
@@ -508,9 +512,8 @@ public class AgentTestController : ControllerBase
             _logger.LogInformation("Created test session {SessionId}", session.Id);
 
             // Set up SignalR client connection
-            var baseUrl = "http://localhost:5093"; // Default development port
             hubConnection = new HubConnectionBuilder()
-                .WithUrl($"{baseUrl}/hubs/claudecode")
+                .WithUrl(_signalRUrlProvider.GetHubUrl("/hubs/claudecode"))
                 .WithAutomaticReconnect()
                 .Build();
 

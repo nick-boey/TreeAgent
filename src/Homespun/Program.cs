@@ -10,6 +10,7 @@ using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Features.SignalR;
 using Homespun.Components;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -83,6 +84,11 @@ builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
 builder.Services.Configure<GitHubSyncPollingOptions>(
     builder.Configuration.GetSection(GitHubSyncPollingOptions.SectionName));
 builder.Services.AddHostedService<GitHubSyncPollingService>();
+
+// SignalR URL provider (uses internal URL in Docker, localhost in development)
+builder.Services.Configure<SignalROptions>(
+    builder.Configuration.GetSection(SignalROptions.SectionName));
+builder.Services.AddSingleton<ISignalRUrlProvider, SignalRUrlProvider>();
 
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
