@@ -36,16 +36,22 @@ TS_AUTHKEY="${TAILSCALE_AUTH_KEY:-$TS_AUTHKEY}"
 if [ -n "$TS_AUTHKEY" ]; then
     echo "Starting Tailscale..."
 
+    # Set default state directory (use /data/tailscale for proper permissions with runtime user)
+    TS_STATE_DIR="${TS_STATE_DIR:-/data/tailscale}"
+
+    # Create Tailscale state directory if it doesn't exist
+    mkdir -p "$TS_STATE_DIR"
+
     # Start tailscaled daemon in userspace mode
-    tailscaled --state="${TS_STATE_DIR:-/var/lib/tailscale}/tailscaled.state" \
-               --socket="${TS_STATE_DIR:-/var/lib/tailscale}/tailscaled.sock" \
+    tailscaled --state="$TS_STATE_DIR/tailscaled.state" \
+               --socket="$TS_STATE_DIR/tailscaled.sock" \
                --tun=userspace-networking &
 
     # Wait for tailscaled to be ready
     sleep 2
 
     # Connect to Tailscale
-    tailscale --socket="${TS_STATE_DIR:-/var/lib/tailscale}/tailscaled.sock" up \
+    tailscale --socket="$TS_STATE_DIR/tailscaled.sock" up \
               --authkey="$TS_AUTHKEY" \
               --hostname="${TS_HOSTNAME:-homespun}" \
               --accept-routes \
@@ -55,11 +61,11 @@ if [ -n "$TS_AUTHKEY" ]; then
 
     # Enable HTTPS serving (proxies port 443 to the app on 8080)
     echo "Enabling Tailscale HTTPS serve..."
-    tailscale --socket="${TS_STATE_DIR:-/var/lib/tailscale}/tailscaled.sock" serve --bg --https=443 http://127.0.0.1:8080 || true
+    tailscale --socket="$TS_STATE_DIR/tailscaled.sock" serve --bg --https=443 http://127.0.0.1:8080 || true
     echo "Tailscale HTTPS proxy enabled on port 443"
 
     # Show Tailscale status
-    tailscale --socket="${TS_STATE_DIR:-/var/lib/tailscale}/tailscaled.sock" status || true
+    tailscale --socket="$TS_STATE_DIR/tailscaled.sock" status || true
 fi
 
 echo "Starting Homespun..."

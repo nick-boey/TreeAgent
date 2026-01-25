@@ -251,7 +251,7 @@ fi
 # Check Claude directory
 CLAUDE_MOUNT=""
 if [ -d "$CLAUDE_DIR" ]; then
-    CLAUDE_MOUNT="-v $CLAUDE_DIR:/home/homespun/.claude:ro"
+    CLAUDE_MOUNT="-v $CLAUDE_DIR:/home/homespun/.claude"
     log_success "      Claude config found: $CLAUDE_DIR"
 else
     log_warn "      Claude config not found: $CLAUDE_DIR"
@@ -287,7 +287,7 @@ if [ -n "$SSH_MOUNT" ]; then
     echo "  SSH mount:   $SSH_DIR (read-only)"
 fi
 if [ -n "$CLAUDE_MOUNT" ]; then
-    echo "  Claude auth: $CLAUDE_DIR (read-only)"
+    echo "  Claude auth: $CLAUDE_DIR"
 fi
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
     echo "  Tailscale:   Enabled (will connect on startup)"
