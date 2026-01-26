@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Homespun.Features.ClaudeCode.Data;
 using Homespun.Features.PullRequests.Data.Entities;
 
 namespace Homespun.Features.PullRequests.Data;
@@ -36,14 +37,22 @@ public class JsonDataStore : IDataStore
     #endregion
     
     #region Pull Requests
-    
+
     public IReadOnlyList<PullRequest> PullRequests => _data.PullRequests.AsReadOnly();
 
     public PullRequest? GetPullRequest(string id) => _data.PullRequests.FirstOrDefault(pr => pr.Id == id);
 
     public IReadOnlyList<PullRequest> GetPullRequestsByProject(string projectId) =>
         _data.PullRequests.Where(pr => pr.ProjectId == projectId).ToList().AsReadOnly();
-    
+
+    #endregion
+
+    #region Agent Prompts
+
+    public IReadOnlyList<AgentPrompt> AgentPrompts => _data.AgentPrompts.AsReadOnly();
+
+    public AgentPrompt? GetAgentPrompt(string id) => _data.AgentPrompts.FirstOrDefault(p => p.Id == id);
+
     #endregion
 
     public async Task AddProjectAsync(Project project)
@@ -179,6 +188,56 @@ public class JsonDataStore : IDataStore
 
     #endregion
 
+    #region Agent Prompt Operations
+
+    public async Task AddAgentPromptAsync(AgentPrompt prompt)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            _data.AgentPrompts.Add(prompt);
+            await SaveInternalAsync();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task UpdateAgentPromptAsync(AgentPrompt prompt)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            var index = _data.AgentPrompts.FindIndex(p => p.Id == prompt.Id);
+            if (index >= 0)
+            {
+                _data.AgentPrompts[index] = prompt;
+                await SaveInternalAsync();
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    public async Task RemoveAgentPromptAsync(string promptId)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            _data.AgentPrompts.RemoveAll(p => p.Id == promptId);
+            await SaveInternalAsync();
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    #endregion
+
     public async Task SaveAsync()
     {
         await _lock.WaitAsync();
@@ -245,5 +304,6 @@ public class JsonDataStore : IDataStore
         public List<Project> Projects { get; set; } = [];
         public List<PullRequest> PullRequests { get; set; } = [];
         public List<string> FavoriteModels { get; set; } = [];
+        public List<AgentPrompt> AgentPrompts { get; set; } = [];
     }
 }

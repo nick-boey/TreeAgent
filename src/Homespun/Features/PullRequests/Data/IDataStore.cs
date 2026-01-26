@@ -1,3 +1,5 @@
+using Homespun.Features.ClaudeCode.Data;
+
 namespace Homespun.Features.PullRequests.Data;
 
 /// <summary>
@@ -89,6 +91,35 @@ public interface IDataStore
     /// Checks if a model is in favorites.
     /// </summary>
     bool IsFavoriteModel(string modelId);
+
+    #endregion
+
+    #region Agent Prompts
+
+    /// <summary>
+    /// Gets all agent prompts.
+    /// </summary>
+    IReadOnlyList<AgentPrompt> AgentPrompts { get; }
+
+    /// <summary>
+    /// Adds an agent prompt to the store.
+    /// </summary>
+    Task AddAgentPromptAsync(AgentPrompt prompt);
+
+    /// <summary>
+    /// Updates an agent prompt in the store.
+    /// </summary>
+    Task UpdateAgentPromptAsync(AgentPrompt prompt);
+
+    /// <summary>
+    /// Removes an agent prompt from the store.
+    /// </summary>
+    Task RemoveAgentPromptAsync(string promptId);
+
+    /// <summary>
+    /// Gets an agent prompt by ID.
+    /// </summary>
+    AgentPrompt? GetAgentPrompt(string id);
 
     #endregion
 

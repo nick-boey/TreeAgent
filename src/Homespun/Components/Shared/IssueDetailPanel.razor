@@ -10,6 +10,7 @@
 @inject IClaudeSessionStore SessionStore
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
+@inject IAgentPromptService AgentPromptService
 @inject IFleeceService FleeceService
 @inject IGitWorktreeService GitWorktreeService
 @inject ProjectService ProjectService
@@ -115,16 +116,9 @@
                 </div>
             }
 
-            <div class="d-flex flex-wrap gap-2">
-                @if (StartupTracker.IsStarting(Issue.Id))
-                {
-                    <button class="btn btn-sm btn-secondary" disabled>
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        Starting Session...
-                    </button>
-                }
-                else if (_session != null)
-                {
+            @if (_session != null)
+            {
+                <div class="d-flex flex-wrap gap-2">
                     <a href="/session/@_session.Id" class="btn btn-sm btn-primary">
                         Open Chat
                     </a>
@@ -135,17 +129,19 @@
                         }
                         Stop Session
                     </button>
-                }
-                else if (Issue.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
-                {
-                    <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" title="Start a read-only planning session">
-                        Start Planning
-                    </button>
-                    <button class="btn btn-sm btn-success" @onclick="StartBuilding" title="Start a session with full code editing">
-                        Start Building
-                    </button>
-                }
+                </div>
+            }
+            else if (Issue.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
+            {
+                <div class="mb-2">
+                    <AgentSelector
+                        Disabled="@(_session != null)"
+                        IsStarting="@StartupTracker.IsStarting(Issue.Id)"
+                        OnStart="HandleAgentStart" />
+                </div>
+            }
 
+            <div class="d-flex flex-wrap gap-2">
                 @if (Issue.Status is IssueStatus.Idea or IssueStatus.Spec or IssueStatus.Next or IssueStatus.Progress or IssueStatus.Review)
                 {
                     <button class="btn btn-sm btn-outline-primary" @onclick="CloseIssue" disabled="@_isLoading" title="Mark issue as completed">
@@ -259,17 +255,12 @@
         return sanitized.Trim('-');
     }
 
-    private async Task StartPlanning()
+    private async Task HandleAgentStart(AgentPrompt? selectedPrompt)
     {
-        await StartSession(SessionMode.Plan);
+        await StartSession(selectedPrompt);
     }
 
-    private async Task StartBuilding()
-    {
-        await StartSession(SessionMode.Build);
-    }
-
-    private async Task StartSession(SessionMode mode)
+    private async Task StartSession(AgentPrompt? prompt)
     {
         if (_project == null)
         {
@@ -301,6 +292,9 @@
 
             Logger.LogInformation("Created worktree at {WorktreePath} for issue {IssueId}", worktreePath, Issue.Id);
 
+            // Use the prompt's mode, or default to Build if no prompt selected
+            var mode = prompt?.Mode ?? SessionMode.Build;
+
             var systemPrompt = GenerateSystemPrompt();
             _session = await SessionService.StartSessionAsync(
                 Issue.Id,
@@ -312,10 +306,23 @@
 
             StartupTracker.MarkAsStarted(Issue.Id);
 
-            // Send an initial message to start the agent working
-            // This way the prompt is visible in the chat and triggers the agent
-            var initialMessage = GenerateInitialMessage(mode);
-            await SessionService.SendMessageAsync(_session.Id, initialMessage);
+            // Send an initial message to start the agent working (if a prompt is selected)
+            if (prompt != null && !string.IsNullOrEmpty(prompt.InitialMessage))
+            {
+                var context = new PromptContext
+                {
+                    Title = Issue.Title,
+                    Id = Issue.Id,
+                    Description = Issue.Description,
+                    Branch = branchName,
+                    Type = Issue.Type.ToString()
+                };
+                var initialMessage = AgentPromptService.RenderTemplate(prompt.InitialMessage, context);
+                if (!string.IsNullOrEmpty(initialMessage))
+                {
+                    await SessionService.SendMessageAsync(_session.Id, initialMessage);
+                }
+            }
 
             // Navigate to the session chat page
             NavigationManager.NavigateTo($"/session/{_session.Id}");
@@ -344,42 +351,6 @@
 
         sb.AppendLine();
         sb.AppendLine($"Branch: {GetBranchPreview()}");
-
-        return sb.ToString();
-    }
-
-    private string GenerateInitialMessage(SessionMode mode)
-    {
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"## Issue: {Issue.Title}");
-        sb.AppendLine();
-        sb.AppendLine($"**ID:** {Issue.Id}");
-        sb.AppendLine($"**Type:** {Issue.Type}");
-        sb.AppendLine($"**Branch:** {GetBranchPreview()}");
-
-        if (!string.IsNullOrEmpty(Issue.Description))
-        {
-            sb.AppendLine();
-            sb.AppendLine("### Description");
-            sb.AppendLine(Issue.Description);
-        }
-
-        sb.AppendLine();
-        sb.AppendLine("---");
-        sb.AppendLine();
-
-        if (mode == SessionMode.Plan)
-        {
-            sb.AppendLine("Please analyze this issue and create a detailed implementation plan. Consider:");
-            sb.AppendLine("- What files need to be modified or created");
-            sb.AppendLine("- The approach and architecture");
-            sb.AppendLine("- Any potential challenges or risks");
-            sb.AppendLine("- Test requirements");
-        }
-        else
-        {
-            sb.AppendLine("Please implement this issue. Start by understanding the requirements and exploring the codebase, then proceed with the implementation.");
-        }
 
         return sb.ToString();
     }

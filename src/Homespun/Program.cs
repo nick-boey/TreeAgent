@@ -83,6 +83,7 @@ builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
 builder.Services.AddSingleton<SessionOptionsFactory>();
 builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
 builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
+builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
 
 // GitHub sync polling service (PR sync, review polling, issue linking)
 builder.Services.Configure<GitHubSyncPollingOptions>(

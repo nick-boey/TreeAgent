@@ -1,13 +1,13 @@
-@page "/agents"
+@page "/sessions"
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
 @implements IAsyncDisposable
 @rendermode InteractiveServer
 @inject IClaudeSessionStore SessionStore
 
-<PageTitle>Agent Management - Homespun</PageTitle>
+<PageTitle>Sessions - Homespun</PageTitle>
 
-<h1>Claude Code Sessions</h1>
+<h1>Sessions</h1>
 
 <div class="agent-management-page">
     @if (_isLoading)
