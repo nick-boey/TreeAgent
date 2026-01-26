@@ -54,16 +54,13 @@ public class CriticalJourneysTests : PageTest
         await Page.GotoAsync(BaseUrl);
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Navigate to projects if there's a projects link
-        var projectsLink = Page.Locator("a[href*='projects'], a:has-text('Projects')").First;
-        if (await projectsLink.CountAsync() > 0)
-        {
-            await projectsLink.ClickAsync();
-            await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        // Navigate to settings page via nav link
+        var settingsLink = Page.Locator("a[href*='settings'], a:has-text('Settings')").First;
+        await settingsLink.ClickAsync();
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-            // Verify URL changed
-            Assert.That(Page.Url, Does.Contain("projects").IgnoreCase);
-        }
+        // Verify URL changed to settings
+        Assert.That(Page.Url, Does.Contain("settings").IgnoreCase);
     }
 
     [Test]
@@ -98,8 +95,8 @@ public class CriticalJourneysTests : PageTest
         // Wait for page to load
         await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Verify Swagger UI loads
-        await Expect(Page.Locator(".swagger-ui")).ToBeVisibleAsync(new()
+        // Verify Swagger UI loads - use specific selector to avoid matching multiple elements
+        await Expect(Page.Locator("div.swagger-ui")).ToBeVisibleAsync(new()
         {
             Timeout = 10000
         });
