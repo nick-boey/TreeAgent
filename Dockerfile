@@ -17,6 +17,8 @@ WORKDIR /src
 COPY Homespun.sln ./
 COPY src/Homespun/Homespun.csproj src/Homespun/
 COPY tests/Homespun.Tests/Homespun.Tests.csproj tests/Homespun.Tests/
+COPY tests/Homespun.Api.Tests/Homespun.Api.Tests.csproj tests/Homespun.Api.Tests/
+COPY tests/Homespun.E2E.Tests/Homespun.E2E.Tests.csproj tests/Homespun.E2E.Tests/
 
 # Restore dependencies
 RUN dotnet restore

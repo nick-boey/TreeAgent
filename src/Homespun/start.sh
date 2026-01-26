@@ -50,14 +50,16 @@ if [ -n "$TS_AUTHKEY" ]; then
     # Wait for tailscaled to be ready
     sleep 2
 
-    # Connect to Tailscale
-    tailscale --socket="$TS_STATE_DIR/tailscaled.sock" up \
+    # Connect to Tailscale (allow failure - non-critical for local dev)
+    if tailscale --socket="$TS_STATE_DIR/tailscaled.sock" up \
               --authkey="$TS_AUTHKEY" \
               --hostname="${TS_HOSTNAME:-homespun}" \
               --accept-routes \
-              --reset
-
-    echo "Tailscale connected as ${TS_HOSTNAME:-homespun}"
+              --reset 2>&1; then
+        echo "Tailscale connected as ${TS_HOSTNAME:-homespun}"
+    else
+        echo "Warning: Tailscale failed to connect (non-fatal, continuing without Tailscale)"
+    fi
 
     # Enable HTTPS serving (proxies port 443 to the app on 8080)
     echo "Enabling Tailscale HTTPS serve..."

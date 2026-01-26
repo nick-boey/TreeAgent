@@ -31,6 +31,10 @@
     Runs with external hostname for agent URLs.
 
 .EXAMPLE
+    .\run.ps1 -DataDir "C:\custom\data" -ContainerName "homespun-custom"
+    Runs with custom data directory and container name.
+
+.EXAMPLE
     .\run.ps1 -Stop
     Stops all containers.
 
@@ -79,6 +83,16 @@ param(
 
     [Parameter(ParameterSetName = 'Run')]
     [string]$ExternalHostname,
+
+    [Parameter(ParameterSetName = 'Run')]
+    [Parameter(ParameterSetName = 'Stop')]
+    [Parameter(ParameterSetName = 'Logs')]
+    [string]$DataDir,
+
+    [Parameter(ParameterSetName = 'Run')]
+    [Parameter(ParameterSetName = 'Stop')]
+    [Parameter(ParameterSetName = 'Logs')]
+    [string]$ContainerName = "homespun",
 
     [Parameter(ParameterSetName = 'Stop')]
     [switch]$Stop,
@@ -264,11 +278,11 @@ Push-Location $RepoRoot
 try {
     # Handle Stop action
     if ($Stop) {
-        Write-Host "Stopping containers..." -ForegroundColor Cyan
-        docker compose --profile production down 2>$null
-        if ($LASTEXITCODE -ne 0) {
-            docker compose down
-        }
+        Write-Host "Stopping container '$ContainerName'..." -ForegroundColor Cyan
+        docker stop $ContainerName 2>$null
+        docker rm $ContainerName 2>$null
+        docker stop watchtower 2>$null
+        docker rm watchtower 2>$null
         Write-Host "Containers stopped." -ForegroundColor Green
         exit 0
     }
@@ -276,7 +290,7 @@ try {
     # Handle Logs action
     if ($Logs) {
         Write-Host "Following container logs (Ctrl+C to exit)..." -ForegroundColor Cyan
-        docker compose logs -f homespun
+        docker logs -f $ContainerName
         exit 0
     }
 
@@ -340,7 +354,13 @@ try {
     # Step 4: Set up directories
     Write-Host "[4/5] Setting up directories..." -ForegroundColor Cyan
     $homeDir = [Environment]::GetFolderPath('UserProfile')
-    $dataDir = Join-Path $homeDir ".homespun-container" "data"
+    # Use DataDir parameter if provided, otherwise default
+    if ([string]::IsNullOrWhiteSpace($DataDir)) {
+        $dataDir = Join-Path $homeDir ".homespun-container" "data"
+    }
+    else {
+        $dataDir = $DataDir
+    }
     $sshDir = Join-Path $homeDir ".ssh"
     $claudeCredentialsFile = Join-Path $homeDir ".claude\.credentials.json"
     $tailscaleStateDir = Join-Path $dataDir "tailscale"
@@ -384,27 +404,10 @@ try {
     $claudeCredentialsFileUnix = if ($claudeCredentialsFile) { $claudeCredentialsFile -replace '\\', '/' } else { "/dev/null" }
     $tailscaleStateDirUnix = $tailscaleStateDir -replace '\\', '/'
 
-    # Set environment variables for docker-compose
-    $env:HOMESPUN_IMAGE = $ImageName
-    $env:DATA_DIR = $dataDirUnix
-    $env:SSH_DIR = $sshDirUnix
-    $env:CLAUDE_CREDENTIALS_FILE = $claudeCredentialsFileUnix
-    $env:GITHUB_TOKEN = $githubToken
-    $env:TAILSCALE_AUTH_KEY = $tailscaleKey
-    $env:TAILSCALE_HOSTNAME = $TailscaleHostname
-    $env:TAILSCALE_STATE_DIR = $tailscaleStateDirUnix
-    $env:HSP_EXTERNAL_HOSTNAME = $externalHostnameValue
-
-    # Determine compose profiles (only production profile for Watchtower)
-    $composeProfiles = @()
-    if (-not $Local) {
-        $composeProfiles += "--profile"
-        $composeProfiles += "production"
-    }
-
     Write-Host "======================================" -ForegroundColor Cyan
     Write-Host "  Container Configuration" -ForegroundColor Cyan
     Write-Host "======================================" -ForegroundColor Cyan
+    Write-Host "  Container:   $ContainerName"
     Write-Host "  Image:       $ImageName"
     Write-Host "  Port:        8080"
     Write-Host "  URL:         http://localhost:8080"
@@ -433,16 +436,77 @@ try {
     Write-Host "======================================" -ForegroundColor Cyan
     Write-Host ""
 
+    # Stop existing containers first
+    docker stop $ContainerName 2>$null
+    docker rm $ContainerName 2>$null
+
+    # Build docker run arguments
+    $dockerArgs = @("run")
+
     # Determine run mode
     $runDetached = $Detach -or (-not $Interactive)
 
     if ($runDetached) {
-        Write-Host "Starting containers in detached mode..." -ForegroundColor Cyan
-        $composeArgs = @("compose") + $composeProfiles + @("up", "-d")
-        & docker @composeArgs
+        $dockerArgs += "-d"
+    }
+
+    $dockerArgs += "--name", $ContainerName
+    $dockerArgs += "-p", "8080:8080"
+    $dockerArgs += "-v", "${dataDirUnix}:/data"
+
+    if ($sshDir) {
+        $dockerArgs += "-v", "${sshDirUnix}:/home/homespun/.ssh:ro"
+    }
+
+    if ($claudeCredentialsFile) {
+        $dockerArgs += "-v", "${claudeCredentialsFileUnix}:/home/homespun/.claude/.credentials.json:ro"
+    }
+
+    $dockerArgs += "-e", "HOME=/home/homespun"
+    $dockerArgs += "-e", "ASPNETCORE_ENVIRONMENT=Production"
+    $dockerArgs += "-e", "HSP_HOST_DATA_PATH=$dataDirUnix"
+
+    if (-not [string]::IsNullOrWhiteSpace($githubToken)) {
+        $dockerArgs += "-e", "GITHUB_TOKEN=$githubToken"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($tailscaleKey)) {
+        $dockerArgs += "-e", "TAILSCALE_AUTH_KEY=$tailscaleKey"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($externalHostnameValue)) {
+        $dockerArgs += "-e", "HSP_EXTERNAL_HOSTNAME=$externalHostnameValue"
+    }
+
+    $dockerArgs += "--restart", "unless-stopped"
+    $dockerArgs += "--health-cmd", "curl -f http://localhost:8080/health || exit 1"
+    $dockerArgs += "--health-interval", "30s"
+    $dockerArgs += "--health-timeout", "10s"
+    $dockerArgs += "--health-retries", "3"
+    $dockerArgs += "--health-start-period", "10s"
+    $dockerArgs += $ImageName
+
+    if ($runDetached) {
+        Write-Host "Starting container in detached mode..." -ForegroundColor Cyan
+        & docker @dockerArgs
+
+        # Start Watchtower for production mode
+        if (-not $Local) {
+            docker stop watchtower 2>$null
+            docker rm watchtower 2>$null
+            docker run -d `
+                --name watchtower `
+                -v /var/run/docker.sock:/var/run/docker.sock `
+                -e WATCHTOWER_CLEANUP=true `
+                -e WATCHTOWER_POLL_INTERVAL=300 `
+                -e WATCHTOWER_INCLUDE_STOPPED=false `
+                -e WATCHTOWER_ROLLING_RESTART=true `
+                --restart unless-stopped `
+                containrrr/watchtower $ContainerName
+        }
 
         Write-Host ""
-        Write-Host "Containers started successfully!" -ForegroundColor Green
+        Write-Host "Container started successfully!" -ForegroundColor Green
         Write-Host ""
         Write-Host "Access URLs:"
         Write-Host "  Local:       http://localhost:8080"
@@ -457,13 +521,12 @@ try {
         Write-Host ""
     }
     else {
-        Write-Warning "Starting containers in interactive mode..."
+        Write-Warning "Starting container in interactive mode..."
         Write-Warning "Press Ctrl+C to stop."
         Write-Host ""
-        $composeArgs = @("compose") + $composeProfiles + @("up")
-        & docker @composeArgs
+        & docker @dockerArgs
         Write-Host ""
-        Write-Warning "Containers stopped."
+        Write-Warning "Container stopped."
     }
 }
 finally {

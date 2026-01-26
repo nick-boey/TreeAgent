@@ -24,6 +24,8 @@ set -e
 #   --logs                      Follow container logs
 #   --pull                      Pull latest image before starting
 #   --external-hostname HOST    Set external hostname for agent URLs
+#   --data-dir DIR              Override data directory (default: ~/.homespun-container/data)
+#   --container-name NAME       Override container name (default: homespun)
 #
 # Environment Variables:
 #   HSP_GITHUB_TOKEN            GitHub token (preferred for VM secrets)
@@ -54,6 +56,8 @@ DETACHED=true
 ACTION="start"
 PULL_FIRST=false
 EXTERNAL_HOSTNAME=""
+DATA_DIR_PARAM=""
+CONTAINER_NAME="homespun"
 USER_SECRETS_ID="2cfc6c57-72da-4b56-944b-08f2c1df76f6"
 
 # Colors
@@ -70,7 +74,7 @@ log_warn() { echo -e "${YELLOW}$1${NC}"; }
 log_error() { echo -e "${RED}$1${NC}"; }
 
 show_help() {
-    head -35 "$0" | tail -30
+    head -37 "$0" | tail -32
     exit 0
 }
 
@@ -85,6 +89,8 @@ while [[ "$#" -gt 0 ]]; do
         --logs) ACTION="logs" ;;
         --pull) PULL_FIRST=true ;;
         --external-hostname) EXTERNAL_HOSTNAME="$2"; shift ;;
+        --data-dir) DATA_DIR_PARAM="$2"; shift ;;
+        --container-name) CONTAINER_NAME="$2"; shift ;;
         -h|--help) show_help ;;
         *) log_error "Unknown parameter: $1"; show_help ;;
     esac
@@ -101,9 +107,9 @@ echo
 # Handle stop action
 if [ "$ACTION" = "stop" ]; then
     log_info "Stopping containers..."
-    docker stop homespun 2>/dev/null || true
+    docker stop "$CONTAINER_NAME" 2>/dev/null || true
     docker stop watchtower 2>/dev/null || true
-    docker rm homespun 2>/dev/null || true
+    docker rm "$CONTAINER_NAME" 2>/dev/null || true
     docker rm watchtower 2>/dev/null || true
     log_success "Containers stopped."
     exit 0
@@ -112,7 +118,7 @@ fi
 # Handle logs action
 if [ "$ACTION" = "logs" ]; then
     log_info "Following container logs (Ctrl+C to exit)..."
-    docker logs -f homespun
+    docker logs -f "$CONTAINER_NAME"
     exit 0
 fi
 
@@ -226,7 +232,12 @@ fi
 # Step 4: Set up directories
 log_info "[4/5] Setting up directories..."
 
-DATA_DIR="$HOME/.homespun-container/data"
+# Use DATA_DIR_PARAM if provided, otherwise default
+if [ -n "$DATA_DIR_PARAM" ]; then
+    DATA_DIR="$DATA_DIR_PARAM"
+else
+    DATA_DIR="$HOME/.homespun-container/data"
+fi
 SSH_DIR="$HOME/.ssh"
 CLAUDE_DIR="$HOME/.claude"
 
@@ -278,6 +289,7 @@ HOST_GID="$(id -g)"
 log_info "======================================"
 log_info "  Container Configuration"
 log_info "======================================"
+echo "  Container:   $CONTAINER_NAME"
 echo "  Image:       $IMAGE_NAME"
 echo "  User:        $HOST_UID:$HOST_GID (host user)"
 echo "  Port:        8080"
@@ -304,15 +316,15 @@ log_info "======================================"
 echo
 
 # Stop existing containers first
-docker stop homespun 2>/dev/null || true
-docker rm homespun 2>/dev/null || true
+docker stop "$CONTAINER_NAME" 2>/dev/null || true
+docker rm "$CONTAINER_NAME" 2>/dev/null || true
 
 # Build docker run command
 DOCKER_CMD="docker run"
 if [ "$DETACHED" = true ]; then
     DOCKER_CMD="$DOCKER_CMD -d"
 fi
-DOCKER_CMD="$DOCKER_CMD --name homespun"
+DOCKER_CMD="$DOCKER_CMD --name $CONTAINER_NAME"
 DOCKER_CMD="$DOCKER_CMD --user $HOST_UID:$HOST_GID"
 DOCKER_CMD="$DOCKER_CMD -p 8080:8080"
 DOCKER_CMD="$DOCKER_CMD -v $DATA_DIR:/data"
@@ -362,7 +374,7 @@ if [ "$DETACHED" = true ]; then
             -e WATCHTOWER_INCLUDE_STOPPED=false \
             -e WATCHTOWER_ROLLING_RESTART=true \
             --restart unless-stopped \
-            containrrr/watchtower homespun
+            containrrr/watchtower "$CONTAINER_NAME"
     fi
 
     echo
