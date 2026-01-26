@@ -278,4 +278,262 @@ public class GitWorktreeServiceIntegrationTests
         Assert.That(worktreePath, Does.Not.Contain("#"));
         Assert.That(Directory.Exists(worktreePath), Is.True);
     }
+
+    #region ListLocalBranchesAsync Integration Tests
+
+    [Test]
+    public async Task ListLocalBranchesAsync_ReturnsMainBranch()
+    {
+        // Act
+        var branches = await _service.ListLocalBranchesAsync(_fixture.RepositoryPath);
+
+        // Assert
+        Assert.That(branches, Is.Not.Null);
+        Assert.That(branches, Has.Count.GreaterThanOrEqualTo(1));
+
+        // Should have either 'main' or 'master' depending on git config
+        var mainBranch = branches.FirstOrDefault(b => b.ShortName == "main" || b.ShortName == "master");
+        Assert.That(mainBranch, Is.Not.Null);
+        Assert.That(mainBranch!.IsCurrent, Is.True);
+    }
+
+    [Test]
+    public async Task ListLocalBranchesAsync_ReturnsMultipleBranches()
+    {
+        // Arrange
+        _fixture.CreateBranch("feature/test-1");
+        _fixture.CreateBranch("feature/test-2");
+
+        // Act
+        var branches = await _service.ListLocalBranchesAsync(_fixture.RepositoryPath);
+
+        // Assert
+        Assert.That(branches, Has.Count.GreaterThanOrEqualTo(3));
+        Assert.That(branches, Has.Some.Matches<BranchInfo>(b => b.ShortName == "feature/test-1"));
+        Assert.That(branches, Has.Some.Matches<BranchInfo>(b => b.ShortName == "feature/test-2"));
+    }
+
+    [Test]
+    public async Task ListLocalBranchesAsync_IdentifiesWorktreeBranches()
+    {
+        // Arrange
+        var branchName = "feature/worktree-branch";
+        _fixture.CreateBranch(branchName);
+        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
+        Assert.That(worktreePath, Is.Not.Null);
+
+        // Act
+        var branches = await _service.ListLocalBranchesAsync(_fixture.RepositoryPath);
+
+        // Assert
+        var worktreeBranch = branches.FirstOrDefault(b => b.ShortName == branchName);
+        Assert.That(worktreeBranch, Is.Not.Null);
+        Assert.That(worktreeBranch!.HasWorktree, Is.True);
+        Assert.That(worktreeBranch.WorktreePath, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task ListLocalBranchesAsync_ReturnsCommitInfo()
+    {
+        // Arrange
+        _fixture.CreateBranch("feature/with-commit", checkout: true);
+        _fixture.CreateFileAndCommit("test.txt", "test content", "Add test file");
+        _fixture.RunGit("checkout -"); // Go back to main
+
+        // Act
+        var branches = await _service.ListLocalBranchesAsync(_fixture.RepositoryPath);
+
+        // Assert
+        var featureBranch = branches.FirstOrDefault(b => b.ShortName == "feature/with-commit");
+        Assert.That(featureBranch, Is.Not.Null);
+        Assert.That(featureBranch!.CommitSha, Is.Not.Null.And.Not.Empty);
+        Assert.That(featureBranch.LastCommitMessage, Does.Contain("Add test file"));
+    }
+
+    #endregion
+
+    #region IsBranchMergedAsync Integration Tests
+
+    [Test]
+    public async Task IsBranchMergedAsync_MergedBranch_ReturnsTrue()
+    {
+        // Arrange - Create and merge a branch
+        var branchName = "feature/to-merge";
+        _fixture.CreateBranch(branchName, checkout: true);
+        _fixture.CreateFileAndCommit("merged.txt", "merged content", "Add merged file");
+        _fixture.RunGit("checkout -"); // Back to main
+        _fixture.RunGit($"merge \"{branchName}\" --no-ff -m \"Merge feature branch\"");
+
+        // Get the default branch name
+        var defaultBranch = _fixture.RunGit("rev-parse --abbrev-ref HEAD").Trim();
+
+        // Act
+        var isMerged = await _service.IsBranchMergedAsync(_fixture.RepositoryPath, branchName, defaultBranch);
+
+        // Assert
+        Assert.That(isMerged, Is.True);
+    }
+
+    [Test]
+    public async Task IsBranchMergedAsync_UnmergedBranch_ReturnsFalse()
+    {
+        // Arrange - Create a branch with changes but don't merge
+        var branchName = "feature/unmerged";
+        _fixture.CreateBranch(branchName, checkout: true);
+        _fixture.CreateFileAndCommit("unmerged.txt", "unmerged content", "Add unmerged file");
+        _fixture.RunGit("checkout -"); // Back to main
+
+        // Get the default branch name
+        var defaultBranch = _fixture.RunGit("rev-parse --abbrev-ref HEAD").Trim();
+
+        // Act
+        var isMerged = await _service.IsBranchMergedAsync(_fixture.RepositoryPath, branchName, defaultBranch);
+
+        // Assert
+        Assert.That(isMerged, Is.False);
+    }
+
+    #endregion
+
+    #region DeleteLocalBranchAsync Integration Tests
+
+    [Test]
+    public async Task DeleteLocalBranchAsync_MergedBranch_DeletesSuccessfully()
+    {
+        // Arrange - Create and merge a branch
+        var branchName = "feature/delete-merged";
+        _fixture.CreateBranch(branchName, checkout: true);
+        _fixture.CreateFileAndCommit("delete.txt", "content", "Add file");
+        _fixture.RunGit("checkout -");
+        _fixture.RunGit($"merge \"{branchName}\" --no-ff -m \"Merge\"");
+
+        // Act
+        var result = await _service.DeleteLocalBranchAsync(_fixture.RepositoryPath, branchName);
+
+        // Assert
+        Assert.That(result, Is.True);
+
+        var branches = _fixture.RunGit("branch --list");
+        Assert.That(branches, Does.Not.Contain(branchName));
+    }
+
+    [Test]
+    public async Task DeleteLocalBranchAsync_UnmergedBranch_FailsWithoutForce()
+    {
+        // Arrange - Create a branch with changes but don't merge
+        var branchName = "feature/delete-unmerged";
+        _fixture.CreateBranch(branchName, checkout: true);
+        _fixture.CreateFileAndCommit("unmerged.txt", "content", "Add file");
+        _fixture.RunGit("checkout -");
+
+        // Act
+        var result = await _service.DeleteLocalBranchAsync(_fixture.RepositoryPath, branchName, force: false);
+
+        // Assert
+        Assert.That(result, Is.False);
+
+        // Branch should still exist
+        var branches = _fixture.RunGit("branch --list");
+        Assert.That(branches, Does.Contain(branchName));
+    }
+
+    [Test]
+    public async Task DeleteLocalBranchAsync_UnmergedBranchWithForce_DeletesSuccessfully()
+    {
+        // Arrange - Create a branch with changes but don't merge
+        var branchName = "feature/force-delete";
+        _fixture.CreateBranch(branchName, checkout: true);
+        _fixture.CreateFileAndCommit("force.txt", "content", "Add file");
+        _fixture.RunGit("checkout -");
+
+        // Act
+        var result = await _service.DeleteLocalBranchAsync(_fixture.RepositoryPath, branchName, force: true);
+
+        // Assert
+        Assert.That(result, Is.True);
+
+        var branches = _fixture.RunGit("branch --list");
+        Assert.That(branches, Does.Not.Contain(branchName));
+    }
+
+    #endregion
+
+    #region GetBranchDivergenceAsync Integration Tests
+
+    [Test]
+    public async Task GetBranchDivergenceAsync_BranchAhead_ReturnsCorrectCount()
+    {
+        // Arrange
+        var branchName = "feature/ahead-branch";
+        var defaultBranch = _fixture.RunGit("rev-parse --abbrev-ref HEAD").Trim();
+
+        _fixture.CreateBranch(branchName, checkout: true);
+        _fixture.CreateFileAndCommit("file1.txt", "content1", "Commit 1");
+        _fixture.CreateFileAndCommit("file2.txt", "content2", "Commit 2");
+        _fixture.RunGit("checkout -");
+
+        // Act
+        var (ahead, behind) = await _service.GetBranchDivergenceAsync(_fixture.RepositoryPath, branchName, defaultBranch);
+
+        // Assert
+        Assert.That(ahead, Is.EqualTo(2));
+        Assert.That(behind, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task GetBranchDivergenceAsync_BranchBehind_ReturnsCorrectCount()
+    {
+        // Arrange
+        var branchName = "feature/behind-branch";
+        var defaultBranch = _fixture.RunGit("rev-parse --abbrev-ref HEAD").Trim();
+
+        _fixture.CreateBranch(branchName);
+        // Add commits to main after creating branch
+        _fixture.CreateFileAndCommit("main1.txt", "main content", "Main commit 1");
+        _fixture.CreateFileAndCommit("main2.txt", "main content 2", "Main commit 2");
+
+        // Act
+        var (ahead, behind) = await _service.GetBranchDivergenceAsync(_fixture.RepositoryPath, branchName, defaultBranch);
+
+        // Assert
+        Assert.That(ahead, Is.EqualTo(0));
+        Assert.That(behind, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task GetBranchDivergenceAsync_BranchDiverged_ReturnsBothCounts()
+    {
+        // Arrange
+        var branchName = "feature/diverged-branch";
+        var defaultBranch = _fixture.RunGit("rev-parse --abbrev-ref HEAD").Trim();
+
+        _fixture.CreateBranch(branchName, checkout: true);
+        _fixture.CreateFileAndCommit("feature.txt", "feature content", "Feature commit");
+        _fixture.RunGit("checkout -");
+        _fixture.CreateFileAndCommit("main.txt", "main content", "Main commit");
+
+        // Act
+        var (ahead, behind) = await _service.GetBranchDivergenceAsync(_fixture.RepositoryPath, branchName, defaultBranch);
+
+        // Assert
+        Assert.That(ahead, Is.EqualTo(1));
+        Assert.That(behind, Is.EqualTo(1));
+    }
+
+    #endregion
+
+    #region FetchAllAsync Integration Tests
+
+    [Test]
+    public async Task FetchAllAsync_NoRemote_DoesNotThrow()
+    {
+        // The test repo has no remotes configured
+        // git fetch --all --prune might succeed (returning exit 0) or fail depending on git version
+        // The important thing is it doesn't throw an exception
+
+        // Act & Assert - Should not throw
+        await _service.FetchAllAsync(_fixture.RepositoryPath);
+    }
+
+    #endregion
 }
