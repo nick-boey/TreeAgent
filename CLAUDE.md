@@ -15,15 +15,16 @@ Homespun is a Blazor web application for managing development features and AI ag
 
 ### Test Driven Development (TDD)
 
-Use Test Driven Development practices where possible:
+**TDD is mandatory for all planning and implementation.** When developing new features or fixing bugs:
 
-1. **Write tests first** - Before implementing a feature, write failing tests that define the expected behavior
-2. **Red-Green-Refactor** - Follow the TDD cycle:
+1. **Write tests first** - Before implementing any code, write failing tests that define the expected behavior
+2. **Red-Green-Refactor** - Follow the TDD cycle for every change:
    - Red: Write a failing test
    - Green: Write minimal code to make the test pass
    - Refactor: Clean up the code while keeping tests green
-3. **Test naming** - Use descriptive test names that explain the scenario and expected outcome
-4. **Test coverage** - Aim for comprehensive coverage of business logic in services
+3. **Plan with tests in mind** - When planning features, identify test cases as part of the design
+4. **Test naming** - Use descriptive test names that explain the scenario and expected outcome (e.g., `GetProjectById_ReturnsNotFound_WhenNotExists`)
+5. **Test coverage** - Aim for comprehensive coverage of business logic in services
 
 ### Project Structure (Vertical Slice Architecture)
 
@@ -54,13 +55,17 @@ src/Homespun/
 ├── HealthChecks/                # Health check implementations
 └── Program.cs                   # Application entry point
 
-tests/Homespun.Tests/
-├── Features/                    # Tests organized by feature (mirrors src structure)
-│   ├── ClaudeCode/              # ClaudeCode service and hub tests
-│   ├── Git/                     # Git worktree tests
-│   ├── GitHub/                  # GitHub service tests
-│   └── PullRequests/            # PR model and workflow tests
-└── Helpers/                     # Shared test utilities and fixtures
+tests/
+├── Homespun.Tests/              # Unit tests (NUnit + bUnit + Moq)
+│   ├── Features/                # Tests organized by feature (mirrors src structure)
+│   │   ├── ClaudeCode/          # ClaudeCode service and hub tests
+│   │   ├── Git/                 # Git worktree tests
+│   │   ├── GitHub/              # GitHub service tests
+│   │   └── PullRequests/        # PR model and workflow tests
+│   ├── Components/              # bUnit tests for Blazor components
+│   └── Helpers/                 # Shared test utilities and fixtures
+├── Homespun.Api.Tests/          # API integration tests (WebApplicationFactory)
+└── Homespun.E2E.Tests/          # End-to-end tests (Playwright)
 ```
 
 ### Feature Slices
@@ -86,8 +91,165 @@ The application will be available at `https://localhost:5001` (or the configured
 ### Running Tests
 
 ```bash
+# Run all tests
 dotnet test
+
+# Run specific test project
+dotnet test tests/Homespun.Tests
+dotnet test tests/Homespun.Api.Tests
+dotnet test tests/Homespun.E2E.Tests
+
+# Run with verbose output
+dotnet test --verbosity normal
 ```
+
+## Testing Infrastructure
+
+The project uses a comprehensive three-tier testing strategy:
+
+### Unit Tests (Homespun.Tests)
+
+**Framework:** NUnit + bUnit + Moq
+
+Unit tests cover service logic and Blazor components in isolation.
+
+**Service tests** use Moq for dependency mocking:
+```csharp
+[TestFixture]
+public class GitHubServiceTests
+{
+    private Mock<IGitHubClientWrapper> _mockClient = null!;
+    private GitHubService _sut = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _mockClient = new Mock<IGitHubClientWrapper>();
+        _sut = new GitHubService(_mockClient.Object);
+    }
+
+    [Test]
+    public async Task GetPullRequests_ReturnsEmpty_WhenNoPullRequests()
+    {
+        // Arrange
+        _mockClient.Setup(x => x.GetPullRequestsAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new List<PullRequest>());
+
+        // Act
+        var result = await _sut.GetPullRequestsAsync("owner", "repo");
+
+        // Assert
+        Assert.That(result, Is.Empty);
+    }
+}
+```
+
+**Component tests** use bUnit with a shared `BunitTestContext` base class:
+```csharp
+[TestFixture]
+public class ModelSelectorTests : BunitTestContext
+{
+    [Test]
+    public void ModelSelector_DefaultsToOpus()
+    {
+        var cut = Render<ModelSelector>();
+        var select = cut.Find("select");
+        Assert.That(select.GetAttribute("value"), Is.EqualTo("opus"));
+    }
+
+    [Test]
+    public void ModelSelector_InvokesCallbackOnChange()
+    {
+        string? selectedModel = null;
+        var cut = Render<ModelSelector>(parameters =>
+            parameters.Add(p => p.SelectedModelChanged,
+                EventCallback.Factory.Create<string>(this, value => selectedModel = value)));
+
+        cut.Find("select").Change("haiku");
+
+        Assert.That(selectedModel, Is.EqualTo("haiku"));
+    }
+}
+```
+
+### API Integration Tests (Homespun.Api.Tests)
+
+**Framework:** NUnit + WebApplicationFactory
+
+API tests verify HTTP endpoints using an in-memory test server with `HomespunWebApplicationFactory`:
+
+```csharp
+[TestFixture]
+public class ProjectsApiTests
+{
+    private HomespunWebApplicationFactory _factory = null!;
+    private HttpClient _client = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _factory = new HomespunWebApplicationFactory();
+        _client = _factory.CreateClient();
+    }
+
+    [Test]
+    public async Task GetProjects_ReturnsEmptyList_WhenNoProjects()
+    {
+        var response = await _client.GetAsync("/api/projects");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var projects = await response.Content.ReadFromJsonAsync<List<Project>>();
+        Assert.That(projects, Is.Empty);
+    }
+
+    [Test]
+    public async Task GetProjectById_ReturnsProject_WhenExists()
+    {
+        // Seed test data
+        _factory.TestDataStore.SeedProject(new Project { Id = "test-id", Name = "Test" });
+
+        var response = await _client.GetAsync("/api/projects/test-id");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+}
+```
+
+### End-to-End Tests (Homespun.E2E.Tests)
+
+**Framework:** NUnit + Playwright
+
+E2E tests run against the full application stack using Playwright for browser automation:
+
+```csharp
+[TestFixture]
+public class CriticalJourneysTests : PageTest
+{
+    private string BaseUrl => HomespunFixture.BaseUrl;
+
+    [Test]
+    public async Task HomePage_LoadsSuccessfully()
+    {
+        await Page.GotoAsync(BaseUrl);
+        await Page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+        await Expect(Page).ToHaveTitleAsync(new Regex("Homespun"));
+    }
+
+    [Test]
+    public async Task Navigation_WorksBetweenPages()
+    {
+        await Page.GotoAsync(BaseUrl);
+        var projectsLink = Page.Locator("a[href*='projects']").First;
+        await projectsLink.ClickAsync();
+        Assert.That(Page.Url, Does.Contain("projects"));
+    }
+}
+```
+
+**E2E Configuration:**
+- `HomespunFixture` automatically starts the application for tests
+- Set `E2E_BASE_URL` to test against an external server
+- Set `E2E_CONFIGURATION` to specify build configuration (Release/Debug)
 
 ### Data Storage
 
