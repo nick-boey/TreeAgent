@@ -1,0 +1,32 @@
+@using Homespun.Features.ClaudeCode.Data
+
+<div class="agent-result">
+    <div class="summary-section">
+        <h6>Summary</h6>
+        <p>@Data.Summary</p>
+    </div>
+    @if (!string.IsNullOrEmpty(Data.DetailedOutput))
+    {
+        <details class="detailed-output">
+            <summary>Full Output</summary>
+            <pre>@Data.DetailedOutput</pre>
+        </details>
+    }
+    @if (Data.FilesAffected?.Count > 0)
+    {
+        <div class="files-affected">
+            <h6>Files Affected</h6>
+            <ul>
+                @foreach (var file in Data.FilesAffected)
+                {
+                    <li><code>@file</code></li>
+                }
+            </ul>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public required AgentToolData Data { get; set; }
+}

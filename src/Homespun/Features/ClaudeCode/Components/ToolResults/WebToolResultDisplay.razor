@@ -1,0 +1,26 @@
+@using Homespun.Features.ClaudeCode.Data
+
+<div class="web-result @(Data.IsError ? "error" : "")">
+    @if (!string.IsNullOrEmpty(Data.Url))
+    {
+        <div class="web-url">
+            <span class="label">URL:</span>
+            <a href="@Data.Url" target="_blank" rel="noopener noreferrer">@TruncateUrl(Data.Url)</a>
+        </div>
+    }
+    <div class="web-content">
+        <pre>@Data.Content</pre>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public required WebToolData Data { get; set; }
+
+    private static string TruncateUrl(string url)
+    {
+        if (url.Length <= 80)
+            return url;
+        return url[..77] + "...";
+    }
+}

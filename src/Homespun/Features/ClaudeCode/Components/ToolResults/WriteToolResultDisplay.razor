@@ -1,0 +1,42 @@
+@using Homespun.Features.ClaudeCode.Data
+
+<div class="write-result @Data.Operation">
+    <div class="operation-icon">
+        @switch (Data.Operation)
+        {
+            case "created":
+                <span title="File created">✅</span>
+                break;
+            case "updated" or "written":
+                <span title="File updated">📝</span>
+                break;
+            case "edited":
+                <span title="File edited">✏️</span>
+                break;
+            case "deleted":
+                <span title="File deleted">🗑️</span>
+                break;
+            default:
+                <span title="File modified">📄</span>
+                break;
+        }
+    </div>
+    <div class="operation-details">
+        <span class="file-path" title="@Data.FilePath">@Data.FilePath</span>
+        @if (Data.LinesWritten.HasValue)
+        {
+            <span class="lines-written">@Data.LinesWritten line@(Data.LinesWritten == 1 ? "" : "s")</span>
+        }
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Data.Message))
+    {
+        <div class="operation-message">
+            <pre>@Data.Message</pre>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public required WriteToolData Data { get; set; }
+}

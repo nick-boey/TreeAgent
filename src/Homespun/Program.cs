@@ -86,6 +86,7 @@ builder.Services.AddScoped<IBreadcrumbService, BreadcrumbService>();
 // Claude Code SDK services
 builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
 builder.Services.AddSingleton<SessionOptionsFactory>();
+builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
 builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
 builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
 builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();

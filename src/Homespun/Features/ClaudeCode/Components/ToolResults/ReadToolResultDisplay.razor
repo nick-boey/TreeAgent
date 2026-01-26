@@ -1,0 +1,29 @@
+@using Homespun.Features.ClaudeCode.Data
+
+<div class="read-result">
+    <div class="file-header">
+        <span class="file-path" title="@Data.FilePath">@TruncatePath(Data.FilePath)</span>
+        <span class="line-count">@Data.TotalLines line@(Data.TotalLines == 1 ? "" : "s")</span>
+    </div>
+    <div class="code-content">
+        <pre class="code-block @(Data.Language ?? "")"><code>@Data.Content</code></pre>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public required ReadToolData Data { get; set; }
+
+    private static string TruncatePath(string path)
+    {
+        if (path.Length <= 60)
+            return path;
+
+        var fileName = System.IO.Path.GetFileName(path);
+        if (fileName.Length >= 50)
+            return "..." + fileName[^50..];
+
+        var remaining = 57 - fileName.Length;
+        return "..." + path[^(remaining + fileName.Length)..];
+    }
+}

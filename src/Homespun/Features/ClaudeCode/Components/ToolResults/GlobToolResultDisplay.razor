@@ -1,0 +1,36 @@
+@using Homespun.Features.ClaudeCode.Data
+
+<div class="glob-result">
+    @if (!string.IsNullOrEmpty(Data.Pattern))
+    {
+        <div class="glob-pattern">
+            <span class="label">Pattern:</span>
+            <code>@Data.Pattern</code>
+        </div>
+    }
+    <div class="file-count">
+        Found @Data.TotalFiles file@(Data.TotalFiles == 1 ? "" : "s")
+    </div>
+    @if (Data.Files.Count > 0)
+    {
+        <div class="files-list">
+            @foreach (var file in Data.Files.Take(100))
+            {
+                <div class="file-item">
+                    <code>@file</code>
+                </div>
+            }
+            @if (Data.Files.Count > 100)
+            {
+                <div class="more-files">
+                    ... and @(Data.Files.Count - 100) more files
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public required GlobToolData Data { get; set; }
+}

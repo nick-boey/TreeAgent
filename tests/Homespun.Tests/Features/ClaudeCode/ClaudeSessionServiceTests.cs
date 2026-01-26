@@ -16,6 +16,7 @@ public class ClaudeSessionServiceTests
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private IToolResultParser _toolResultParser = null!;
 
     [SetUp]
     public void SetUp()
@@ -24,6 +25,7 @@ public class ClaudeSessionServiceTests
         _optionsFactory = new SessionOptionsFactory();
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _toolResultParser = new ToolResultParser();
 
         // Setup mock hub clients
         var clientsMock = new Mock<IHubClients>();
@@ -32,7 +34,7 @@ public class ClaudeSessionServiceTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(_sessionStore, _optionsFactory, _loggerMock.Object, _hubContextMock.Object);
+        _service = new ClaudeSessionService(_sessionStore, _optionsFactory, _loggerMock.Object, _hubContextMock.Object, _toolResultParser);
     }
 
     [Test]
@@ -294,6 +296,7 @@ public class ClaudeSessionServiceMessageTests
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private IToolResultParser _toolResultParser = null!;
 
     [SetUp]
     public void SetUp()
@@ -302,6 +305,7 @@ public class ClaudeSessionServiceMessageTests
         _optionsFactory = new SessionOptionsFactory();
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _toolResultParser = new ToolResultParser();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -309,7 +313,7 @@ public class ClaudeSessionServiceMessageTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(_sessionStore, _optionsFactory, _loggerMock.Object, _hubContextMock.Object);
+        _service = new ClaudeSessionService(_sessionStore, _optionsFactory, _loggerMock.Object, _hubContextMock.Object, _toolResultParser);
     }
 
     [Test]
@@ -384,6 +388,7 @@ public class ClaudeSessionServicePermissionModeTests
     private SessionOptionsFactory _optionsFactory = null!;
     private Mock<ILogger<ClaudeSessionService>> _loggerMock = null!;
     private Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>> _hubContextMock = null!;
+    private IToolResultParser _toolResultParser = null!;
 
     [SetUp]
     public void SetUp()
@@ -392,6 +397,7 @@ public class ClaudeSessionServicePermissionModeTests
         _optionsFactory = new SessionOptionsFactory();
         _loggerMock = new Mock<ILogger<ClaudeSessionService>>();
         _hubContextMock = new Mock<IHubContext<Homespun.Features.ClaudeCode.Hubs.ClaudeCodeHub>>();
+        _toolResultParser = new ToolResultParser();
 
         var clientsMock = new Mock<IHubClients>();
         var clientProxyMock = new Mock<IClientProxy>();
@@ -399,7 +405,7 @@ public class ClaudeSessionServicePermissionModeTests
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(clientProxyMock.Object);
         _hubContextMock.Setup(h => h.Clients).Returns(clientsMock.Object);
 
-        _service = new ClaudeSessionService(_sessionStore, _optionsFactory, _loggerMock.Object, _hubContextMock.Object);
+        _service = new ClaudeSessionService(_sessionStore, _optionsFactory, _loggerMock.Object, _hubContextMock.Object, _toolResultParser);
     }
 
     [TestCase(PermissionMode.Default)]

@@ -1,0 +1,21 @@
+@using Homespun.Features.ClaudeCode.Data
+
+<div class="bash-result @(Data.IsError ? "error" : "")">
+    @if (!string.IsNullOrEmpty(Data.Command))
+    {
+        <div class="command-line">
+            <span class="prompt">$</span>
+            <code>@Data.Command</code>
+        </div>
+    }
+    <pre class="output @(Data.IsError ? "error-output" : "")">@Data.Output</pre>
+    @if (Data.ExitCode.HasValue && Data.ExitCode != 0)
+    {
+        <div class="exit-code">Exit code: @Data.ExitCode</div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public required BashToolData Data { get; set; }
+}

@@ -1,0 +1,44 @@
+@using Homespun.Features.ClaudeCode.Data
+
+<div class="grep-result">
+    @if (!string.IsNullOrEmpty(Data.Pattern))
+    {
+        <div class="search-pattern">
+            <span class="label">Pattern:</span>
+            <code>@Data.Pattern</code>
+        </div>
+    }
+    <div class="match-count">
+        Found @Data.TotalMatches match@(Data.TotalMatches == 1 ? "" : "es")
+    </div>
+    @if (Data.Matches.Count > 0)
+    {
+        <div class="matches-list">
+            @foreach (var match in Data.Matches.Take(50))
+            {
+                <div class="match-item">
+                    <span class="match-file">@match.FilePath</span>
+                    @if (match.LineNumber.HasValue)
+                    {
+                        <span class="match-line">:@match.LineNumber</span>
+                    }
+                    @if (!string.IsNullOrEmpty(match.Content))
+                    {
+                        <span class="match-content">@match.Content</span>
+                    }
+                </div>
+            }
+            @if (Data.Matches.Count > 50)
+            {
+                <div class="more-matches">
+                    ... and @(Data.Matches.Count - 50) more matches
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public required GrepToolData Data { get; set; }
+}

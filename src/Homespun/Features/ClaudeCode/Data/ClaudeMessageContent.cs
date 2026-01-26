@@ -41,6 +41,17 @@ public class ClaudeMessageContent
     public bool? ToolSuccess { get; set; }
 
     /// <summary>
+    /// The tool use ID for linking tool_result back to tool_use blocks.
+    /// </summary>
+    public string? ToolUseId { get; set; }
+
+    /// <summary>
+    /// Parsed tool result data for rich display (for tool_result blocks).
+    /// Contains structured data specific to the tool type.
+    /// </summary>
+    public ToolResultData? ParsedToolResult { get; set; }
+
+    /// <summary>
     /// Whether this content block is still being streamed.
     /// </summary>
     public bool IsStreaming { get; set; }

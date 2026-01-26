@@ -1,0 +1,92 @@
+@using Homespun.Features.ClaudeCode.Data
+
+@if (Result?.ParsedToolResult != null)
+{
+    <div class="tool-result-block @(Result.ParsedToolResult.IsSuccess ? "" : "error")">
+        <details>
+            <summary class="tool-result-summary">
+                <span class="tool-icon">@GetToolIcon(Result.ParsedToolResult.ToolName)</span>
+                <span class="tool-name">@Result.ParsedToolResult.ToolName</span>
+                <span class="tool-summary">@Result.ParsedToolResult.Summary</span>
+                @if (!Result.ParsedToolResult.IsSuccess)
+                {
+                    <span class="error-badge">Error</span>
+                }
+            </summary>
+            <div class="tool-result-details">
+                @switch (Result.ParsedToolResult.TypedData)
+                {
+                    case ReadToolData readData:
+                        <ReadToolResultDisplay Data="readData" />
+                        break;
+                    case WriteToolData writeData:
+                        <WriteToolResultDisplay Data="writeData" />
+                        break;
+                    case BashToolData bashData:
+                        <BashToolResultDisplay Data="bashData" />
+                        break;
+                    case AgentToolData agentData:
+                        <AgentToolResultDisplay Data="agentData" />
+                        break;
+                    case GrepToolData grepData:
+                        <GrepToolResultDisplay Data="grepData" />
+                        break;
+                    case GlobToolData globData:
+                        <GlobToolResultDisplay Data="globData" />
+                        break;
+                    case WebToolData webData:
+                        <WebToolResultDisplay Data="webData" />
+                        break;
+                    default:
+                        <GenericToolResultDisplay Content="@Result.Text" />
+                        break;
+                }
+            </div>
+        </details>
+    </div>
+}
+else
+{
+    @* Fallback for unparsed results *@
+    <div class="tool-result-block">
+        <details>
+            <summary class="tool-result-summary">
+                <span class="tool-icon">@GetToolIcon(Result?.ToolName ?? "Tool")</span>
+                <span class="tool-name">@(Result?.ToolName ?? "Tool")</span>
+                <span class="tool-summary">@GetFallbackSummary()</span>
+            </summary>
+            <div class="tool-result-details">
+                <pre class="generic-result">@Result?.Text</pre>
+            </div>
+        </details>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public ClaudeMessageContent? Result { get; set; }
+
+    private static string GetToolIcon(string toolName) => toolName.ToLowerInvariant() switch
+    {
+        "read" => "📖",
+        "write" => "✏️",
+        "edit" => "📝",
+        "bash" => "💻",
+        "task" => "🤖",
+        "explore" => "🔭",
+        "grep" => "🔍",
+        "glob" => "📁",
+        "webfetch" => "🌐",
+        "websearch" => "🔎",
+        _ => "🔧"
+    };
+
+    private string GetFallbackSummary()
+    {
+        if (string.IsNullOrEmpty(Result?.Text))
+            return "No output";
+
+        var firstLine = Result.Text.Split('\n')[0];
+        return firstLine.Length > 60 ? firstLine[..57] + "..." : firstLine;
+    }
+}

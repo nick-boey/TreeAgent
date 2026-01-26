@@ -3,6 +3,7 @@
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.ClaudeCode.Hubs
+@using Homespun.Features.ClaudeCode.Components.ToolResults
 @using Homespun.Features.Shared.Services
 @using Homespun.Features.SignalR
 @using Microsoft.AspNetCore.Components.Web
@@ -123,9 +124,7 @@
                                                 break;
 
                                             case ClaudeContentType.ToolResult:
-                                                <div class="tool-result-block">
-                                                    <pre class="tool-result">@content.Text</pre>
-                                                </div>
+                                                <ToolResultRenderer Result="content" />
                                                 break;
                                         }
                                     </div>
@@ -339,7 +338,7 @@
         color: var(--text-secondary);
     }
 
-    .tool-use-block, .tool-result-block {
+    .tool-use-block {
         background: var(--bg-tertiary);
         padding: var(--spacing-sm);
         border-radius: var(--radius-sm);
@@ -354,11 +353,7 @@
         margin-bottom: var(--spacing-xs);
     }
 
-    .tool-name {
-        font-weight: 600;
-    }
-
-    .tool-input, .tool-result {
+    .tool-input {
         margin: 0;
         padding: var(--spacing-sm);
         background: var(--bg-primary);
@@ -368,6 +363,405 @@
         word-break: break-word;
         max-height: 200px;
         overflow-y: auto;
+    }
+
+    /* Tool Result Block Styles */
+    .tool-result-block {
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-sm);
+        font-family: monospace;
+        font-size: 0.875rem;
+        overflow: hidden;
+    }
+
+    .tool-result-block.error {
+        border-left: 3px solid var(--status-error);
+    }
+
+    .tool-result-block details {
+        margin: 0;
+    }
+
+    .tool-result-summary {
+        padding: var(--spacing-sm) var(--spacing-md);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+        background: var(--bg-tertiary);
+        user-select: none;
+        list-style: none;
+    }
+
+    .tool-result-summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .tool-result-summary:hover {
+        background: var(--bg-secondary);
+    }
+
+    .tool-result-summary .tool-icon {
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .tool-result-summary .tool-name {
+        font-weight: 600;
+        color: var(--text-primary);
+        flex-shrink: 0;
+    }
+
+    .tool-result-summary .tool-summary {
+        flex: 1;
+        color: var(--text-secondary);
+        font-size: 0.8125rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .tool-result-summary .error-badge {
+        background: var(--status-error);
+        color: white;
+        padding: 0.125rem 0.375rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.6875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        flex-shrink: 0;
+    }
+
+    .tool-result-details {
+        border-top: 1px solid var(--border-color);
+        background: var(--bg-primary);
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .tool-result-block details[open] .tool-result-summary {
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    /* Read Tool Styles */
+    .read-result .file-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: var(--spacing-xs) var(--spacing-sm);
+        background: var(--bg-tertiary);
+        font-size: 0.8125rem;
+    }
+
+    .read-result .file-path {
+        font-family: monospace;
+        color: var(--text-primary);
+    }
+
+    .read-result .line-count {
+        color: var(--text-muted);
+    }
+
+    .read-result .code-content {
+        max-height: 350px;
+        overflow: auto;
+    }
+
+    .read-result .code-block {
+        margin: 0;
+        padding: var(--spacing-sm);
+        font-size: 0.8125rem;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    /* Write Tool Styles */
+    .write-result {
+        display: flex;
+        flex-direction: column;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-sm);
+    }
+
+    .write-result .operation-icon {
+        font-size: 1.25rem;
+    }
+
+    .write-result .operation-details {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-sm);
+    }
+
+    .write-result .file-path {
+        font-family: monospace;
+        font-size: 0.875rem;
+    }
+
+    .write-result .lines-written {
+        color: var(--text-muted);
+        font-size: 0.8125rem;
+    }
+
+    .write-result .operation-message pre {
+        margin: var(--spacing-xs) 0 0;
+        padding: var(--spacing-sm);
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        max-height: 150px;
+        overflow: auto;
+    }
+
+    .write-result.created {
+        border-left: 3px solid var(--status-success);
+        padding-left: calc(var(--spacing-sm) - 3px);
+    }
+
+    .write-result.updated, .write-result.edited, .write-result.written {
+        border-left: 3px solid var(--status-info);
+        padding-left: calc(var(--spacing-sm) - 3px);
+    }
+
+    .write-result.deleted {
+        border-left: 3px solid var(--status-error);
+        padding-left: calc(var(--spacing-sm) - 3px);
+    }
+
+    /* Bash Tool Styles */
+    .bash-result .command-line {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        padding: var(--spacing-xs) var(--spacing-sm);
+        background: var(--bg-tertiary);
+        font-family: monospace;
+        font-size: 0.8125rem;
+    }
+
+    .bash-result .prompt {
+        color: var(--status-success);
+        font-weight: bold;
+    }
+
+    .bash-result .output {
+        margin: 0;
+        padding: var(--spacing-sm);
+        font-size: 0.8125rem;
+        max-height: 300px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .bash-result .error-output {
+        color: var(--status-error);
+        background: rgba(218, 26, 50, 0.1);
+    }
+
+    .bash-result .exit-code {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        background: var(--bg-tertiary);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+
+    /* Agent Tool Styles */
+    .agent-result {
+        padding: var(--spacing-sm);
+    }
+
+    .agent-result h6 {
+        margin: 0 0 var(--spacing-xs);
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+    }
+
+    .agent-result .summary-section p {
+        margin: 0;
+        font-size: 0.875rem;
+    }
+
+    .agent-result .detailed-output {
+        margin-top: var(--spacing-sm);
+    }
+
+    .agent-result .detailed-output summary {
+        cursor: pointer;
+        font-size: 0.8125rem;
+        color: var(--text-muted);
+    }
+
+    .agent-result .detailed-output pre {
+        margin: var(--spacing-xs) 0 0;
+        padding: var(--spacing-sm);
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        max-height: 250px;
+        overflow: auto;
+    }
+
+    .agent-result .files-affected {
+        margin-top: var(--spacing-sm);
+    }
+
+    .agent-result .files-affected ul {
+        margin: 0;
+        padding-left: var(--spacing-lg);
+    }
+
+    .agent-result .files-affected li {
+        font-size: 0.8125rem;
+    }
+
+    /* Grep Tool Styles */
+    .grep-result {
+        padding: var(--spacing-sm);
+    }
+
+    .grep-result .search-pattern {
+        margin-bottom: var(--spacing-xs);
+        font-size: 0.8125rem;
+    }
+
+    .grep-result .search-pattern .label {
+        color: var(--text-muted);
+        margin-right: var(--spacing-xs);
+    }
+
+    .grep-result .match-count {
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .grep-result .matches-list {
+        max-height: 250px;
+        overflow-y: auto;
+    }
+
+    .grep-result .match-item {
+        padding: var(--spacing-xs) 0;
+        border-bottom: 1px solid var(--border-color);
+        font-size: 0.8125rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--spacing-xs);
+    }
+
+    .grep-result .match-item:last-child {
+        border-bottom: none;
+    }
+
+    .grep-result .match-file {
+        color: var(--color-lagoon);
+    }
+
+    .grep-result .match-line {
+        color: var(--text-muted);
+    }
+
+    .grep-result .match-content {
+        color: var(--text-secondary);
+        flex-basis: 100%;
+        padding-left: var(--spacing-sm);
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .grep-result .more-matches {
+        padding: var(--spacing-xs);
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        font-style: italic;
+    }
+
+    /* Glob Tool Styles */
+    .glob-result {
+        padding: var(--spacing-sm);
+    }
+
+    .glob-result .glob-pattern {
+        margin-bottom: var(--spacing-xs);
+        font-size: 0.8125rem;
+    }
+
+    .glob-result .glob-pattern .label {
+        color: var(--text-muted);
+        margin-right: var(--spacing-xs);
+    }
+
+    .glob-result .file-count {
+        font-size: 0.8125rem;
+        color: var(--text-secondary);
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .glob-result .files-list {
+        max-height: 250px;
+        overflow-y: auto;
+    }
+
+    .glob-result .file-item {
+        padding: var(--spacing-xs) 0;
+        font-size: 0.8125rem;
+    }
+
+    .glob-result .more-files {
+        padding: var(--spacing-xs);
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        font-style: italic;
+    }
+
+    /* Web Tool Styles */
+    .web-result {
+        padding: var(--spacing-sm);
+    }
+
+    .web-result .web-url {
+        margin-bottom: var(--spacing-sm);
+        font-size: 0.8125rem;
+    }
+
+    .web-result .web-url .label {
+        color: var(--text-muted);
+        margin-right: var(--spacing-xs);
+    }
+
+    .web-result .web-url a {
+        color: var(--color-lagoon);
+        word-break: break-all;
+    }
+
+    .web-result .web-content pre {
+        margin: 0;
+        padding: var(--spacing-sm);
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-sm);
+        font-size: 0.75rem;
+        max-height: 300px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .web-result.error .web-content pre {
+        color: var(--status-error);
+    }
+
+    /* Generic Result Styles */
+    .generic-result {
+        margin: 0;
+        padding: var(--spacing-sm);
+        font-size: 0.8125rem;
+        max-height: 300px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
     }
 
     .processing-indicator {
