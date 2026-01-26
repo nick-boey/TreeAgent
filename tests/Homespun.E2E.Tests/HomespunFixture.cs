@@ -46,15 +46,23 @@ public class HomespunFixture
             throw new Exception("Could not find Homespun project directory");
         }
 
-        Console.WriteLine($"Starting Homespun application from: {projectDir}");
+        var config = GetBuildConfiguration();
+        var dllPath = GetApplicationDllPath(projectDir, config);
 
-        // Start the application
+        Console.WriteLine("Starting Homespun application");
+        Console.WriteLine($"  Configuration: {config}");
+        Console.WriteLine($"  DLL: {dllPath}");
+        Console.WriteLine($"  Working directory: {projectDir}");
+        Console.WriteLine($"  URL: {BaseUrl}");
+
+        // Start the application by running the compiled DLL directly
+        // (more reliable than `dotnet run --no-build` in CI)
         _appProcess = new Process
         {
             StartInfo = new ProcessStartInfo
             {
                 FileName = "dotnet",
-                Arguments = $"run --no-build --configuration {GetBuildConfiguration()}",
+                Arguments = dllPath,
                 WorkingDirectory = projectDir,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
@@ -82,6 +90,13 @@ public class HomespunFixture
         _appProcess.Start();
         _appProcess.BeginOutputReadLine();
         _appProcess.BeginErrorReadLine();
+
+        // Check for immediate crash
+        await Task.Delay(1000);
+        if (_appProcess.HasExited)
+        {
+            throw new Exception($"Application exited immediately with code {_appProcess.ExitCode}");
+        }
 
         // Wait for the application to start
         await WaitForApplicationAsync(BaseUrl, TimeSpan.FromSeconds(30));
@@ -115,6 +130,20 @@ public class HomespunFixture
             return "Release";
 
         return "Debug";
+    }
+
+    private static string GetApplicationDllPath(string projectDir, string configuration)
+    {
+        var dllPath = Path.Combine(projectDir, "bin", configuration, "net10.0", "Homespun.dll");
+
+        if (!File.Exists(dllPath))
+        {
+            throw new FileNotFoundException(
+                $"Application DLL not found at: {dllPath}. " +
+                $"Ensure the project is built with --configuration {configuration}");
+        }
+
+        return dllPath;
     }
 
     private static string? FindProjectDirectory()
