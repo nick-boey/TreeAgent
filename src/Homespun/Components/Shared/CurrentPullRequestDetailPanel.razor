@@ -1,5 +1,6 @@
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Git
 @using Homespun.Features.GitHub
 @using Homespun.Features.PullRequests.Data
 @using Homespun.Features.PullRequests.Data.Entities
@@ -7,9 +8,12 @@
 @inject IClaudeSessionStore SessionStore
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
+@inject IAgentPromptService AgentPromptService
 @inject PullRequestDataService PullRequestDataService
 @inject IGitHubService GitHubService
+@inject IGitWorktreeService GitWorktreeService
 @inject NavigationManager NavigationManager
+@inject ILogger<CurrentPullRequestDetailPanel> Logger
 
 <div class="card pull-request-detail-panel">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -113,14 +117,7 @@
             }
 
             @* Start/Stop Session - available for all statuses *@
-            @if (StartupTracker.IsStarting(PullRequest.Id))
-            {
-                <button class="btn btn-sm btn-secondary" disabled>
-                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                    Starting Session...
-                </button>
-            }
-            else if (_session != null)
+            @if (_session != null)
             {
                 <a href="/session/@_session.Id" class="btn btn-sm btn-primary">
                     Open Chat
@@ -135,22 +132,16 @@
             }
             else
             {
-                <div class="d-flex flex-column gap-2">
+                <div class="d-flex flex-column gap-2 w-100">
                     <div>
                         <ModelSelector Id="@($"pr-model-{PullRequest.Id}")"
                                        SelectedModel="@_selectedModel"
                                        SelectedModelChanged="OnModelChanged" />
                     </div>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning"
-                                disabled="@StartSessionDisabled" title="Read-only planning session">
-                            Plan
-                        </button>
-                        <button class="btn btn-sm btn-success" @onclick="StartBuilding"
-                                disabled="@StartSessionDisabled" title="Full code editing session">
-                            Build
-                        </button>
-                    </div>
+                    <AgentSelector
+                        Disabled="@StartSessionDisabled"
+                        IsStarting="@StartupTracker.IsStarting(PullRequest.Id)"
+                        OnStart="HandleAgentStart" />
                 </div>
             }
 
@@ -217,50 +208,119 @@
         _selectedModel = modelId;
     }
 
-    private async Task StartPlanning()
+    private async Task HandleAgentStart(AgentPrompt? selectedPrompt)
     {
-        await StartSession(SessionMode.Plan);
+        await StartSession(selectedPrompt);
     }
 
-    private async Task StartBuilding()
+    private async Task StartSession(AgentPrompt? prompt)
     {
-        await StartSession(SessionMode.Build);
-    }
-
-    private async Task StartSession(SessionMode mode)
-    {
-        if (string.IsNullOrEmpty(PullRequest.WorktreePath))
-        {
-            _sessionErrorMessage = "No worktree path available for this pull request.";
-            return;
-        }
-
         StartupTracker.MarkAsStarting(PullRequest.Id);
         _sessionErrorMessage = null;
 
         try
         {
+            var worktreePath = PullRequest.WorktreePath;
+
+            // If no worktree path, try to create one from the branch
+            if (string.IsNullOrEmpty(worktreePath) && !string.IsNullOrEmpty(PullRequest.BranchName) && PullRequest.Project != null)
+            {
+                Logger.LogInformation("No worktree path for PR, checking if branch {BranchName} has a worktree", PullRequest.BranchName);
+
+                // Check if worktree already exists for this branch
+                var worktreeExists = await GitWorktreeService.WorktreeExistsAsync(PullRequest.Project.LocalPath, PullRequest.BranchName);
+
+                if (worktreeExists)
+                {
+                    // Get the worktree path from existing worktrees
+                    var worktrees = await GitWorktreeService.ListWorktreesAsync(PullRequest.Project.LocalPath);
+                    var existingWorktree = worktrees.FirstOrDefault(w => w.Branch == PullRequest.BranchName);
+                    if (existingWorktree != null)
+                    {
+                        worktreePath = existingWorktree.Path;
+                        Logger.LogInformation("Found existing worktree at {WorktreePath}", worktreePath);
+
+                        // Check if there's already a session running in this worktree
+                        var existingSession = SessionStore.GetByEntityId(PullRequest.Id);
+                        if (existingSession != null)
+                        {
+                            _sessionErrorMessage = "A session is already running for this pull request.";
+                            StartupTracker.MarkAsFailed(PullRequest.Id, _sessionErrorMessage);
+                            return;
+                        }
+
+                        // Pull latest changes
+                        Logger.LogInformation("Pulling latest changes to worktree {WorktreePath}", worktreePath);
+                        var pullSuccess = await GitWorktreeService.PullLatestAsync(worktreePath);
+                        if (!pullSuccess)
+                        {
+                            Logger.LogWarning("Failed to pull latest changes, continuing anyway");
+                        }
+                    }
+                }
+                else
+                {
+                    // Create new worktree for the PR branch
+                    Logger.LogInformation("Creating worktree for branch {BranchName}", PullRequest.BranchName);
+                    worktreePath = await GitWorktreeService.CreateWorktreeAsync(
+                        PullRequest.Project.LocalPath,
+                        PullRequest.BranchName,
+                        createBranch: false); // Branch already exists for PRs
+                }
+
+                // Update the PR with the worktree path
+                if (!string.IsNullOrEmpty(worktreePath))
+                {
+                    PullRequest.WorktreePath = worktreePath;
+                    await PullRequestDataService.UpdateWorktreePathAsync(PullRequest.Id, worktreePath);
+                }
+            }
+
+            if (string.IsNullOrEmpty(worktreePath))
+            {
+                _sessionErrorMessage = "Unable to create or find worktree for this pull request.";
+                StartupTracker.MarkAsFailed(PullRequest.Id, _sessionErrorMessage);
+                return;
+            }
+
+            // Use the prompt's mode, or default to Build if no prompt selected
+            var mode = prompt?.Mode ?? SessionMode.Build;
+
             var systemPrompt = GenerateSystemPrompt();
             _session = await SessionService.StartSessionAsync(
                 PullRequest.Id,
                 PullRequest.ProjectId,
-                PullRequest.WorktreePath,
+                worktreePath,
                 mode,
                 _selectedModel,
                 systemPrompt);
 
             StartupTracker.MarkAsStarted(PullRequest.Id);
 
-            // Send an initial message to start the agent working
-            // This way the prompt is visible in the chat and triggers the agent
-            var initialMessage = GenerateInitialMessage(mode);
-            await SessionService.SendMessageAsync(_session.Id, initialMessage);
+            // Send an initial message to start the agent working (if a prompt is selected)
+            if (prompt != null && !string.IsNullOrEmpty(prompt.InitialMessage))
+            {
+                var context = new PromptContext
+                {
+                    Title = PullRequest.Title,
+                    Id = PullRequest.GitHubPRNumber?.ToString() ?? PullRequest.Id,
+                    Description = PullRequest.Description,
+                    Branch = PullRequest.BranchName ?? string.Empty,
+                    Type = "PullRequest"
+                };
+                var initialMessage = AgentPromptService.RenderTemplate(prompt.InitialMessage, context);
+                if (!string.IsNullOrEmpty(initialMessage))
+                {
+                    await SessionService.SendMessageAsync(_session.Id, initialMessage);
+                }
+            }
 
             // Navigate to the session chat page
             NavigationManager.NavigateTo($"/session/{_session.Id}");
         }
         catch (Exception ex)
         {
+            Logger.LogError(ex, "Failed to start session for PR {PullRequestId}", PullRequest.Id);
             StartupTracker.MarkAsFailed(PullRequest.Id, ex.Message);
             _sessionErrorMessage = $"Failed to start session: {ex.Message}";
             _session = null;
@@ -290,44 +350,6 @@
         {
             sb.AppendLine();
             sb.AppendLine($"Linked Issue: {PullRequest.BeadsIssueId}");
-        }
-
-        return sb.ToString();
-    }
-
-    private string GenerateInitialMessage(SessionMode mode)
-    {
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"## Pull Request: {PullRequest.Title}");
-        sb.AppendLine();
-        sb.AppendLine($"**Branch:** {PullRequest.BranchName}");
-
-        if (!string.IsNullOrEmpty(PullRequest.BeadsIssueId))
-        {
-            sb.AppendLine($"**Linked Issue:** {PullRequest.BeadsIssueId}");
-        }
-
-        if (!string.IsNullOrEmpty(PullRequest.Description))
-        {
-            sb.AppendLine();
-            sb.AppendLine("### Description");
-            sb.AppendLine(PullRequest.Description);
-        }
-
-        sb.AppendLine();
-        sb.AppendLine("---");
-        sb.AppendLine();
-
-        if (mode == SessionMode.Plan)
-        {
-            sb.AppendLine("Please analyze this pull request and help plan any needed changes. Consider:");
-            sb.AppendLine("- What changes are included in this PR");
-            sb.AppendLine("- What improvements or fixes might be needed");
-            sb.AppendLine("- Any potential issues or risks");
-        }
-        else
-        {
-            sb.AppendLine("Please help me work on this pull request. Review the current state and help implement any needed changes.");
         }
 
         return sb.ToString();

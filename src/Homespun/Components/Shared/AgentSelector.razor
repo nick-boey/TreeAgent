@@ -1,0 +1,80 @@
+@using Homespun.Features.ClaudeCode.Data
+@using Homespun.Features.ClaudeCode.Services
+
+@inject IAgentPromptService AgentPromptService
+
+<div class="agent-selector">
+    <div class="d-flex gap-2 align-items-end">
+        <div class="flex-grow-1">
+            <label class="form-label small mb-1">Agent</label>
+            <select class="form-select form-select-sm" @bind="_selectedPromptId" disabled="@Disabled">
+                <option value="">None (no prompt)</option>
+                @foreach (var prompt in _prompts)
+                {
+                    <option value="@prompt.Id">@prompt.Name (@prompt.Mode)</option>
+                }
+            </select>
+        </div>
+        <button class="btn btn-sm btn-success" @onclick="HandleStart" disabled="@(Disabled || IsStarting)">
+            @if (IsStarting)
+            {
+                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                <span>Starting...</span>
+            }
+            else
+            {
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" class="me-1">
+                    <path d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393"/>
+                </svg>
+                <span>Start</span>
+            }
+        </button>
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// Whether the selector is disabled.
+    /// </summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>
+    /// Whether a session is currently starting.
+    /// </summary>
+    [Parameter] public bool IsStarting { get; set; }
+
+    /// <summary>
+    /// Callback when the Start button is clicked.
+    /// Passes the selected AgentPrompt (null if "None" is selected).
+    /// </summary>
+    [Parameter] public EventCallback<AgentPrompt?> OnStart { get; set; }
+
+    private IReadOnlyList<AgentPrompt> _prompts = [];
+    private string _selectedPromptId = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Ensure default prompts exist
+        await AgentPromptService.EnsureDefaultPromptsAsync();
+        _prompts = AgentPromptService.GetAllPrompts();
+
+        // Default to "Build" if available
+        var buildPrompt = _prompts.FirstOrDefault(p => p.Name == "Build");
+        if (buildPrompt != null)
+        {
+            _selectedPromptId = buildPrompt.Id;
+        }
+    }
+
+    private async Task HandleStart()
+    {
+        AgentPrompt? selectedPrompt = null;
+
+        if (!string.IsNullOrEmpty(_selectedPromptId))
+        {
+            selectedPrompt = AgentPromptService.GetPrompt(_selectedPromptId);
+        }
+
+        await OnStart.InvokeAsync(selectedPrompt);
+    }
+}

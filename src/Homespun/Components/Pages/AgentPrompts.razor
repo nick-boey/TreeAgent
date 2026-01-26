@@ -1,0 +1,293 @@
+@page "/agents"
+@using Homespun.Features.ClaudeCode.Data
+@using Homespun.Features.ClaudeCode.Services
+@rendermode InteractiveServer
+@inject IAgentPromptService AgentPromptService
+
+<PageTitle>Agents - Homespun</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Agent Prompts</h1>
+    <button class="btn btn-primary" @onclick="ShowAddModal">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="me-1">
+            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+        </svg>
+        Add Agent
+    </button>
+</div>
+
+<p class="text-muted mb-4">
+    Manage custom agent prompts that can be used when starting sessions on issues or pull requests.
+</p>
+
+@if (!_prompts.Any())
+{
+    <div class="alert alert-info">
+        <h5 class="alert-heading">No Agent Prompts</h5>
+        <p class="mb-0">Click "Add Agent" to create your first agent prompt, or default prompts will be created automatically when you start a session.</p>
+    </div>
+}
+else
+{
+    <div class="row">
+        @foreach (var prompt in _prompts)
+        {
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">@prompt.Name</span>
+                        <span class="badge @(prompt.Mode == SessionMode.Plan ? "bg-info" : "bg-success")">
+                            @prompt.Mode
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        @if (!string.IsNullOrEmpty(prompt.InitialMessage))
+                        {
+                            <pre class="prompt-preview mb-0">@TruncateMessage(prompt.InitialMessage)</pre>
+                        }
+                        else
+                        {
+                            <p class="text-muted mb-0"><em>No initial message configured</em></p>
+                        }
+                    </div>
+                    <div class="card-footer d-flex justify-content-end gap-2">
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => ShowEditModal(prompt)">
+                            Edit
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => ShowDeleteConfirmation(prompt)">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (_showModal)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editingPrompt == null ? "Add Agent Prompt" : "Edit Agent Prompt")</h5>
+                    <button type="button" class="btn-close" @onclick="HideModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-control" @bind="_modalName" placeholder="e.g., Plan, Build, Review" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Mode</label>
+                        <select class="form-select" @bind="_modalMode">
+                            <option value="@SessionMode.Plan">Plan (Read-only tools)</option>
+                            <option value="@SessionMode.Build">Build (Full access)</option>
+                        </select>
+                        <div class="form-text">
+                            Plan mode restricts the agent to read-only tools. Build mode allows code editing.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Initial Message Template</label>
+                        <textarea class="form-control font-monospace" rows="12" @bind="_modalMessage"
+                            placeholder="Enter the initial message to send to the agent..."></textarea>
+                        <div class="form-text">
+                            Available placeholders: <code>@("{{title}}")</code>, <code>@("{{id}}")</code>,
+                            <code>@("{{type}}")</code>, <code>@("{{branch}}")</code>, <code>@("{{description}}")</code>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    @if (!string.IsNullOrEmpty(_modalError))
+                    {
+                        <div class="text-danger me-auto">@_modalError</div>
+                    }
+                    <button type="button" class="btn btn-secondary" @onclick="HideModal">Cancel</button>
+                    <button type="button" class="btn btn-primary" @onclick="SavePrompt" disabled="@_isSaving">
+                        @if (_isSaving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Save
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showDeleteConfirmation && _promptToDelete != null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Delete Agent Prompt</h5>
+                    <button type="button" class="btn-close" @onclick="HideDeleteConfirmation"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to delete the agent prompt <strong>"@_promptToDelete.Name"</strong>?</p>
+                    <p class="text-muted mb-0">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="HideDeleteConfirmation">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="DeletePrompt" disabled="@_isDeleting">
+                        @if (_isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .prompt-preview {
+        background-color: var(--bg-secondary, #f8f9fa);
+        padding: 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        max-height: 120px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+    }
+</style>
+
+@code {
+    private IReadOnlyList<AgentPrompt> _prompts = [];
+    private bool _showModal;
+    private bool _showDeleteConfirmation;
+    private bool _isSaving;
+    private bool _isDeleting;
+    private string? _modalError;
+    private AgentPrompt? _editingPrompt;
+    private AgentPrompt? _promptToDelete;
+
+    // Modal form fields
+    private string _modalName = string.Empty;
+    private SessionMode _modalMode = SessionMode.Build;
+    private string _modalMessage = string.Empty;
+
+    protected override void OnInitialized()
+    {
+        RefreshPrompts();
+    }
+
+    private void RefreshPrompts()
+    {
+        _prompts = AgentPromptService.GetAllPrompts();
+    }
+
+    private string TruncateMessage(string message)
+    {
+        const int maxLength = 200;
+        if (message.Length <= maxLength)
+            return message;
+        return message[..maxLength] + "...";
+    }
+
+    private void ShowAddModal()
+    {
+        _editingPrompt = null;
+        _modalName = string.Empty;
+        _modalMode = SessionMode.Build;
+        _modalMessage = string.Empty;
+        _modalError = null;
+        _showModal = true;
+    }
+
+    private void ShowEditModal(AgentPrompt prompt)
+    {
+        _editingPrompt = prompt;
+        _modalName = prompt.Name;
+        _modalMode = prompt.Mode;
+        _modalMessage = prompt.InitialMessage ?? string.Empty;
+        _modalError = null;
+        _showModal = true;
+    }
+
+    private void HideModal()
+    {
+        _showModal = false;
+        _editingPrompt = null;
+        _modalError = null;
+    }
+
+    private async Task SavePrompt()
+    {
+        if (string.IsNullOrWhiteSpace(_modalName))
+        {
+            _modalError = "Name is required.";
+            return;
+        }
+
+        _isSaving = true;
+        _modalError = null;
+
+        try
+        {
+            if (_editingPrompt == null)
+            {
+                await AgentPromptService.CreatePromptAsync(
+                    _modalName.Trim(),
+                    string.IsNullOrWhiteSpace(_modalMessage) ? null : _modalMessage,
+                    _modalMode);
+            }
+            else
+            {
+                await AgentPromptService.UpdatePromptAsync(
+                    _editingPrompt.Id,
+                    _modalName.Trim(),
+                    string.IsNullOrWhiteSpace(_modalMessage) ? null : _modalMessage,
+                    _modalMode);
+            }
+
+            RefreshPrompts();
+            HideModal();
+        }
+        catch (Exception ex)
+        {
+            _modalError = ex.Message;
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void ShowDeleteConfirmation(AgentPrompt prompt)
+    {
+        _promptToDelete = prompt;
+        _showDeleteConfirmation = true;
+    }
+
+    private void HideDeleteConfirmation()
+    {
+        _showDeleteConfirmation = false;
+        _promptToDelete = null;
+    }
+
+    private async Task DeletePrompt()
+    {
+        if (_promptToDelete == null) return;
+
+        _isDeleting = true;
+        try
+        {
+            await AgentPromptService.DeletePromptAsync(_promptToDelete.Id);
+            RefreshPrompts();
+            HideDeleteConfirmation();
+        }
+        finally
+        {
+            _isDeleting = false;
+        }
+    }
+}
