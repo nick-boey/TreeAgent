@@ -88,6 +88,13 @@ else
                                 </select>
                             </div>
                         </div>
+
+                        <div class="mb-3">
+                            <label for="group" class="form-label">Group</label>
+                            <input type="text" class="form-control" id="group"
+                                   @bind="_group"
+                                   placeholder="Optional group for categorization (e.g., core, api, ui)" />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -96,6 +103,13 @@ else
                 <div class="card mb-3">
                     <div class="card-header">Branch Information</div>
                     <div class="card-body">
+                        <div class="mb-3">
+                            <label for="workingBranchId" class="form-label">Working Branch ID</label>
+                            <input type="text" class="form-control" id="workingBranchId"
+                                   @bind="_workingBranchId"
+                                   placeholder="Custom branch identifier" />
+                            <div class="form-text">Leave empty to auto-generate from title</div>
+                        </div>
                         <div class="p-2 bg-light rounded small">
                             <strong>Branch Preview:</strong><br/>
                             <code>@GetBranchPreview()</code>
@@ -174,6 +188,8 @@ else
     private IssueType _type = IssueType.Feature;
     private IssueStatus _status = IssueStatus.Idea;
     private string _priority = "";
+    private string _group = "";
+    private string _workingBranchId = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -228,6 +244,8 @@ else
         _type = _issue.Type;
         _status = _issue.Status;
         _priority = _issue.Priority?.ToString() ?? "";
+        _group = _issue.Group ?? "";
+        _workingBranchId = _issue.WorkingBranchId ?? "";
     }
 
     private async Task HandleSubmit()
@@ -263,6 +281,8 @@ else
             var typeToUpdate = _type != _issue.Type ? _type : (IssueType?)null;
             var statusToUpdate = _status != _issue.Status ? _status : (IssueStatus?)null;
             var priorityToUpdate = priority != _issue.Priority ? priority : null;
+            var groupToUpdate = _group.Trim() != (_issue.Group ?? "") ? _group.Trim() : null;
+            var workingBranchIdToUpdate = _workingBranchId.Trim() != (_issue.WorkingBranchId ?? "") ? _workingBranchId.Trim() : null;
 
             // Perform update
             var updated = await FleeceService.UpdateIssueAsync(
@@ -272,7 +292,9 @@ else
                 status: statusToUpdate,
                 type: typeToUpdate,
                 description: descToUpdate,
-                priority: priorityToUpdate);
+                priority: priorityToUpdate,
+                group: groupToUpdate,
+                workingBranchId: workingBranchIdToUpdate);
 
             if (updated == null)
             {
@@ -307,7 +329,16 @@ else
     private string GetBranchPreview()
     {
         var type = _type.ToString().ToLowerInvariant();
-        var branchId = SanitizeForBranch(_title);
+        // Use working branch ID if set, otherwise generate from title
+        var branchId = !string.IsNullOrWhiteSpace(_workingBranchId)
+            ? _workingBranchId.Trim()
+            : SanitizeForBranch(_title);
+
+        // If group is set, use group-based format; otherwise use issues/ prefix
+        if (!string.IsNullOrWhiteSpace(_group))
+        {
+            return $"{_group.Trim()}/{type}/{branchId}+{IssueId}";
+        }
 
         return $"issues/{type}/{branchId}+{IssueId}";
     }

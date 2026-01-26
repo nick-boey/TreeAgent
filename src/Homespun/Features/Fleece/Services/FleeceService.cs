@@ -143,6 +143,8 @@ public sealed class FleeceService : IFleeceService, IDisposable
         IssueType? type = null,
         string? description = null,
         int? priority = null,
+        string? group = null,
+        string? workingBranchId = null,
         CancellationToken ct = default)
     {
         var service = GetOrCreateIssueService(projectPath);
@@ -156,6 +158,8 @@ public sealed class FleeceService : IFleeceService, IDisposable
                 type: type,
                 description: description,
                 priority: priority,
+                group: group,
+                workingBranchId: workingBranchId,
                 cancellationToken: ct);
 
             var changes = new List<string>();
@@ -164,6 +168,8 @@ public sealed class FleeceService : IFleeceService, IDisposable
             if (type != null) changes.Add($"type={type}");
             if (description != null) changes.Add("description updated");
             if (priority != null) changes.Add($"priority={priority}");
+            if (group != null) changes.Add($"group='{group}'");
+            if (workingBranchId != null) changes.Add($"workingBranchId='{workingBranchId}'");
 
             _logger.LogInformation(
                 "Updated issue '{IssueId}': {Changes}",
