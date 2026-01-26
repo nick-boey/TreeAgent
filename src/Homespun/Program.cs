@@ -10,6 +10,7 @@ using Homespun.Features.Notifications;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
+using Homespun.Features.Shared.Services;
 using Homespun.Features.SignalR;
 using Homespun.Components;
 using Microsoft.AspNetCore.DataProtection;
@@ -64,6 +65,9 @@ builder.Services.AddScoped<PullRequestWorkflowService>();
 // Fleece services (file-based issue tracking)
 builder.Services.AddSingleton<IFleeceService, FleeceService>();
 builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
+
+// Markdown rendering service
+builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
 
 // Gitgraph services
 builder.Services.AddScoped<IGraphService, GraphService>();

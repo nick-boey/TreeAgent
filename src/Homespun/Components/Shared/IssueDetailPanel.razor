@@ -5,6 +5,7 @@
 @using Homespun.Features.Git
 @using Homespun.Features.Projects
 @using Homespun.Features.PullRequests.Data.Entities
+@using Homespun.Features.Shared.Services
 
 @inject IClaudeSessionStore SessionStore
 @inject IClaudeSessionService SessionService
@@ -14,6 +15,7 @@
 @inject ProjectService ProjectService
 @inject NavigationManager NavigationManager
 @inject ILogger<IssueDetailPanel> Logger
+@inject IMarkdownRenderingService MarkdownService
 
 <div class="card issue-detail-panel">
     <div class="card-header d-flex justify-content-between align-items-center">
@@ -58,8 +60,8 @@
 
             @if (!string.IsNullOrEmpty(Issue.Description))
             {
-                <div class="description-content mb-3">
-                    <pre class="mb-0">@Issue.Description</pre>
+                <div class="description-content markdown-content mb-3">
+                    @((MarkupString)MarkdownService.RenderToHtml(Issue.Description))
                 </div>
             }
 
@@ -192,18 +194,6 @@
         }
 </div>
 
-<style>
-    .description-content pre {
-        background-color: var(--bg-secondary);
-        padding: var(--spacing-sm);
-        border-radius: var(--radius-sm);
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        font-size: 0.85rem;
-        max-height: 200px;
-        overflow-y: auto;
-    }
-</style>
 
 @code {
     [Parameter] public required string ProjectId { get; set; }

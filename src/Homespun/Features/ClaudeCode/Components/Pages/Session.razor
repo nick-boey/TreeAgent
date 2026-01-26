@@ -3,6 +3,7 @@
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.ClaudeCode.Hubs
+@using Homespun.Features.Shared.Services
 @using Homespun.Features.SignalR
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.SignalR.Client
@@ -14,6 +15,7 @@
 @inject ISignalRUrlProvider SignalRUrlProvider
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
+@inject IMarkdownRenderingService MarkdownService
 
 <PageTitle>Session - Homespun</PageTitle>
 
@@ -69,8 +71,8 @@
                                         @switch (content.Type)
                                         {
                                             case ClaudeContentType.Text:
-                                                <div class="text-content">
-                                                    @content.Text
+                                                <div class="text-content markdown-content">
+                                                    @((MarkupString)MarkdownService.RenderToHtml(content.Text))
                                                     @if (content.IsStreaming)
                                                     {
                                                         <span class="streaming-cursor">▌</span>
