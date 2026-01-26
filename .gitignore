@@ -10,6 +10,9 @@
 # Claude Code temp files
 tmpclaude-*
 
+# Serena cache files
+.serena/cache/
+
 # Test agent artifacts (HTTP header files from curl testing)
 Accept:
 GET
