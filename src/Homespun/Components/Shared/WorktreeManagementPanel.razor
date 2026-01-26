@@ -1,0 +1,817 @@
+@using Homespun.Features.ClaudeCode.Data
+@using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Git
+@using Homespun.Features.GitHub
+@using Homespun.Features.Projects
+@using Homespun.Features.PullRequests
+@using Homespun.Features.PullRequests.Data
+@using Homespun.Features.PullRequests.Data.Entities
+
+@inject IGitWorktreeService GitWorktreeService
+@inject IClaudeSessionStore SessionStore
+@inject IClaudeSessionService SessionService
+@inject IAgentStartupTracker StartupTracker
+@inject IGitHubService GitHubService
+@inject PullRequestDataService PullRequestDataService
+@inject NavigationManager NavigationManager
+@inject ILogger<WorktreeManagementPanel> Logger
+
+<div class="worktree-management-panel">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">Worktrees &amp; Branches</h4>
+        <div class="btn-group">
+            <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshDataAsync" disabled="@_isLoading">
+                @if (_isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                }
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" @onclick="FetchAllAsync" disabled="@_isFetching">
+                @if (_isFetching)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                }
+                <i class="bi bi-cloud-download"></i> Fetch
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @_errorMessage
+            <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_successMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @_successMessage
+            <button type="button" class="btn-close" @onclick="() => _successMessage = null"></button>
+        </div>
+    }
+
+    @* Active Worktrees Section *@
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Active Worktrees</span>
+            <span class="badge bg-secondary">@_worktrees.Count</span>
+        </div>
+        <div class="card-body p-0">
+            @if (_worktrees.Count == 0)
+            {
+                <div class="text-muted p-3">No active worktrees</div>
+            }
+            else
+            {
+                <div class="list-group list-group-flush">
+                    @foreach (var worktree in _worktrees.Where(w => !w.IsBare))
+                    {
+                        var branchName = GetShortBranchName(worktree.Branch);
+                        var branchInfo = _branches.FirstOrDefault(b => b.ShortName == branchName);
+                        var session = GetSessionForWorktree(worktree);
+                        var prInfo = GetPullRequestForBranch(branchName);
+
+                        <div class="list-group-item worktree-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div class="worktree-info flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 mb-1">
+                                        <strong class="branch-name">@branchName</strong>
+                                        @if (IsDefaultBranch(branchName))
+                                        {
+                                            <span class="badge bg-primary">default</span>
+                                        }
+                                        @if (branchInfo?.IsMerged == true)
+                                        {
+                                            <span class="badge bg-success">merged</span>
+                                        }
+                                        @if (prInfo != null)
+                                        {
+                                            <a href="https://github.com/@Project.GitHubOwner/@Project.GitHubRepo/pull/@prInfo.GitHubPRNumber"
+                                               target="_blank"
+                                               class="badge bg-info text-decoration-none">
+                                                PR #@prInfo.GitHubPRNumber
+                                            </a>
+                                        }
+                                        @if (session != null)
+                                        {
+                                            <span class="badge @GetSessionStatusBadgeClass(session.Status)">
+                                                @session.Status
+                                            </span>
+                                        }
+                                        @if (StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))
+                                        {
+                                            <span class="badge bg-warning text-dark">
+                                                <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                                                Starting...
+                                            </span>
+                                        }
+                                    </div>
+                                    <div class="text-muted small">
+                                        <code class="worktree-path">@worktree.Path</code>
+                                    </div>
+                                    @if (branchInfo != null)
+                                    {
+                                        <div class="text-muted small mt-1">
+                                            @if (branchInfo.AheadCount > 0 || branchInfo.BehindCount > 0)
+                                            {
+                                                @if (branchInfo.AheadCount > 0)
+                                                {
+                                                    <span class="text-success me-2">+@branchInfo.AheadCount ahead</span>
+                                                }
+                                                @if (branchInfo.BehindCount > 0)
+                                                {
+                                                    <span class="text-danger">-@branchInfo.BehindCount behind</span>
+                                                }
+                                            }
+                                            @if (!string.IsNullOrEmpty(branchInfo.LastCommitMessage))
+                                            {
+                                                <div class="commit-message mt-1">@TruncateMessage(branchInfo.LastCommitMessage)</div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                                <div class="worktree-actions">
+                                    @if (!IsDefaultBranch(branchName))
+                                    {
+                                        @if (session != null)
+                                        {
+                                            <a href="/session/@session.Id" class="btn btn-sm btn-primary me-1" title="Open chat">
+                                                Chat
+                                            </a>
+                                            <button class="btn btn-sm btn-outline-danger me-1"
+                                                    @onclick="() => StopSessionAsync(session)"
+                                                    disabled="@_operationInProgress"
+                                                    title="Stop session">
+                                                Stop
+                                            </button>
+                                        }
+                                        else if (!StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))
+                                        {
+                                            <button class="btn btn-sm btn-outline-primary me-1"
+                                                    @onclick="() => StartSessionAsync(worktree, SessionMode.Plan)"
+                                                    disabled="@_operationInProgress"
+                                                    title="Start planning session">
+                                                Plan
+                                            </button>
+                                            <button class="btn btn-sm btn-success me-1"
+                                                    @onclick="() => StartSessionAsync(worktree, SessionMode.Build)"
+                                                    disabled="@_operationInProgress"
+                                                    title="Start building session">
+                                                Build
+                                            </button>
+                                        }
+
+                                        @if (branchInfo?.BehindCount > 0)
+                                        {
+                                            <button class="btn btn-sm btn-outline-secondary me-1"
+                                                    @onclick="() => PullLatestAsync(worktree)"
+                                                    disabled="@_operationInProgress"
+                                                    title="Pull latest changes">
+                                                Pull
+                                            </button>
+                                        }
+
+                                        <button class="btn btn-sm btn-outline-danger"
+                                                @onclick="() => ShowDeleteWorktreeConfirmation(worktree, branchInfo)"
+                                                disabled="@_operationInProgress"
+                                                title="Delete worktree">
+                                            Delete
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @* Local Branches Without Worktrees *@
+    @{
+        var branchesWithoutWorktrees = _branches.Where(b => !b.HasWorktree && !IsDefaultBranch(b.ShortName)).ToList();
+    }
+    @if (branchesWithoutWorktrees.Any())
+    {
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Local Branches (No Worktree)</span>
+                <span class="badge bg-secondary">@branchesWithoutWorktrees.Count</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    @foreach (var branch in branchesWithoutWorktrees)
+                    {
+                        var prInfo = GetPullRequestForBranch(branch.ShortName);
+
+                        <div class="list-group-item branch-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="branch-info">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <strong>@branch.ShortName</strong>
+                                        @if (branch.IsMerged)
+                                        {
+                                            <span class="badge bg-success">merged</span>
+                                        }
+                                        @if (prInfo != null)
+                                        {
+                                            <a href="https://github.com/@Project.GitHubOwner/@Project.GitHubRepo/pull/@prInfo.GitHubPRNumber"
+                                               target="_blank"
+                                               class="badge bg-info text-decoration-none">
+                                                PR #@prInfo.GitHubPRNumber
+                                            </a>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(branch.LastCommitMessage))
+                                    {
+                                        <div class="text-muted small">@TruncateMessage(branch.LastCommitMessage)</div>
+                                    }
+                                </div>
+                                <div class="branch-actions">
+                                    <button class="btn btn-sm btn-outline-primary me-1"
+                                            @onclick="() => CreateWorktreeForBranchAsync(branch.ShortName)"
+                                            disabled="@_operationInProgress"
+                                            title="Create worktree for this branch">
+                                        Start
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => ShowDeleteBranchConfirmation(branch)"
+                                            disabled="@_operationInProgress"
+                                            title="Delete branch">
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Remote Branches Section *@
+    @if (_remoteBranches.Any())
+    {
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Remote Branches (Not Local)</span>
+                <span class="badge bg-secondary">@_remoteBranches.Count</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="list-group list-group-flush">
+                    @foreach (var remoteBranch in _remoteBranches)
+                    {
+                        <div class="list-group-item branch-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="branch-info">
+                                    <strong>origin/@remoteBranch</strong>
+                                </div>
+                                <div class="branch-actions">
+                                    <button class="btn btn-sm btn-outline-primary"
+                                            @onclick="() => CreateWorktreeFromRemoteAsync(remoteBranch)"
+                                            disabled="@_operationInProgress"
+                                            title="Create local worktree from remote branch">
+                                        Checkout
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@* Delete Confirmation Modal *@
+@if (_showDeleteConfirmation)
+{
+    <div class="modal-backdrop fade show" style="background-color: rgba(0,0,0,0.5);"></div>
+    <div class="modal fade show d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@_deleteModalTitle</h5>
+                    <button type="button" class="btn-close" @onclick="HideDeleteConfirmation"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_deleteTargetIsMerged)
+                    {
+                        <p>Are you sure you want to delete <strong>@_deleteTargetName</strong>?</p>
+                        <p class="text-muted mb-0">This branch has been merged and is safe to delete.</p>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            <strong>Warning:</strong> This branch has <strong>not been merged</strong> into the default branch.
+                        </div>
+                        <p>Are you sure you want to delete <strong>@_deleteTargetName</strong>?</p>
+                        <p class="text-danger mb-0">You may lose uncommitted or unpushed changes.</p>
+                    }
+
+                    @if (_deleteIncludesWorktree)
+                    {
+                        <hr />
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="deleteWorktreeOnly" @bind="_deleteWorktreeOnly">
+                            <label class="form-check-label" for="deleteWorktreeOnly">
+                                Delete worktree only (keep branch)
+                            </label>
+                        </div>
+                    }
+
+                    @if (_hasRemoteBranch && !_deleteWorktreeOnly)
+                    {
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="deleteRemote" @bind="_deleteRemoteBranch">
+                            <label class="form-check-label" for="deleteRemote">
+                                Also delete remote branch
+                            </label>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="HideDeleteConfirmation">Cancel</button>
+                    <button type="button" class="btn btn-danger" @onclick="ExecuteDeleteAsync" disabled="@_operationInProgress">
+                        @if (_operationInProgress)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        }
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .worktree-management-panel {
+        font-size: 0.875rem;
+    }
+
+    .worktree-item, .branch-item {
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+
+    .branch-name {
+        font-family: var(--font-family-mono, monospace);
+    }
+
+    .worktree-path {
+        font-size: 0.75rem;
+        word-break: break-all;
+    }
+
+    .commit-message {
+        font-style: italic;
+        max-width: 400px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .worktree-actions, .branch-actions {
+        flex-shrink: 0;
+        white-space: nowrap;
+    }
+
+    .list-group-item:hover {
+        background-color: var(--bg-hover, #f8f9fa);
+    }
+</style>
+
+@code {
+    [Parameter] public required Project Project { get; set; }
+    [Parameter] public EventCallback OnDataChanged { get; set; }
+
+    private List<WorktreeInfo> _worktrees = [];
+    private List<BranchInfo> _branches = [];
+    private List<string> _remoteBranches = [];
+    private List<PullRequest> _pullRequests = [];
+    private bool _isLoading;
+    private bool _isFetching;
+    private bool _operationInProgress;
+    private string? _errorMessage;
+    private string? _successMessage;
+
+    // Delete confirmation state
+    private bool _showDeleteConfirmation;
+    private string _deleteModalTitle = "Confirm Delete";
+    private string _deleteTargetName = "";
+    private bool _deleteTargetIsMerged;
+    private bool _deleteIncludesWorktree;
+    private bool _deleteWorktreeOnly;
+    private bool _deleteRemoteBranch;
+    private bool _hasRemoteBranch;
+    private WorktreeInfo? _deleteTargetWorktree;
+    private BranchInfo? _deleteTargetBranch;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshDataAsync();
+    }
+
+    private async Task RefreshDataAsync()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            // Load worktrees
+            _worktrees = await GitWorktreeService.ListWorktreesAsync(Project.LocalPath);
+
+            // Load local branches with their info
+            _branches = await GitWorktreeService.ListLocalBranchesAsync(Project.LocalPath);
+
+            // Check merge status for each branch
+            foreach (var branch in _branches.Where(b => !IsDefaultBranch(b.ShortName)))
+            {
+                branch.IsMerged = await GitWorktreeService.IsBranchMergedAsync(
+                    Project.LocalPath,
+                    branch.ShortName,
+                    Project.DefaultBranch);
+            }
+
+            // Load remote-only branches
+            _remoteBranches = await GitWorktreeService.ListRemoteOnlyBranchesAsync(Project.LocalPath);
+
+            // Load pull requests for this project
+            _pullRequests = await PullRequestDataService.GetByProjectIdAsync(Project.Id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load worktree data for project {ProjectId}", Project.Id);
+            _errorMessage = $"Failed to load data: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task FetchAllAsync()
+    {
+        _isFetching = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var success = await GitWorktreeService.FetchAllAsync(Project.LocalPath);
+            if (success)
+            {
+                _successMessage = "Fetched latest changes from remote";
+                await RefreshDataAsync();
+            }
+            else
+            {
+                _errorMessage = "Failed to fetch from remote";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to fetch: {ex.Message}";
+        }
+        finally
+        {
+            _isFetching = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task PullLatestAsync(WorktreeInfo worktree)
+    {
+        _operationInProgress = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var success = await GitWorktreeService.PullLatestAsync(worktree.Path);
+            if (success)
+            {
+                _successMessage = $"Pulled latest changes for {GetShortBranchName(worktree.Branch)}";
+                await RefreshDataAsync();
+            }
+            else
+            {
+                _errorMessage = "Failed to pull latest changes";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to pull: {ex.Message}";
+        }
+        finally
+        {
+            _operationInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CreateWorktreeForBranchAsync(string branchName)
+    {
+        _operationInProgress = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var worktreePath = await GitWorktreeService.CreateWorktreeAsync(
+                Project.LocalPath,
+                branchName,
+                createBranch: false);
+
+            if (!string.IsNullOrEmpty(worktreePath))
+            {
+                _successMessage = $"Created worktree for {branchName}";
+                await RefreshDataAsync();
+                await OnDataChanged.InvokeAsync();
+            }
+            else
+            {
+                _errorMessage = $"Failed to create worktree for {branchName}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to create worktree: {ex.Message}";
+        }
+        finally
+        {
+            _operationInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CreateWorktreeFromRemoteAsync(string remoteBranch)
+    {
+        _operationInProgress = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            // First create the local branch from remote
+            var branchCreated = await GitWorktreeService.CreateLocalBranchFromRemoteAsync(
+                Project.LocalPath,
+                remoteBranch);
+
+            if (!branchCreated)
+            {
+                _errorMessage = $"Failed to create local branch from origin/{remoteBranch}";
+                return;
+            }
+
+            // Then create the worktree
+            var worktreePath = await GitWorktreeService.CreateWorktreeAsync(
+                Project.LocalPath,
+                remoteBranch,
+                createBranch: false);
+
+            if (!string.IsNullOrEmpty(worktreePath))
+            {
+                _successMessage = $"Created worktree for {remoteBranch}";
+                await RefreshDataAsync();
+                await OnDataChanged.InvokeAsync();
+            }
+            else
+            {
+                _errorMessage = $"Failed to create worktree for {remoteBranch}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to checkout remote branch: {ex.Message}";
+        }
+        finally
+        {
+            _operationInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StartSessionAsync(WorktreeInfo worktree, SessionMode mode)
+    {
+        var entityId = GetWorktreeEntityId(worktree);
+        var branchName = GetShortBranchName(worktree.Branch);
+
+        StartupTracker.MarkAsStarting(entityId);
+        StateHasChanged();
+
+        try
+        {
+            var session = await SessionService.StartSessionAsync(
+                entityId,
+                Project.Id,
+                worktree.Path,
+                mode,
+                Project.DefaultModel ?? "sonnet",
+                systemPrompt: $"You are working on branch: {branchName}");
+
+            StartupTracker.MarkAsStarted(entityId);
+
+            // Navigate to the session
+            NavigationManager.NavigateTo($"/session/{session.Id}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start session for worktree {WorktreePath}", worktree.Path);
+            StartupTracker.MarkAsFailed(entityId, ex.Message);
+            _errorMessage = $"Failed to start session: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private async Task StopSessionAsync(ClaudeSession session)
+    {
+        _operationInProgress = true;
+        StateHasChanged();
+
+        try
+        {
+            await SessionService.StopSessionAsync(session.Id);
+            _successMessage = "Session stopped";
+            await RefreshDataAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to stop session: {ex.Message}";
+        }
+        finally
+        {
+            _operationInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ShowDeleteWorktreeConfirmation(WorktreeInfo worktree, BranchInfo? branchInfo)
+    {
+        var branchName = GetShortBranchName(worktree.Branch);
+        _deleteModalTitle = "Delete Worktree";
+        _deleteTargetName = branchName;
+        _deleteTargetIsMerged = branchInfo?.IsMerged ?? false;
+        _deleteIncludesWorktree = true;
+        _deleteWorktreeOnly = false;
+        _deleteRemoteBranch = false;
+        _hasRemoteBranch = branchInfo?.Upstream != null;
+        _deleteTargetWorktree = worktree;
+        _deleteTargetBranch = branchInfo;
+        _showDeleteConfirmation = true;
+    }
+
+    private void ShowDeleteBranchConfirmation(BranchInfo branch)
+    {
+        _deleteModalTitle = "Delete Branch";
+        _deleteTargetName = branch.ShortName;
+        _deleteTargetIsMerged = branch.IsMerged;
+        _deleteIncludesWorktree = false;
+        _deleteWorktreeOnly = false;
+        _deleteRemoteBranch = false;
+        _hasRemoteBranch = branch.Upstream != null;
+        _deleteTargetWorktree = null;
+        _deleteTargetBranch = branch;
+        _showDeleteConfirmation = true;
+    }
+
+    private void HideDeleteConfirmation()
+    {
+        _showDeleteConfirmation = false;
+        _deleteTargetWorktree = null;
+        _deleteTargetBranch = null;
+    }
+
+    private async Task ExecuteDeleteAsync()
+    {
+        _operationInProgress = true;
+        StateHasChanged();
+
+        try
+        {
+            var branchName = _deleteTargetBranch?.ShortName ?? GetShortBranchName(_deleteTargetWorktree?.Branch);
+
+            // Stop any active session first
+            if (_deleteTargetWorktree != null)
+            {
+                var session = GetSessionForWorktree(_deleteTargetWorktree);
+                if (session != null)
+                {
+                    await SessionService.StopSessionAsync(session.Id);
+                }
+
+                // Remove the worktree
+                var worktreeRemoved = await GitWorktreeService.RemoveWorktreeAsync(
+                    Project.LocalPath,
+                    _deleteTargetWorktree.Path);
+
+                if (!worktreeRemoved)
+                {
+                    _errorMessage = "Failed to remove worktree";
+                    return;
+                }
+            }
+
+            // Delete the branch if not worktree-only
+            if (!_deleteWorktreeOnly && !string.IsNullOrEmpty(branchName))
+            {
+                var forceDelete = !_deleteTargetIsMerged;
+                var branchDeleted = await GitWorktreeService.DeleteLocalBranchAsync(
+                    Project.LocalPath,
+                    branchName,
+                    force: forceDelete);
+
+                if (!branchDeleted)
+                {
+                    _errorMessage = $"Failed to delete local branch {branchName}";
+                    return;
+                }
+
+                // Delete remote branch if requested
+                if (_deleteRemoteBranch)
+                {
+                    var remoteDeleted = await GitWorktreeService.DeleteRemoteBranchAsync(
+                        Project.LocalPath,
+                        branchName);
+
+                    if (!remoteDeleted)
+                    {
+                        _errorMessage = $"Failed to delete remote branch {branchName}";
+                        return;
+                    }
+                }
+            }
+
+            _successMessage = _deleteWorktreeOnly
+                ? $"Removed worktree for {branchName}"
+                : $"Deleted {branchName}" + (_deleteRemoteBranch ? " (local and remote)" : " (local)");
+
+            HideDeleteConfirmation();
+            await RefreshDataAsync();
+            await OnDataChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Delete failed: {ex.Message}";
+        }
+        finally
+        {
+            _operationInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    private ClaudeSession? GetSessionForWorktree(WorktreeInfo worktree)
+    {
+        var entityId = GetWorktreeEntityId(worktree);
+        return SessionStore.GetByEntityId(entityId);
+    }
+
+    private string GetWorktreeEntityId(WorktreeInfo worktree)
+    {
+        // Use the branch name as the entity ID for session tracking
+        var branchName = GetShortBranchName(worktree.Branch);
+        return $"worktree:{branchName}";
+    }
+
+    private PullRequest? GetPullRequestForBranch(string? branchName)
+    {
+        if (string.IsNullOrEmpty(branchName)) return null;
+        return _pullRequests.FirstOrDefault(pr => pr.BranchName == branchName);
+    }
+
+    private static string GetShortBranchName(string? branch)
+    {
+        if (string.IsNullOrEmpty(branch)) return "unknown";
+        return branch.Replace("refs/heads/", "");
+    }
+
+    private bool IsDefaultBranch(string? branchName)
+    {
+        if (string.IsNullOrEmpty(branchName)) return false;
+        return branchName == Project.DefaultBranch;
+    }
+
+    private static string TruncateMessage(string? message, int maxLength = 60)
+    {
+        if (string.IsNullOrEmpty(message)) return "";
+        return message.Length <= maxLength ? message : message[..(maxLength - 3)] + "...";
+    }
+
+    private static string GetSessionStatusBadgeClass(ClaudeSessionStatus status) => status switch
+    {
+        ClaudeSessionStatus.Running => "bg-success",
+        ClaudeSessionStatus.Processing => "bg-primary",
+        ClaudeSessionStatus.WaitingForInput => "bg-info",
+        ClaudeSessionStatus.Starting => "bg-warning text-dark",
+        ClaudeSessionStatus.Stopped => "bg-secondary",
+        ClaudeSessionStatus.Error => "bg-danger",
+        _ => "bg-secondary"
+    };
+}

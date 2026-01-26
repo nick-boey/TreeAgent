@@ -1,4 +1,5 @@
 @page "/projects/{Id}"
+@page "/projects/{Id}/branches"
 @implements IDisposable
 @using Fleece.Core.Models
 @using Homespun.Features.ClaudeCode.Data
@@ -33,29 +34,51 @@
 }
 else
 {
-    <div class="project-layout">
-        <div class="timeline-column">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h1>@_project.Name</h1>
-                <div class="btn-group">
-                    <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshData" disabled="@_isRefreshing">
-                        @if (_isRefreshing)
-                        {
-                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                        }
-                        <i class="bi bi-arrow-clockwise"></i> Refresh
-                    </button>
-                    <a href="projects/@Id/edit" class="btn btn-outline-secondary btn-sm">Edit Project</a>
-                </div>
-            </div>
-
-            <GitgraphVisualization
-                @ref="_graphVisualization"
-                ProjectId="@Id"
-                OnPullRequestClick="@SelectPullRequestByNumber"
-                OnIssueClick="@SelectIssue"
-                SelectedNodeId="@GetSelectedNodeId()" />
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>@_project.Name</h1>
+        <div class="btn-group">
+            <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshData" disabled="@_isRefreshing">
+                @if (_isRefreshing)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                }
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+            <a href="projects/@Id/edit" class="btn btn-outline-secondary btn-sm">Edit Project</a>
         </div>
+    </div>
+
+    @* Tab Navigation *@
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "issues" ? "active" : "")"
+               href="/projects/@Id"
+               @onclick="SwitchToIssuesTab"
+               @onclick:preventDefault>
+                <i class="bi bi-kanban me-1"></i>Issues
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link @(_activeTab == "branches" ? "active" : "")"
+               href="/projects/@Id/branches"
+               @onclick="SwitchToBranchesTab"
+               @onclick:preventDefault>
+                <i class="bi bi-diagram-2 me-1"></i>Branches
+            </a>
+        </li>
+    </ul>
+
+    @if (_activeTab == "issues")
+    {
+        <div class="project-layout">
+            <div class="timeline-column">
+                <GitgraphVisualization
+                    @ref="_graphVisualization"
+                    ProjectId="@Id"
+                    OnPullRequestClick="@SelectPullRequestByNumber"
+                    OnIssueClick="@SelectIssue"
+                    SelectedNodeId="@GetSelectedNodeId()" />
+            </div>
 
         <div class="detail-column">
             @if (_selectedPullRequest != null)
@@ -154,10 +177,16 @@ else
         </div>
     </div>
 
-    <QuickIssueCreateBar ProjectId="@Id"
-                         LocalPath="@_project.LocalPath"
-                         OnIssueCreated="RefreshData"
-                         OnIssueCreatedForEdit="NavigateToIssueEdit"/>
+        <QuickIssueCreateBar ProjectId="@Id"
+                             LocalPath="@_project.LocalPath"
+                             OnIssueCreated="RefreshData"
+                             OnIssueCreatedForEdit="NavigateToIssueEdit"/>
+    }
+    else if (_activeTab == "branches")
+    {
+        <WorktreeManagementPanel Project="@_project"
+                                 OnDataChanged="RefreshData" />
+    }
 }
 
 <style>
@@ -396,6 +425,9 @@ else
     private HubConnection? _hubConnection;
     private bool _isRefreshing;
 
+    // Tab navigation state
+    private string _activeTab = "issues";
+
     // Test agent state
     private bool _isStartingTestAgent;
     private string? _testAgentError;
@@ -406,6 +438,10 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Determine active tab from URL
+        var uri = NavigationManager.Uri;
+        _activeTab = uri.Contains("/branches") ? "branches" : "issues";
+
         // Subscribe to agent startup state changes to update UI
         StartupTracker.OnStateChanged += OnStartupStateChanged;
 
@@ -426,6 +462,23 @@ else
             });
         }
     }
+
+    private void SwitchTab(string tab)
+    {
+        if (_activeTab == tab) return;
+
+        _activeTab = tab;
+        ClearSelection();
+
+        // Update the URL without causing a full navigation
+        var newUrl = tab == "branches"
+            ? $"/projects/{Id}/branches"
+            : $"/projects/{Id}";
+        NavigationManager.NavigateTo(newUrl, forceLoad: false, replace: true);
+    }
+
+    private void SwitchToIssuesTab() => SwitchTab("issues");
+    private void SwitchToBranchesTab() => SwitchTab("branches");
 
     public void Dispose()
     {

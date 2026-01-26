@@ -192,4 +192,255 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         // Trim dashes and slashes from ends
         return sanitized.Trim('-', '/');
     }
+
+    public async Task<List<BranchInfo>> ListLocalBranchesAsync(string repoPath)
+    {
+        // Get list of worktrees first to map branches to their worktree paths
+        var worktrees = await ListWorktreesAsync(repoPath);
+        var worktreeByBranch = worktrees
+            .Where(w => !string.IsNullOrEmpty(w.Branch))
+            .ToDictionary(
+                w => w.Branch!.Replace("refs/heads/", ""),
+                w => w.Path);
+
+        // Get branch info with format: branch name, commit sha, upstream, and tracking info
+        var result = await commandRunner.RunAsync(
+            "git",
+            "for-each-ref --format='%(refname:short)|%(objectname:short)|%(upstream:short)|%(upstream:track)|%(committerdate:iso8601)|%(subject)' refs/heads/",
+            repoPath);
+
+        if (!result.Success)
+        {
+            logger.LogWarning("Failed to list local branches: {Error}", result.Error);
+            return [];
+        }
+
+        var branches = new List<BranchInfo>();
+        var lines = result.Output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        // Get the current branch
+        var currentBranchResult = await commandRunner.RunAsync("git", "rev-parse --abbrev-ref HEAD", repoPath);
+        var currentBranch = currentBranchResult.Success ? currentBranchResult.Output.Trim() : "";
+
+        foreach (var line in lines)
+        {
+            var trimmedLine = line.Trim().Trim('\'');
+            var parts = trimmedLine.Split('|');
+            if (parts.Length < 6) continue;
+
+            var branchName = parts[0];
+            var commitSha = parts[1];
+            var upstream = string.IsNullOrEmpty(parts[2]) ? null : parts[2];
+            var trackingInfo = parts[3];
+            var dateStr = parts[4];
+            var subject = parts[5];
+
+            // Parse tracking info like "[ahead 2, behind 1]" or "[ahead 2]" or "[behind 1]"
+            var (ahead, behind) = ParseTrackingInfo(trackingInfo);
+
+            var branch = new BranchInfo
+            {
+                Name = $"refs/heads/{branchName}",
+                ShortName = branchName,
+                IsCurrent = branchName == currentBranch,
+                CommitSha = commitSha,
+                Upstream = upstream,
+                AheadCount = ahead,
+                BehindCount = behind,
+                LastCommitMessage = subject,
+                LastCommitDate = DateTime.TryParse(dateStr, out var date) ? date : null
+            };
+
+            // Check if branch has a worktree
+            if (worktreeByBranch.TryGetValue(branchName, out var worktreePath))
+            {
+                branch.HasWorktree = true;
+                branch.WorktreePath = worktreePath;
+            }
+
+            branches.Add(branch);
+        }
+
+        return branches;
+    }
+
+    public async Task<List<string>> ListRemoteOnlyBranchesAsync(string repoPath)
+    {
+        // First fetch to ensure we have the latest remote refs
+        await commandRunner.RunAsync("git", "fetch --prune", repoPath);
+
+        // Get all remote branches
+        var remoteResult = await commandRunner.RunAsync(
+            "git",
+            "for-each-ref --format='%(refname:short)' refs/remotes/origin/",
+            repoPath);
+
+        if (!remoteResult.Success)
+        {
+            logger.LogWarning("Failed to list remote branches: {Error}", remoteResult.Error);
+            return [];
+        }
+
+        var remoteBranches = remoteResult.Output
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(b => b.Trim().Trim('\''))
+            .Where(b => !b.EndsWith("/HEAD")) // Skip the HEAD pointer
+            .Select(b => b.Replace("origin/", ""))
+            .ToHashSet();
+
+        // Get all local branches
+        var localResult = await commandRunner.RunAsync(
+            "git",
+            "for-each-ref --format='%(refname:short)' refs/heads/",
+            repoPath);
+
+        if (!localResult.Success)
+        {
+            return remoteBranches.ToList();
+        }
+
+        var localBranches = localResult.Output
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(b => b.Trim().Trim('\''))
+            .ToHashSet();
+
+        // Return remote branches that don't have a local counterpart
+        return remoteBranches.Except(localBranches).ToList();
+    }
+
+    public async Task<bool> IsBranchMergedAsync(string repoPath, string branchName, string targetBranch)
+    {
+        // Check if the branch is an ancestor of the target branch
+        var result = await commandRunner.RunAsync(
+            "git",
+            $"merge-base --is-ancestor \"{branchName}\" \"{targetBranch}\"",
+            repoPath);
+
+        // Exit code 0 means it's an ancestor (merged), non-zero means not
+        return result.Success;
+    }
+
+    public async Task<bool> DeleteLocalBranchAsync(string repoPath, string branchName, bool force = false)
+    {
+        var flag = force ? "-D" : "-d";
+        var result = await commandRunner.RunAsync("git", $"branch {flag} \"{branchName}\"", repoPath);
+
+        if (result.Success)
+        {
+            logger.LogInformation("Deleted local branch {BranchName}", branchName);
+        }
+        else
+        {
+            logger.LogWarning("Failed to delete local branch {BranchName}: {Error}", branchName, result.Error);
+        }
+
+        return result.Success;
+    }
+
+    public async Task<bool> DeleteRemoteBranchAsync(string repoPath, string branchName)
+    {
+        var result = await commandRunner.RunAsync("git", $"push origin --delete \"{branchName}\"", repoPath);
+
+        if (result.Success)
+        {
+            logger.LogInformation("Deleted remote branch {BranchName}", branchName);
+        }
+        else
+        {
+            logger.LogWarning("Failed to delete remote branch {BranchName}: {Error}", branchName, result.Error);
+        }
+
+        return result.Success;
+    }
+
+    public async Task<bool> CreateLocalBranchFromRemoteAsync(string repoPath, string remoteBranch)
+    {
+        // Extract the local branch name from the remote branch (e.g., "origin/feature" -> "feature")
+        var localBranchName = remoteBranch.Contains('/')
+            ? remoteBranch.Substring(remoteBranch.IndexOf('/') + 1)
+            : remoteBranch;
+
+        // Create local branch tracking the remote
+        var result = await commandRunner.RunAsync(
+            "git",
+            $"checkout -b \"{localBranchName}\" \"origin/{localBranchName}\"",
+            repoPath);
+
+        if (!result.Success)
+        {
+            // Try an alternative approach - just create the branch without checking out
+            result = await commandRunner.RunAsync(
+                "git",
+                $"branch \"{localBranchName}\" \"origin/{localBranchName}\"",
+                repoPath);
+        }
+
+        if (result.Success)
+        {
+            logger.LogInformation("Created local branch {BranchName} from remote", localBranchName);
+        }
+        else
+        {
+            logger.LogWarning("Failed to create local branch from remote {RemoteBranch}: {Error}", remoteBranch, result.Error);
+        }
+
+        return result.Success;
+    }
+
+    public async Task<(int ahead, int behind)> GetBranchDivergenceAsync(string repoPath, string branchName, string targetBranch)
+    {
+        var result = await commandRunner.RunAsync(
+            "git",
+            $"rev-list --left-right --count \"{targetBranch}...{branchName}\"",
+            repoPath);
+
+        if (!result.Success)
+        {
+            return (0, 0);
+        }
+
+        var parts = result.Output.Trim().Split('\t', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2)
+        {
+            return (0, 0);
+        }
+
+        // Output format is: behind<tab>ahead
+        int.TryParse(parts[0], out var behind);
+        int.TryParse(parts[1], out var ahead);
+
+        return (ahead, behind);
+    }
+
+    public async Task<bool> FetchAllAsync(string repoPath)
+    {
+        var result = await commandRunner.RunAsync("git", "fetch --all --prune", repoPath);
+
+        if (!result.Success)
+        {
+            logger.LogWarning("Failed to fetch all: {Error}", result.Error);
+        }
+
+        return result.Success;
+    }
+
+    private static (int ahead, int behind) ParseTrackingInfo(string trackingInfo)
+    {
+        var ahead = 0;
+        var behind = 0;
+
+        if (string.IsNullOrEmpty(trackingInfo))
+            return (ahead, behind);
+
+        // Parse formats like "[ahead 2]", "[behind 1]", "[ahead 2, behind 1]"
+        var aheadMatch = Regex.Match(trackingInfo, @"ahead (\d+)");
+        var behindMatch = Regex.Match(trackingInfo, @"behind (\d+)");
+
+        if (aheadMatch.Success)
+            int.TryParse(aheadMatch.Groups[1].Value, out ahead);
+        if (behindMatch.Success)
+            int.TryParse(behindMatch.Groups[1].Value, out behind);
+
+        return (ahead, behind);
+    }
 }
