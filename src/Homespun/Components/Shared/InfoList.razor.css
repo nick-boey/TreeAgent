@@ -1,0 +1,19 @@
+.info-list {
+    margin: 0;
+    font-size: 0.8125rem;
+}
+
+.info-list ::deep dt {
+    font-weight: var(--font-weight-medium);
+    color: var(--text-secondary);
+    margin-top: var(--spacing-sm);
+}
+
+.info-list ::deep dt:first-child {
+    margin-top: 0;
+}
+
+.info-list ::deep dd {
+    margin: 0;
+    margin-top: 0.125rem;
+}

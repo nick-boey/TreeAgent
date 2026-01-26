@@ -1,0 +1,27 @@
+<div class="tool-use-container">
+    <div class="tool-header">
+        <span class="tool-icon">🔧</span>
+        <span class="tool-name">@ToolName</span>
+        @if (IsStreaming)
+        {
+            <span class="tool-streaming-indicator">
+                <span class="spinner-border spinner-border-sm ml-2" role="status"></span>
+            </span>
+        }
+    </div>
+    @if (!string.IsNullOrEmpty(ToolInput))
+    {
+        <pre class="tool-input">@ToolInput@(IsStreaming ? "▌" : "")</pre>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public string? ToolName { get; set; }
+
+    [Parameter]
+    public string? ToolInput { get; set; }
+
+    [Parameter]
+    public bool IsStreaming { get; set; }
+}

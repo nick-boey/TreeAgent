@@ -19,10 +19,10 @@
 }
 else
 {
-    <p class="text-muted">Creating pull request for @_project.Name</p>
+    <p class="text-text-muted">Creating pull request for @_project.Name</p>
 
-    <div class="row">
-        <div class="col-md-8">
+    <div class="grid grid-cols-12">
+        <div class="col-span-8">
             <EditForm Model="_model" OnValidSubmit="HandleSubmit" FormName="CreatePullRequest">
                 <DataAnnotationsValidator />
                 <ValidationSummary class="text-danger" />
@@ -56,11 +56,11 @@ else
                     <div class="form-text">Optional. Select a parent to nest this pull request.</div>
                 </div>
 
-                <div class="d-flex gap-2">
+                <div class="flex gap-2">
                     <button type="submit" class="btn btn-primary" disabled="@_isSubmitting">
                         @if (_isSubmitting)
                         {
-                            <span class="spinner-border spinner-border-sm me-1"></span>
+                            <span class="spinner-border spinner-border-sm mr-1"></span>
                         }
                         Create Pull Request
                     </button>

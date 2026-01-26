@@ -1,0 +1,21 @@
+@using Homespun.Features.ClaudeCode.Data
+
+<div class="chat-message @(IsUserMessage ? "chat-message-user" : "chat-message-assistant")">
+    <div class="chat-message-header">
+        <span class="chat-message-role">@(IsUserMessage ? "You" : "Claude")</span>
+        <span class="chat-message-time">@Message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
+    </div>
+    <div class="chat-message-content">
+        @foreach (var content in Message.Content)
+        {
+            <ContentBlock Content="content" />
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ClaudeMessage Message { get; set; } = default!;
+
+    private bool IsUserMessage => Message.Role == ClaudeMessageRole.User;
+}

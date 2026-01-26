@@ -1,0 +1,9 @@
+<div class="processing-indicator">
+    <div class="spinner-border spinner-border-sm" role="status"></div>
+    <span>@Message</span>
+</div>
+
+@code {
+    [Parameter]
+    public string Message { get; set; } = "Processing...";
+}

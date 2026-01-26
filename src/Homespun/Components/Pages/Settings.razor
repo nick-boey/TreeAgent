@@ -12,14 +12,14 @@
 <div class="settings-container">
     <section class="settings-section">
         <h2>GitHub Authentication</h2>
-        <p class="text-muted">Authentication status for agents pushing code and creating PRs.</p>
+        <p class="text-text-muted">Authentication status for agents pushing code and creating PRs.</p>
 
         <div class="auth-status-card">
             @if (_isLoading)
             {
-                <div class="d-flex align-items-center gap-2">
+                <div class="flex items-center gap-2">
                     <div class="spinner-border spinner-border-sm" role="status">
-                        <span class="visually-hidden">Checking...</span>
+                        <span class="sr-only">Checking...</span>
                     </div>
                     <span>Checking authentication status...</span>
                 </div>
@@ -108,7 +108,7 @@
                     <pre><code>-e GITHUB_TOKEN=ghp_...</code></pre>
                 </li>
             </ol>
-            <p class="text-muted">
+            <p class="text-text-muted">
                 The token needs <code>repo</code> scope for pushing code and creating PRs.
                 Create a token at <a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a>.
             </p>

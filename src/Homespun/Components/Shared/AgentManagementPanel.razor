@@ -16,7 +16,7 @@
         <div class="empty-state">
             <div class="empty-icon">🤖</div>
             <h5>No Active Sessions</h5>
-            <p class="text-muted">Start a Claude Code session from an issue or pull request to see it here.</p>
+            <p class="text-text-muted">Start a Claude Code session from an issue or pull request to see it here.</p>
         </div>
     }
     else
@@ -47,7 +47,7 @@
                                     }
                                     else
                                     {
-                                        <span class="text-muted">@session.EntityId</span>
+                                        <span class="text-text-muted">@session.EntityId</span>
                                     }
                                 </div>
                                 <span class="status-indicator @GetStatusIndicatorClass(session.Status)" title="@session.Status"></span>
@@ -57,7 +57,7 @@
                                 <div class="session-details">
                                     <div class="detail-row">
                                         <span class="detail-label">Mode:</span>
-                                        <span class="badge @(session.Mode == SessionMode.Plan ? "bg-info" : "bg-success")">
+                                        <span class="badge @(session.Mode == SessionMode.Plan ? "bg-status-info" : "bg-status-success")">
                                             @session.Mode
                                         </span>
                                     </div>
@@ -94,7 +94,7 @@
                                         disabled="@(_stoppingSessions.Contains(session.Id))">
                                     @if (_stoppingSessions.Contains(session.Id))
                                     {
-                                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                                     }
                                     Stop Session
                                 </button>

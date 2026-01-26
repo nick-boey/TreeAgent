@@ -38,13 +38,13 @@
 }
 else
 {
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="flex justify-between items-center mb-3">
         <h1>@_project.Name</h1>
         <div class="btn-group">
             <button class="btn btn-outline-secondary btn-sm" @onclick="RefreshData" disabled="@_isRefreshing">
                 @if (_isRefreshing)
                 {
-                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                 }
                 <i class="bi bi-arrow-clockwise"></i> Refresh
             </button>
@@ -118,33 +118,33 @@ else
                                     </a>
                                     @if (_isSyncingPRs)
                                     {
-                                        <span class="badge bg-info ms-2">
-                                            <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                        <span class="badge bg-status-info ml-2">
+                                            <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                                             Syncing...
                                         </span>
                                     }
                                     else if (_tokenMissing)
                                     {
-                                        <span class="badge bg-warning text-dark ms-2"
+                                        <span class="badge bg-status-warning text-text-primary ml-2"
                                               title="Set GITHUB_TOKEN environment variable">Token missing</span>
-                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
+                                        <button class="btn btn-sm btn-link p-0 ml-1" @onclick="SyncPullRequestsAsync">
                                             Retry
                                         </button>
                                     }
                                     else if (_syncError != null)
                                     {
-                                        <span class="badge bg-danger ms-2" title="@_syncError">Sync failed</span>
-                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
+                                        <span class="badge bg-status-error ml-2" title="@_syncError">Sync failed</span>
+                                        <button class="btn btn-sm btn-link p-0 ml-1" @onclick="SyncPullRequestsAsync">
                                             Retry
                                         </button>
                                     }
                                     else if (_lastSyncResult != null)
                                     {
-                                        <span class="badge bg-success ms-2"
+                                        <span class="badge bg-status-success ml-2"
                                               title="Imported: @_lastSyncResult.Imported, Updated: @_lastSyncResult.Updated, Removed: @_lastSyncResult.Removed">
                                             Synced
                                         </span>
-                                        <button class="btn btn-sm btn-link p-0 ms-1" @onclick="SyncPullRequestsAsync">
+                                        <button class="btn btn-sm btn-link p-0 ml-1" @onclick="SyncPullRequestsAsync">
                                             Refresh
                                         </button>
                                     }
@@ -154,13 +154,13 @@ else
 
                         <hr class="my-3" />
 
-                        <div class="d-flex flex-column gap-2">
+                        <div class="flex flex-col gap-2">
                             <button class="btn btn-outline-primary btn-sm"
                                     @onclick="StartTestAgentAsync"
                                     disabled="@_isStartingTestAgent">
                                 @if (_isStartingTestAgent)
                                 {
-                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                                     <span>Starting...</span>
                                 }
                                 else
@@ -170,7 +170,7 @@ else
                             </button>
                             @if (!string.IsNullOrEmpty(_testAgentError))
                             {
-                                <div class="alert alert-danger py-1 px-2 mb-0 small">
+                                <div class="alert alert-danger py-1 px-2 mb-0 text-sm">
                                     @_testAgentError
                                 </div>
                             }

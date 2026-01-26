@@ -1,0 +1,11 @@
+{
+  "name": "homespun-ui",
+  "private": true,
+  "scripts": {
+    "css:build": "tailwindcss -i ./wwwroot/css/tailwind.css -o ./wwwroot/css/tailwind.min.css --minify",
+    "css:watch": "tailwindcss -i ./wwwroot/css/tailwind.css -o ./wwwroot/css/tailwind.min.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

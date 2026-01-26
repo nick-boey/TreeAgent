@@ -19,9 +19,9 @@
     @if (IsLoading)
     {
         <div class="panel-body">
-            <div class="d-flex justify-content-center py-3">
+            <div class="flex justify-center py-3">
                 <div class="spinner-border spinner-border-sm" role="status">
-                    <span class="visually-hidden">Loading...</span>
+                    <span class="sr-only">Loading...</span>
                 </div>
             </div>
         </div>
@@ -30,13 +30,13 @@
     {
         <div class="panel-body">
             <div class="status-info">
-                <small class="text-muted">
-                    Mode: <span class="badge @(_session.Mode == SessionMode.Plan ? "bg-info" : "bg-success") ms-1">@_session.Mode</span>
+                <small class="text-text-muted">
+                    Mode: <span class="badge @(_session.Mode == SessionMode.Plan ? "bg-status-info" : "bg-status-success") ml-1">@_session.Mode</span>
                 </small>
-                <small class="text-muted d-block">
+                <small class="text-text-muted block">
                     Model: <code>@GetModelDisplayName(_session.Model)</code>
                 </small>
-                <small class="text-muted d-block">
+                <small class="text-text-muted block">
                     Status: <code>@_session.Status</code>
                 </small>
             </div>
@@ -44,12 +44,12 @@
             @if (_session.Messages.Count > 0)
             {
                 <div class="last-message mt-2">
-                    <small class="text-muted">Messages: @_session.Messages.Count</small>
+                    <small class="text-text-muted">Messages: @_session.Messages.Count</small>
                 </div>
             }
         </div>
         <div class="panel-footer">
-            <a href="/session/@_session.Id" class="btn btn-sm btn-outline-primary me-2">
+            <a href="/session/@_session.Id" class="btn btn-sm btn-outline-primary mr-2">
                 Open Chat
             </a>
             <button class="btn btn-sm btn-outline-danger" @onclick="StopSession" disabled="@IsLoading">
@@ -60,18 +60,18 @@
     else if (StartupTracker.IsStarting(EntityId))
     {
         <div class="panel-body">
-            <div class="d-flex align-items-center gap-2">
+            <div class="flex items-center gap-2">
                 <div class="spinner-border spinner-border-sm" role="status">
-                    <span class="visually-hidden">Starting...</span>
+                    <span class="sr-only">Starting...</span>
                 </div>
-                <small class="text-muted">Starting session...</small>
+                <small class="text-text-muted">Starting session...</small>
             </div>
         </div>
     }
     else
     {
         <div class="panel-body">
-            <p class="text-muted small mb-0">No session active.</p>
+            <p class="text-text-muted text-sm mb-0">No session active.</p>
         </div>
         @if (CanStart)
         {
@@ -81,7 +81,7 @@
                                  SelectedModel="@_selectedModel"
                                  SelectedModelChanged="OnModelChanged" />
                 </div>
-                <div class="d-flex gap-2">
+                <div class="flex gap-2">
                     <button class="btn btn-sm btn-outline-primary" @onclick="StartPlanning" disabled="@IsLoading" title="Read-only planning session">
                         Plan
                     </button>
@@ -95,7 +95,7 @@
 
     @if (!string.IsNullOrEmpty(ErrorMessage))
     {
-        <div class="alert alert-danger m-2 py-1 px-2 small mb-0">@ErrorMessage</div>
+        <div class="alert alert-danger m-2 py-1 px-2 text-sm mb-0">@ErrorMessage</div>
     }
 </div>
 

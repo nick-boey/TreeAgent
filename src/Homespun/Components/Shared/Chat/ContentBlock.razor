@@ -1,0 +1,38 @@
+@using Homespun.Features.ClaudeCode.Data
+
+<div class="content-block @GetContentBlockClass() @(Content.IsStreaming ? "streaming" : "")">
+    @switch (Content.Type)
+    {
+        case ClaudeContentType.Text:
+            <TextBlock Text="@Content.Text" IsStreaming="@Content.IsStreaming" />
+            break;
+
+        case ClaudeContentType.Thinking:
+            <ThinkingBlock Text="@Content.Text" IsStreaming="@Content.IsStreaming" />
+            break;
+
+        case ClaudeContentType.ToolUse:
+            <ToolUseBlock ToolName="@Content.ToolName"
+                          ToolInput="@Content.ToolInput"
+                          IsStreaming="@Content.IsStreaming" />
+            break;
+
+        case ClaudeContentType.ToolResult:
+            <ToolResultBlock Text="@Content.Text" />
+            break;
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ClaudeMessageContent Content { get; set; } = default!;
+
+    private string GetContentBlockClass() => Content.Type switch
+    {
+        ClaudeContentType.Text => "text-block",
+        ClaudeContentType.Thinking => "thinking-block",
+        ClaudeContentType.ToolUse => "tool-use-block",
+        ClaudeContentType.ToolResult => "tool-result-block",
+        _ => ""
+    };
+}

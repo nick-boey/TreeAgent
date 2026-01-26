@@ -21,7 +21,7 @@
 @inject ILogger<CurrentPullRequestDetailPanel> Logger
 
 <div class="card pull-request-detail-panel">
-    <div class="card-header d-flex justify-content-between align-items-center">
+    <div class="card-header flex justify-between items-center">
         <span>Pull Request Details</span>
         <button type="button" class="btn-close" @onclick="OnClose"></button>
     </div>
@@ -34,20 +34,20 @@
             {
                 <a href="https://github.com/@PullRequest.Project.GitHubOwner/@PullRequest.Project?.GitHubRepo/pull/@PullRequest.GitHubPRNumber"
                    target="_blank"
-                   class="badge bg-secondary text-decoration-none ms-1">
+                   class="badge bg-secondary text-decoration-none ml-1">
                     PR #@PullRequest.GitHubPRNumber
                 </a>
             }
             @if (StartupTracker.IsStarting(PullRequest.Id))
             {
-                <span class="badge bg-warning text-dark ms-1">
-                    <span class="spinner-border spinner-border-sm me-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
+                <span class="badge bg-status-warning text-text-primary ml-1">
+                    <span class="spinner-border spinner-border-sm mr-1" role="status" style="width: 0.6rem; height: 0.6rem;"></span>
                     Starting...
                 </span>
             }
             else if (_session != null)
             {
-                <span class="badge bg-success ms-1">Session Active</span>
+                <span class="badge bg-status-success ml-1">Session Active</span>
             }
         </div>
 
@@ -56,28 +56,28 @@
             <p class="card-text">@PullRequest.Description</p>
         }
 
-        <dl class="row small">
+        <dl class="grid grid-cols-12 text-sm">
             @if (!string.IsNullOrEmpty(PullRequest.BeadsIssueId))
             {
-                <dt class="col-4">Linked Issue</dt>
-                <dd class="col-8">
-                    <span class="badge bg-info text-dark">@PullRequest.BeadsIssueId</span>
+                <dt class="col-span-4">Linked Issue</dt>
+                <dd class="col-span-8">
+                    <span class="badge bg-status-info text-text-primary">@PullRequest.BeadsIssueId</span>
                 </dd>
             }
             @if (!string.IsNullOrEmpty(PullRequest.BranchName))
             {
-                <dt class="col-4">Branch</dt>
-                <dd class="col-8"><code>@PullRequest.BranchName</code></dd>
+                <dt class="col-span-4">Branch</dt>
+                <dd class="col-span-8"><code>@PullRequest.BranchName</code></dd>
             }
             @if (!string.IsNullOrEmpty(PullRequest.WorktreePath))
             {
-                <dt class="col-4">Worktree</dt>
-                <dd class="col-8"><code>@PullRequest.WorktreePath</code></dd>
+                <dt class="col-span-4">Worktree</dt>
+                <dd class="col-span-8"><code>@PullRequest.WorktreePath</code></dd>
             }
-            <dt class="col-4">Created</dt>
-            <dd class="col-8">@PullRequest.CreatedAt.ToLocalTime().ToString("g")</dd>
-            <dt class="col-4">Updated</dt>
-            <dd class="col-8">@PullRequest.UpdatedAt.ToLocalTime().ToString("g")</dd>
+            <dt class="col-span-4">Created</dt>
+            <dd class="col-span-8">@PullRequest.CreatedAt.ToLocalTime().ToString("g")</dd>
+            <dt class="col-span-4">Updated</dt>
+            <dd class="col-span-8">@PullRequest.UpdatedAt.ToLocalTime().ToString("g")</dd>
         </dl>
 
         @* Session Status Display *@
@@ -87,42 +87,49 @@
                 <h6>Claude Code Session</h6>
                 <div class="mb-2">
                     <span class="badge @GetSessionStatusBadgeClass()">@_session.Status</span>
-                    <a href="/session/@_session.Id" class="btn btn-sm btn-outline-primary ms-2">
+                    <a href="/session/@_session.Id" class="btn btn-sm btn-outline-primary ml-2">
                         Open Chat
                     </a>
                 </div>
                 <div class="mb-2">
-                    <small class="text-muted">
-                        Mode: <span class="badge @(_session.Mode == SessionMode.Plan ? "bg-info" : "bg-success")">@_session.Mode</span>
+                    <small class="text-text-muted">
+                        Mode: <span class="badge @(_session.Mode == SessionMode.Plan ? "bg-status-info" : "bg-status-success")">@_session.Mode</span>
                     </small>
                     <br/>
-                    <small class="text-muted">
+                    <small class="text-text-muted">
                         Model: <code>@GetModelDisplayName(_session.Model)</code>
                     </small>
                 </div>
                 @if (!string.IsNullOrEmpty(_sessionErrorMessage))
                 {
-                    <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_sessionErrorMessage</div>
+                    <div class="alert alert-danger mt-2 mb-0 py-1 px-2 text-sm">@_sessionErrorMessage</div>
                 }
             </div>
         }
     </div>
     <div class="card-footer">
-        <div class="d-flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-2">
             @* Skip review - only when Ready for Review *@
             @if (PullRequest.Status == OpenPullRequestStatus.ReadyForReview)
             {
                 <button class="btn btn-sm btn-outline-warning" @onclick="SkipReview" disabled="@_isLoading">
                     @if (_isLoading)
                     {
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                     }
                     Skip Review
                 </button>
             }
 
             @* Start/Stop Session - available for all statuses *@
-            @if (_session != null)
+            @if (StartupTracker.IsStarting(PullRequest.Id))
+            {
+                <button class="btn btn-sm btn-secondary" disabled>
+                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                    Starting Session...
+                </button>
+            }
+            else if (_session != null)
             {
                 <a href="/session/@_session.Id" class="btn btn-sm btn-primary">
                     Open Chat
@@ -130,14 +137,14 @@
                 <button class="btn btn-sm btn-outline-danger" @onclick="StopSession" disabled="@_isSessionLoading">
                     @if (_isSessionLoading)
                     {
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                     }
                     Stop Session
                 </button>
             }
             else
             {
-                <div class="d-flex flex-column gap-2 w-100">
+                <div class="flex flex-col gap-2">
                     <div>
                         <ModelSelector Id="@($"pr-model-{PullRequest.Id}")"
                                        SelectedModel="@_selectedModel"
@@ -150,12 +157,12 @@
 
                     @if (_worktreeInfo != null && _branchInfo?.BehindCount > 0)
                     {
-                        <button class="btn btn-sm btn-outline-warning w-100"
+                        <button class="btn btn-sm btn-outline-warning w-full"
                                 @onclick="StartRebaseAsync"
                                 disabled="@(_isRebasing || StartupTracker.IsStarting(PullRequest.Id))">
                             @if (_isRebasing)
                             {
-                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                             }
                             Rebase onto @_project?.DefaultBranch (@_branchInfo.BehindCount behind)
                         </button>
@@ -169,7 +176,7 @@
                 <button class="btn btn-sm btn-primary" @onclick="MergePullRequest" disabled="@_isLoading">
                     @if (_isLoading)
                     {
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                     }
                     Merge
                 </button>
@@ -181,18 +188,18 @@
         }
         @if (startupState?.Status == AgentStartupStatus.Failed)
         {
-            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">
+            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 text-sm">
                 @(startupState.ErrorMessage ?? "Failed to start session")
-                <button class="btn btn-link btn-sm p-0 ms-2" @onclick="ClearStartupError">Dismiss</button>
+                <button class="btn btn-link btn-sm p-0 ml-2" @onclick="ClearStartupError">Dismiss</button>
             </div>
         }
         else if (!string.IsNullOrEmpty(_errorMessage))
         {
-            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_errorMessage</div>
+            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 text-sm">@_errorMessage</div>
         }
         else if (!string.IsNullOrEmpty(_sessionErrorMessage))
         {
-            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 small">@_sessionErrorMessage</div>
+            <div class="alert alert-danger mt-2 mb-0 py-1 px-2 text-sm">@_sessionErrorMessage</div>
         }
     </div>
 </div>

@@ -35,14 +35,14 @@ else if (_project == null)
 }
 else
 {
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="flex justify-between items-center mb-3">
         <h1>Edit Issue</h1>
         <span class="badge bg-secondary">@IssueId</span>
     </div>
 
     <form @onsubmit="HandleSubmit" @onkeydown="HandleKeyDown">
-        <div class="row">
-            <div class="col-md-8">
+        <div class="grid grid-cols-12">
+            <div class="col-span-8">
                 <div class="card mb-3">
                     <div class="card-header">Issue Details</div>
                     <div class="card-body">
@@ -59,8 +59,8 @@ else
                                       placeholder="Implementation details, acceptance criteria..."></textarea>
                         </div>
 
-                        <div class="row mb-3">
-                            <div class="col-md-4">
+                        <div class="grid grid-cols-12 mb-3">
+                            <div class="col-span-4">
                                 <label for="type" class="form-label">Type</label>
                                 <select class="form-select" id="type" @bind="_type">
                                     @foreach (var type in Enum.GetValues<IssueType>())
@@ -69,7 +69,7 @@ else
                                     }
                                 </select>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-span-4">
                                 <label for="status" class="form-label">Status</label>
                                 <select class="form-select" id="status" @bind="_status">
                                     @foreach (var status in Enum.GetValues<IssueStatus>().Where(s => s != IssueStatus.Deleted))
@@ -78,7 +78,7 @@ else
                                     }
                                 </select>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-span-4">
                                 <label for="priority" class="form-label">Priority</label>
                                 <select class="form-select" id="priority" @bind="_priority">
                                     <option value="">Not set</option>
@@ -101,7 +101,7 @@ else
                 </div>
             </div>
 
-            <div class="col-md-4">
+            <div class="col-span-4">
                 <div class="card mb-3">
                     <div class="card-header">Branch Information</div>
                     <div class="card-body">
@@ -112,7 +112,7 @@ else
                                    placeholder="Custom branch identifier" />
                             <div class="form-text">Leave empty to auto-generate from title</div>
                         </div>
-                        <div class="p-2 bg-light rounded small">
+                        <div class="p-2 bg-bg-tertiary rounded text-sm">
                             <strong>Branch Preview:</strong><br/>
                             <code>@GetBranchPreview()</code>
                         </div>
@@ -122,9 +122,9 @@ else
                 <div class="card">
                     <div class="card-header">Metadata</div>
                     <div class="card-body">
-                        <dl class="row small mb-0">
-                            <dt class="col-5 text-muted">Created</dt>
-                            <dd class="col-7">@_issue?.CreatedAt.ToString("g")</dd>
+                        <dl class="grid grid-cols-12 text-sm mb-0">
+                            <dt class="col-span-5 text-text-muted">Created</dt>
+                            <dd class="col-span-7">@_issue?.CreatedAt.ToString("g")</dd>
                         </dl>
                     </div>
                 </div>
@@ -133,18 +133,18 @@ else
 
         <hr />
 
-        <div class="d-flex justify-content-between align-items-center">
+        <div class="flex justify-between items-center">
             <div>
                 <button type="submit" class="btn btn-primary" disabled="@_isSaving">
                     @if (_isSaving)
                     {
-                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
                     }
                     Save Changes
                 </button>
                 <a href="projects/@ProjectId" class="btn btn-secondary">Cancel</a>
             </div>
-            <div class="text-muted small">
+            <div class="text-text-muted text-sm">
                 Press <kbd>Ctrl</kbd>+<kbd>Enter</kbd> to save
             </div>
         </div>

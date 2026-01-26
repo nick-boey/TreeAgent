@@ -22,8 +22,8 @@ else if (_notFound)
 else
 {
     <form @onsubmit="HandleSubmit">
-        <div class="row">
-            <div class="col-md-6">
+        <div class="grid grid-cols-12">
+            <div class="col-span-6">
                 <h5>Project Information</h5>
 
                 <div class="mb-3">
@@ -38,13 +38,13 @@ else
 
                 <div class="mb-3">
                     <label class="form-label">Local Path</label>
-                    <p class="form-control-plaintext text-muted" style="font-size: 0.9em;">@_localPath</p>
+                    <p class="form-control-plaintext text-text-muted" style="font-size: 0.9em;">@_localPath</p>
                 </div>
             </div>
 
-            <div class="col-md-6">
+            <div class="col-span-6">
                 <h5>Agent Settings</h5>
-                <p class="text-muted small">Configure the default settings for Claude Code sessions in this project.</p>
+                <p class="text-text-muted text-sm">Configure the default settings for Claude Code sessions in this project.</p>
 
                 <div class="mb-3">
                     <label for="defaultModel" class="form-label">Default Model</label>

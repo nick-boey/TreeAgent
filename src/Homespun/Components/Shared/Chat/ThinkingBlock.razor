@@ -1,0 +1,28 @@
+<details class="thinking-details" open="@IsStreaming">
+    <summary>
+        @if (IsStreaming)
+        {
+            <span>Thinking</span>
+            <span class="streaming-dots">...</span>
+        }
+        else
+        {
+            <span>Thinking...</span>
+        }
+    </summary>
+    <div class="thinking-content">
+        @Text
+        @if (IsStreaming)
+        {
+            <span class="streaming-cursor">▌</span>
+        }
+    </div>
+</details>
+
+@code {
+    [Parameter]
+    public string? Text { get; set; }
+
+    [Parameter]
+    public bool IsStreaming { get; set; }
+}

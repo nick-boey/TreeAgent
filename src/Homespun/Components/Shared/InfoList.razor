@@ -1,0 +1,13 @@
+@*
+    InfoList - A reusable component for displaying definition lists (dt/dd pairs)
+    Used across project detail and other information display pages.
+*@
+
+<dl class="info-list">
+    @ChildContent
+</dl>
+
+@code {
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+}

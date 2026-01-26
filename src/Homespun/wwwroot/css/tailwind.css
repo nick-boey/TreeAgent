@@ -1,0 +1,319 @@
+/* ==========================================================================
+   Tailwind CSS Input File
+
+   This file contains Tailwind directives and custom component classes
+   that will be compiled into tailwind.min.css
+   ========================================================================== */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Custom Component Classes (using @apply)
+
+   These provide semantic class names that mirror the existing design system
+   while using Tailwind utilities under the hood.
+   ========================================================================== */
+
+@layer components {
+  /* Button Base */
+  .btn {
+    @apply inline-flex items-center justify-center gap-xs px-md py-sm;
+    @apply text-base font-medium rounded-md cursor-pointer;
+    @apply border border-transparent transition-all duration-fast;
+  }
+
+  .btn:focus {
+    @apply outline-none ring-2 ring-ocean/30;
+  }
+
+  .btn:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  /* Button Variants */
+  .btn-primary {
+    @apply bg-btn-primary-bg text-btn-primary-text border-btn-primary-bg;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    @apply bg-btn-primary-hover border-btn-primary-hover;
+  }
+
+  .btn-secondary {
+    @apply bg-btn-secondary-bg text-btn-secondary-text border-btn-secondary-bg;
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    @apply bg-btn-secondary-hover border-btn-secondary-hover;
+  }
+
+  .btn-danger {
+    @apply bg-btn-danger-bg text-btn-danger-text border-btn-danger-bg;
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    @apply bg-btn-danger-hover border-btn-danger-hover;
+  }
+
+  .btn-outline {
+    @apply bg-transparent text-text-primary border-border;
+  }
+
+  .btn-outline:hover:not(:disabled) {
+    @apply bg-bg-hover;
+  }
+
+  .btn-link {
+    @apply bg-transparent text-link border-transparent p-0;
+  }
+
+  .btn-link:hover:not(:disabled) {
+    @apply text-link-hover underline;
+  }
+
+  /* Button Sizes */
+  .btn-sm {
+    @apply px-sm py-xs text-sm;
+  }
+
+  .btn-lg {
+    @apply px-lg py-md text-lg;
+  }
+
+  /* Form Controls */
+  .form-control {
+    @apply block w-full px-md py-sm;
+    @apply text-base font-normal;
+    @apply text-text-primary bg-input-bg;
+    @apply border border-transparent rounded-md;
+    @apply transition-all duration-fast;
+  }
+
+  .form-control::placeholder {
+    @apply text-input-placeholder;
+  }
+
+  .form-control:focus {
+    @apply outline-none border-border-light;
+  }
+
+  .form-control:disabled {
+    @apply bg-bg-tertiary opacity-60 cursor-not-allowed;
+  }
+
+  /* Form Select */
+  .form-select {
+    @apply block w-full px-md py-sm pr-8;
+    @apply text-base font-normal;
+    @apply text-text-primary bg-input-bg;
+    @apply border border-transparent rounded-md;
+    @apply appearance-none cursor-pointer;
+    @apply transition-all duration-fast;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath fill='%23767676' d='M4.5 5.5L8 9l3.5-3.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.25rem center;
+  }
+
+  .form-select:focus {
+    @apply outline-none border-border-light;
+  }
+
+  .form-select:disabled {
+    @apply bg-bg-tertiary opacity-60 cursor-not-allowed;
+  }
+
+  /* Form Label */
+  .form-label {
+    @apply block mb-xs text-sm font-semibold text-text-primary;
+  }
+
+  /* Form Text (help text) */
+  .form-text {
+    @apply block mt-xs text-sm text-text-muted;
+  }
+
+  /* Textarea */
+  textarea.form-control {
+    @apply min-h-24 resize-y;
+  }
+
+  /* Card */
+  .card {
+    @apply bg-bg-card border border-border rounded-lg shadow-sm;
+  }
+
+  .card-header {
+    @apply px-md py-md border-b border-border bg-bg-tertiary rounded-t-lg;
+  }
+
+  .card-body {
+    @apply p-md;
+  }
+
+  .card-footer {
+    @apply px-md py-md border-t border-border bg-bg-tertiary rounded-b-lg;
+  }
+
+  /* Table */
+  .table {
+    @apply w-full border-collapse text-base;
+  }
+
+  .table th,
+  .table td {
+    @apply px-md py-sm text-left border-b border-border;
+  }
+
+  .table th {
+    @apply font-semibold bg-bg-tertiary text-text-secondary;
+  }
+
+  .table tbody tr:hover {
+    @apply bg-bg-hover;
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center px-sm py-xs text-xs font-medium leading-none rounded-full;
+  }
+
+  .badge-primary {
+    @apply bg-lagoon text-white;
+  }
+
+  .badge-secondary {
+    @apply bg-basalt-light text-white;
+  }
+
+  .badge-success {
+    @apply bg-status-success text-white;
+  }
+
+  .badge-warning {
+    @apply bg-status-warning text-black;
+  }
+
+  .badge-danger {
+    @apply bg-status-error text-white;
+  }
+
+  .badge-info {
+    @apply bg-status-info text-white;
+  }
+
+  /* Alert */
+  .alert {
+    @apply p-md rounded-md border mb-md;
+  }
+
+  .alert-success {
+    @apply bg-lagoon/10 border-status-success text-status-success;
+  }
+
+  .alert-warning {
+    @apply bg-wattle/20 border-status-warning text-basalt;
+  }
+
+  .alert-danger {
+    @apply bg-red/10 border-status-error text-status-error;
+  }
+
+  .alert-info {
+    @apply bg-ocean/10 border-status-info text-status-info;
+  }
+
+  /* Status Indicator Dots */
+  .status-dot {
+    @apply w-2.5 h-2.5 rounded-full flex-shrink-0;
+  }
+
+  .status-dot-success {
+    @apply bg-status-success;
+  }
+
+  .status-dot-warning {
+    @apply bg-status-warning;
+  }
+
+  .status-dot-error {
+    @apply bg-status-error;
+  }
+
+  .status-dot-info {
+    @apply bg-status-info;
+  }
+
+  .status-dot-muted {
+    @apply bg-status-muted;
+  }
+
+  /* Code */
+  .code-inline {
+    @apply font-mono text-sm px-1 py-0.5 bg-code-bg rounded-sm text-red;
+  }
+
+  .code-block {
+    @apply font-mono bg-code-bg p-md rounded-md overflow-x-auto;
+  }
+
+  .code-block code {
+    @apply p-0 bg-transparent text-text-primary;
+  }
+
+  /* Spinner (Bootstrap-compatible naming) */
+  .spinner-border {
+    @apply inline-block w-4 h-4 border-2 border-current border-r-transparent rounded-full animate-spin;
+  }
+
+  .spinner-border-sm {
+    @apply w-3 h-3 border;
+  }
+
+  /* Button Group */
+  .btn-group {
+    @apply inline-flex;
+  }
+
+  .btn-group > .btn {
+    @apply rounded-none;
+  }
+
+  .btn-group > .btn:first-child {
+    @apply rounded-l-md;
+  }
+
+  .btn-group > .btn:last-child {
+    @apply rounded-r-md;
+  }
+
+  .btn-group > .btn:not(:last-child) {
+    @apply border-r-0;
+  }
+}
+
+/* ==========================================================================
+   Custom Utilities
+   ========================================================================== */
+
+@layer utilities {
+  /* Text utilities that use CSS variables */
+  .text-inherit {
+    color: inherit;
+  }
+
+  /* Transition utilities */
+  .transition-fast {
+    transition: all 150ms ease;
+  }
+
+  .transition-normal {
+    transition: all 250ms ease;
+  }
+
+  /* Focus ring utility */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-ocean/30;
+  }
+}
