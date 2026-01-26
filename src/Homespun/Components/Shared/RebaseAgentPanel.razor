@@ -1,0 +1,254 @@
+@using Homespun.Features.ClaudeCode.Data
+@using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Git
+@using Homespun.Features.Projects
+@using Homespun.Features.PullRequests
+@using Homespun.Features.PullRequests.Data.Entities
+
+@inject IProjectService ProjectService
+@inject IGitWorktreeService GitWorktreeService
+@inject IRebaseAgentService RebaseAgentService
+@inject IAgentStartupTracker StartupTracker
+@inject PullRequestWorkflowService PullRequestWorkflowService
+@inject NavigationManager NavigationManager
+@inject ILogger<RebaseAgentPanel> Logger
+
+<div class="rebase-agent-panel card">
+    <div class="card-header">
+        <h5 class="mb-0">Start Rebase Agent</h5>
+    </div>
+    <div class="card-body">
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                @_errorMessage
+                <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+            </div>
+        }
+
+        <div class="mb-3">
+            <label class="form-label">Project</label>
+            <select class="form-select" @bind="_selectedProjectId" @bind:after="OnProjectChangedAsync">
+                <option value="">Select a project...</option>
+                @foreach (var project in _projects)
+                {
+                    <option value="@project.Id">@project.Name</option>
+                }
+            </select>
+        </div>
+
+        @if (!string.IsNullOrEmpty(_selectedProjectId))
+        {
+            <div class="mb-3">
+                <label class="form-label">Worktree</label>
+                @if (_isLoadingWorktrees)
+                {
+                    <div class="d-flex align-items-center text-muted">
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Loading worktrees...
+                    </div>
+                }
+                else if (_worktrees.Count == 0)
+                {
+                    <div class="text-muted">No worktrees available</div>
+                }
+                else
+                {
+                    <select class="form-select" @bind="_selectedWorktreePath">
+                        <option value="">Select a worktree...</option>
+                        @foreach (var worktree in _worktrees.Where(w => !w.IsBare && !IsDefaultBranch(GetShortBranchName(w.Branch))))
+                        {
+                            var branchName = GetShortBranchName(worktree.Branch);
+                            var branchInfo = _branches.FirstOrDefault(b => b.ShortName == branchName);
+                            <option value="@worktree.Path">
+                                @branchName
+                                @if (branchInfo?.BehindCount > 0)
+                                {
+                                    @($" (-{branchInfo.BehindCount} behind)")
+                                }
+                            </option>
+                        }
+                    </select>
+                }
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Model</label>
+                <select class="form-select" @bind="_selectedModel">
+                    <option value="sonnet">Claude Sonnet</option>
+                    <option value="opus">Claude Opus</option>
+                    <option value="haiku">Claude Haiku</option>
+                </select>
+            </div>
+
+            @if (!string.IsNullOrEmpty(_selectedWorktreePath))
+            {
+                var selectedWorktree = _worktrees.FirstOrDefault(w => w.Path == _selectedWorktreePath);
+                var branchName = GetShortBranchName(selectedWorktree?.Branch);
+                var branchInfo = _branches.FirstOrDefault(b => b.ShortName == branchName);
+
+                @if (branchInfo != null)
+                {
+                    <div class="mb-3 p-2 bg-light rounded">
+                        <div class="small text-muted mb-1">Branch Info:</div>
+                        <div class="d-flex gap-3">
+                            @if (branchInfo.AheadCount > 0)
+                            {
+                                <span class="text-success">+@branchInfo.AheadCount ahead</span>
+                            }
+                            @if (branchInfo.BehindCount > 0)
+                            {
+                                <span class="text-danger">-@branchInfo.BehindCount behind @_selectedProject?.DefaultBranch</span>
+                            }
+                            @if (branchInfo.AheadCount == 0 && branchInfo.BehindCount == 0)
+                            {
+                                <span class="text-muted">Up to date with @_selectedProject?.DefaultBranch</span>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+
+            <button class="btn btn-warning w-100"
+                    @onclick="StartRebaseAgentAsync"
+                    disabled="@(string.IsNullOrEmpty(_selectedWorktreePath) || _isStarting)">
+                @if (_isStarting)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    <span>Starting...</span>
+                }
+                else
+                {
+                    <i class="bi bi-arrow-repeat me-1"></i>
+                    <span>Start Rebase Agent</span>
+                }
+            </button>
+        }
+    </div>
+</div>
+
+<style>
+    .rebase-agent-panel {
+        font-size: 0.875rem;
+    }
+</style>
+
+@code {
+    [Parameter] public EventCallback<ClaudeSession> OnSessionStarted { get; set; }
+
+    private List<Project> _projects = [];
+    private List<WorktreeInfo> _worktrees = [];
+    private List<BranchInfo> _branches = [];
+    private Project? _selectedProject;
+    private string _selectedProjectId = "";
+    private string _selectedWorktreePath = "";
+    private string _selectedModel = "sonnet";
+    private bool _isLoadingWorktrees;
+    private bool _isStarting;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _projects = await ProjectService.GetAllAsync();
+    }
+
+    private async Task OnProjectChangedAsync()
+    {
+        _selectedWorktreePath = "";
+        _worktrees = [];
+        _branches = [];
+
+        if (string.IsNullOrEmpty(_selectedProjectId))
+        {
+            _selectedProject = null;
+            return;
+        }
+
+        _selectedProject = _projects.FirstOrDefault(p => p.Id == _selectedProjectId);
+        if (_selectedProject == null) return;
+
+        _isLoadingWorktrees = true;
+        StateHasChanged();
+
+        try
+        {
+            _worktrees = await GitWorktreeService.ListWorktreesAsync(_selectedProject.LocalPath);
+            _branches = await GitWorktreeService.ListLocalBranchesAsync(_selectedProject.LocalPath);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load worktrees for project {ProjectId}", _selectedProjectId);
+            _errorMessage = $"Failed to load worktrees: {ex.Message}";
+        }
+        finally
+        {
+            _isLoadingWorktrees = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StartRebaseAgentAsync()
+    {
+        if (string.IsNullOrEmpty(_selectedWorktreePath) || _selectedProject == null)
+            return;
+
+        var selectedWorktree = _worktrees.FirstOrDefault(w => w.Path == _selectedWorktreePath);
+        if (selectedWorktree == null) return;
+
+        var branchName = GetShortBranchName(selectedWorktree.Branch);
+        var entityId = $"rebase-{branchName}";
+
+        StartupTracker.MarkAsStarting(entityId);
+        _isStarting = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            // Get recently merged PRs for context
+            var recentMergedPRs = await PullRequestWorkflowService.GetMergedPullRequestsWithTimeAsync(_selectedProject.Id);
+            var recentPRInfos = recentMergedPRs
+                .Take(10)
+                .Select(pr => pr.PullRequest)
+                .ToList();
+
+            var session = await RebaseAgentService.StartRebaseAgentAsync(
+                _selectedProject.Id,
+                selectedWorktree.Path,
+                branchName,
+                _selectedProject.DefaultBranch,
+                _selectedModel,
+                recentPRInfos);
+
+            StartupTracker.MarkAsStarted(entityId);
+
+            await OnSessionStarted.InvokeAsync(session);
+
+            // Navigate to the session
+            NavigationManager.NavigateTo($"/session/{session.Id}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start rebase agent");
+            StartupTracker.MarkAsFailed(entityId, ex.Message);
+            _errorMessage = $"Failed to start rebase agent: {ex.Message}";
+        }
+        finally
+        {
+            _isStarting = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string GetShortBranchName(string? branch)
+    {
+        if (string.IsNullOrEmpty(branch)) return "unknown";
+        return branch.Replace("refs/heads/", "");
+    }
+
+    private bool IsDefaultBranch(string? branchName)
+    {
+        if (string.IsNullOrEmpty(branchName) || _selectedProject == null) return false;
+        return branchName == _selectedProject.DefaultBranch;
+    }
+}
