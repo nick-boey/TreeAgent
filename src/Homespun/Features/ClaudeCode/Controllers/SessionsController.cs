@@ -71,7 +71,7 @@ public class SessionsController(
         }
 
         var workingDirectory = request.WorkingDirectory ?? project.LocalPath;
-        var model = request.Model ?? project.DefaultModel ?? "claude-sonnet-4-20250514";
+        var model = request.Model ?? project.DefaultModel ?? "sonnet";
 
         try
         {
