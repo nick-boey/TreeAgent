@@ -77,6 +77,8 @@ public interface IFleeceService
     /// <param name="type">Optional new type.</param>
     /// <param name="description">Optional new description.</param>
     /// <param name="priority">Optional new priority.</param>
+    /// <param name="group">Optional new group for categorization.</param>
+    /// <param name="workingBranchId">Optional working branch ID.</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The updated issue, or null if not found.</returns>
     Task<Issue?> UpdateIssueAsync(
@@ -87,6 +89,8 @@ public interface IFleeceService
         IssueType? type = null,
         string? description = null,
         int? priority = null,
+        string? group = null,
+        string? workingBranchId = null,
         CancellationToken ct = default);
 
     /// <summary>
