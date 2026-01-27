@@ -68,6 +68,8 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
 
         if (!result.Success)
         {
+            logger.LogWarning("Failed to create worktree at {WorktreePath} for branch {BranchName}: {Error}",
+                worktreePath, branchName, result.Error);
             return null;
         }
         

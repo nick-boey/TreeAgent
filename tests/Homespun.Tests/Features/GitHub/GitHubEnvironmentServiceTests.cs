@@ -45,27 +45,39 @@ public class GitHubEnvironmentServiceTests
     [Test]
     public void GetGitHubEnvironment_WithoutToken_DoesNotIncludeTokenVars()
     {
-        // Arrange
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>())
-            .Build();
+        // Save and clear environment variable to isolate test
+        var savedToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", null);
 
-        using var service = new GitHubEnvironmentService(config, _mockLogger.Object);
+            // Arrange
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>())
+                .Build();
 
-        // Act
-        var env = service.GetGitHubEnvironment();
+            using var service = new GitHubEnvironmentService(config, _mockLogger.Object);
 
-        // Assert - Git identity is always present, but token-related vars should not be
-        Assert.That(env, Does.Not.ContainKey("GITHUB_TOKEN"));
-        Assert.That(env, Does.Not.ContainKey("GH_TOKEN"));
-        Assert.That(env, Does.Not.ContainKey("GIT_ASKPASS"));
-        Assert.That(env, Does.Not.ContainKey("GIT_TERMINAL_PROMPT"));
+            // Act
+            var env = service.GetGitHubEnvironment();
 
-        // Git identity should always be present for git operations
-        Assert.That(env, Does.ContainKey("GIT_AUTHOR_NAME"));
-        Assert.That(env, Does.ContainKey("GIT_AUTHOR_EMAIL"));
-        Assert.That(env, Does.ContainKey("GIT_COMMITTER_NAME"));
-        Assert.That(env, Does.ContainKey("GIT_COMMITTER_EMAIL"));
+            // Assert - Git identity is always present, but token-related vars should not be
+            Assert.That(env, Does.Not.ContainKey("GITHUB_TOKEN"));
+            Assert.That(env, Does.Not.ContainKey("GH_TOKEN"));
+            Assert.That(env, Does.Not.ContainKey("GIT_ASKPASS"));
+            Assert.That(env, Does.Not.ContainKey("GIT_TERMINAL_PROMPT"));
+
+            // Git identity should always be present for git operations
+            Assert.That(env, Does.ContainKey("GIT_AUTHOR_NAME"));
+            Assert.That(env, Does.ContainKey("GIT_AUTHOR_EMAIL"));
+            Assert.That(env, Does.ContainKey("GIT_COMMITTER_NAME"));
+            Assert.That(env, Does.ContainKey("GIT_COMMITTER_EMAIL"));
+        }
+        finally
+        {
+            // Restore original environment variable
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", savedToken);
+        }
     }
 
     [Test]
@@ -88,15 +100,27 @@ public class GitHubEnvironmentServiceTests
     [Test]
     public void IsConfigured_WithoutToken_ReturnsFalse()
     {
-        // Arrange
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>())
-            .Build();
+        // Save and clear environment variable to isolate test
+        var savedToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", null);
 
-        using var service = new GitHubEnvironmentService(config, _mockLogger.Object);
+            // Arrange
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>())
+                .Build();
 
-        // Assert
-        Assert.That(service.IsConfigured, Is.False);
+            using var service = new GitHubEnvironmentService(config, _mockLogger.Object);
+
+            // Assert
+            Assert.That(service.IsConfigured, Is.False);
+        }
+        finally
+        {
+            // Restore original environment variable
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", savedToken);
+        }
     }
 
     [Test]
@@ -125,18 +149,30 @@ public class GitHubEnvironmentServiceTests
     [Test]
     public void GetMaskedToken_WithoutToken_ReturnsNull()
     {
-        // Arrange
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>())
-            .Build();
+        // Save and clear environment variable to isolate test
+        var savedToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", null);
 
-        using var service = new GitHubEnvironmentService(config, _mockLogger.Object);
+            // Arrange
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>())
+                .Build();
 
-        // Act
-        var masked = service.GetMaskedToken();
+            using var service = new GitHubEnvironmentService(config, _mockLogger.Object);
 
-        // Assert
-        Assert.That(masked, Is.Null);
+            // Act
+            var masked = service.GetMaskedToken();
+
+            // Assert
+            Assert.That(masked, Is.Null);
+        }
+        finally
+        {
+            // Restore original environment variable
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", savedToken);
+        }
     }
 
     [Test]
@@ -204,24 +240,36 @@ public class GitHubEnvironmentServiceTests
     [Test]
     public async Task CheckGhAuthStatusAsync_WithoutToken_ReportsNoTokenConfigured()
     {
-        // Arrange - No token configured in our configuration
-        // Note: This test verifies the service correctly identifies no token is configured.
-        // The gh CLI might still be authenticated globally, which is outside our control.
-        var config = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>())
-            .Build();
+        // Save and clear environment variable to isolate test
+        var savedToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+        try
+        {
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", null);
 
-        using var service = new GitHubEnvironmentService(config, _mockLogger.Object);
+            // Arrange - No token configured in our configuration
+            // Note: This test verifies the service correctly identifies no token is configured.
+            // The gh CLI might still be authenticated globally, which is outside our control.
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>())
+                .Build();
 
-        // Act
-        var status = await service.CheckGhAuthStatusAsync();
+            using var service = new GitHubEnvironmentService(config, _mockLogger.Object);
 
-        // Assert - Service should report that no token is configured via IsConfigured
-        Assert.That(service.IsConfigured, Is.False);
-        // The auth status may still show authenticated if gh CLI is globally authenticated,
-        // but our service should report Token auth method is not available
-        Assert.That(status.AuthMethod, Is.Not.EqualTo(GitHubAuthMethod.Token));
-        Assert.That(status.AuthMethod, Is.Not.EqualTo(GitHubAuthMethod.Both));
+            // Act
+            var status = await service.CheckGhAuthStatusAsync();
+
+            // Assert - Service should report that no token is configured via IsConfigured
+            Assert.That(service.IsConfigured, Is.False);
+            // The auth status may still show authenticated if gh CLI is globally authenticated,
+            // but our service should report Token auth method is not available
+            Assert.That(status.AuthMethod, Is.Not.EqualTo(GitHubAuthMethod.Token));
+            Assert.That(status.AuthMethod, Is.Not.EqualTo(GitHubAuthMethod.Both));
+        }
+        finally
+        {
+            // Restore original environment variable
+            Environment.SetEnvironmentVariable("GITHUB_TOKEN", savedToken);
+        }
     }
 
     [Test]

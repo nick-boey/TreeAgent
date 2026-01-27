@@ -110,9 +110,11 @@ public class TempGitRepositoryFixture : IDisposable
 
         try
         {
-            // Clean up the temp directory
             if (Directory.Exists(RepositoryPath))
             {
+                // First, get list of worktrees and clean them up
+                CleanupWorktrees();
+
                 // Force delete all files (handle read-only files in .git)
                 ForceDeleteDirectory(RepositoryPath);
             }
@@ -120,6 +122,63 @@ public class TempGitRepositoryFixture : IDisposable
         catch
         {
             // Best effort cleanup
+        }
+    }
+
+    /// <summary>
+    /// Cleans up any worktrees created during testing.
+    /// </summary>
+    private void CleanupWorktrees()
+    {
+        try
+        {
+            // Get list of worktrees
+            var output = RunGit("worktree list --porcelain");
+            var lines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var worktreePaths = new List<string>();
+
+            foreach (var line in lines)
+            {
+                if (line.StartsWith("worktree "))
+                {
+                    var path = line.Substring(9).Trim();
+                    // Don't try to remove the main worktree (the repo itself)
+                    if (!path.Equals(RepositoryPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        worktreePaths.Add(path);
+                    }
+                }
+            }
+
+            // Remove each worktree
+            foreach (var path in worktreePaths)
+            {
+                try
+                {
+                    RunGit($"worktree remove \"{path}\" --force");
+                }
+                catch
+                {
+                    // Best effort - if git remove fails, try to delete the directory manually
+                }
+
+                // Also try to delete the directory if it still exists
+                if (Directory.Exists(path))
+                {
+                    try
+                    {
+                        ForceDeleteDirectory(path);
+                    }
+                    catch
+                    {
+                        // Best effort cleanup
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Best effort - worktree cleanup is not critical
         }
     }
 
