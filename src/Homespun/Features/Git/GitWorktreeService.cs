@@ -144,6 +144,44 @@ public class GitWorktreeService(ICommandRunner commandRunner, ILogger<GitWorktre
         return worktrees.Any(w => w.Branch?.EndsWith(branchName) == true);
     }
 
+    public async Task<string?> GetWorktreePathForBranchAsync(string repoPath, string branchName)
+    {
+        var worktrees = await ListWorktreesAsync(repoPath);
+
+        // First, try direct branch match (handles most cases where branch name hasn't been sanitized)
+        var directMatch = worktrees.FirstOrDefault(w =>
+            w.Branch?.EndsWith(branchName) == true ||
+            w.Branch == $"refs/heads/{branchName}");
+
+        if (directMatch != null)
+        {
+            logger.LogDebug("Found worktree for branch {BranchName} via direct match at {Path}", branchName, directMatch.Path);
+            return directMatch.Path;
+        }
+
+        // Fall back to path-based matching using sanitized name
+        // This handles cases where the branch name contains special characters like +
+        // that were sanitized when the worktree folder was created
+        var sanitizedName = SanitizeBranchName(branchName);
+        var parentDir = Path.GetDirectoryName(repoPath);
+
+        if (string.IsNullOrEmpty(parentDir))
+        {
+            return null;
+        }
+
+        var expectedPath = Path.GetFullPath(Path.Combine(parentDir, sanitizedName));
+        var pathMatch = worktrees.FirstOrDefault(w =>
+            Path.GetFullPath(w.Path).Equals(expectedPath, StringComparison.OrdinalIgnoreCase));
+
+        if (pathMatch != null)
+        {
+            logger.LogDebug("Found worktree for branch {BranchName} via sanitized path match at {Path}", branchName, pathMatch.Path);
+        }
+
+        return pathMatch?.Path;
+    }
+
     public async Task<bool> PullLatestAsync(string worktreePath)
     {
         // First fetch from remote (may fail for local-only branches, which is OK)
