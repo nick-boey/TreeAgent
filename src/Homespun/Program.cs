@@ -85,7 +85,6 @@ else
 
     // Core services
     builder.Services.AddScoped<IProjectService, ProjectService>();
-    builder.Services.AddScoped<ProjectService>(); // Keep concrete registration for existing injection points
     builder.Services.AddSingleton<IGitHubEnvironmentService, GitHubEnvironmentService>();
     builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
     builder.Services.AddSingleton<IGitWorktreeService, GitWorktreeService>();

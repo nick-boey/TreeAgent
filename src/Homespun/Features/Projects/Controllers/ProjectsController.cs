@@ -9,7 +9,7 @@ namespace Homespun.Features.Projects.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Produces("application/json")]
-public class ProjectsController(ProjectService projectService) : ControllerBase
+public class ProjectsController(IProjectService projectService) : ControllerBase
 {
     /// <summary>
     /// Get all projects.

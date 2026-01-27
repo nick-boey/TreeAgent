@@ -13,7 +13,7 @@ namespace Homespun.Features.ClaudeCode.Controllers;
 [Produces("application/json")]
 public class SessionsController(
     IClaudeSessionService sessionService,
-    ProjectService projectService) : ControllerBase
+    IProjectService projectService) : ControllerBase
 {
     /// <summary>
     /// Get all active sessions.
