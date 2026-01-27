@@ -41,21 +41,27 @@
             }
             else
             {
-                <span>+</span>
+                <span class="btn-content">
+                    <span class="btn-icon">+</span>
+                    <kbd class="shortcut-hint">Enter</kbd>
+                </span>
             }
         </button>
 
         <button class="quick-submit-btn quick-edit-btn"
                 @onclick="HandleSubmitAndEdit"
                 disabled="@(_isSubmitting || string.IsNullOrWhiteSpace(_title))"
-                title="Create and open for editing">
+                title="Create and open for editing (Shift+Enter)">
             @if (_isSubmitting)
             {
                 <span class="spinner-border spinner-border-sm"></span>
             }
             else
             {
-                <span class="edit-icon">&#9998;</span>
+                <span class="btn-content">
+                    <span class="edit-icon">&#9998;</span>
+                    <kbd class="shortcut-hint">Shift</kbd>
+                </span>
             }
         </button>
     </div>
@@ -131,8 +137,8 @@
 
     .quick-submit-btn {
         width: 36px;
-        height: 36px;
-        padding: 0;
+        height: 44px;
+        padding: 4px 0;
         border: none;
         border-radius: var(--radius-sm);
         background: var(--color-ocean);
@@ -168,6 +174,30 @@
 
     .edit-icon {
         font-size: 1rem;
+    }
+
+    .btn-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+    }
+
+    .btn-icon {
+        font-size: 1.25rem;
+        font-weight: bold;
+        line-height: 1;
+    }
+
+    .shortcut-hint {
+        font-size: 0.5rem;
+        opacity: 0.85;
+        line-height: 1;
+        padding: 1px 3px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 2px;
+        font-family: inherit;
+        border: none;
     }
 
     .quick-issue-error {
@@ -215,9 +245,16 @@
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_title))
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_title) && !_isSubmitting)
         {
-            await HandleSubmit();
+            if (e.ShiftKey)
+            {
+                await HandleSubmitAndEdit();
+            }
+            else
+            {
+                await HandleSubmit();
+            }
         }
     }
 
