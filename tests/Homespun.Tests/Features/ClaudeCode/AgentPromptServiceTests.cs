@@ -200,9 +200,10 @@ public class AgentPromptServiceTests
         await _service.EnsureDefaultPromptsAsync();
 
         var prompts = _service.GetAllPrompts();
-        Assert.That(prompts, Has.Count.EqualTo(2));
+        Assert.That(prompts, Has.Count.EqualTo(3)); // Plan, Build, Rebase
         Assert.That(prompts.Any(p => p.Name == "Plan"), Is.True);
         Assert.That(prompts.Any(p => p.Name == "Build"), Is.True);
+        Assert.That(prompts.Any(p => p.Name == "Rebase"), Is.True);
     }
 
     [Test]
@@ -213,7 +214,7 @@ public class AgentPromptServiceTests
         await _service.EnsureDefaultPromptsAsync();
 
         var prompts = _service.GetAllPrompts();
-        Assert.That(prompts, Has.Count.EqualTo(3)); // Custom + 2 defaults
+        Assert.That(prompts, Has.Count.EqualTo(4)); // Custom + 3 defaults (Plan, Build, Rebase)
     }
 
     [Test]
@@ -223,11 +224,13 @@ public class AgentPromptServiceTests
 
         var planPrompt = _service.GetAllPrompts().FirstOrDefault(p => p.Name == "Plan");
         var buildPrompt = _service.GetAllPrompts().FirstOrDefault(p => p.Name == "Build");
+        var rebasePrompt = _service.GetAllPrompts().FirstOrDefault(p => p.Name == "Rebase");
 
         Assert.Multiple(() =>
         {
             Assert.That(planPrompt!.Mode, Is.EqualTo(SessionMode.Plan));
             Assert.That(buildPrompt!.Mode, Is.EqualTo(SessionMode.Build));
+            Assert.That(rebasePrompt!.Mode, Is.EqualTo(SessionMode.Build));
         });
     }
 

@@ -12,7 +12,9 @@
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
 @inject IGitHubService GitHubService
+@inject IRebaseAgentService RebaseAgentService
 @inject PullRequestDataService PullRequestDataService
+@inject PullRequestWorkflowService PullRequestWorkflowService
 @inject NavigationManager NavigationManager
 @inject ILogger<WorktreeManagementPanel> Logger
 
@@ -171,6 +173,12 @@
                                                     disabled="@_operationInProgress"
                                                     title="Pull latest changes">
                                                 Pull
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-warning me-1"
+                                                    @onclick="() => StartRebaseAgentAsync(worktree)"
+                                                    disabled="@(_operationInProgress || session != null || StartupTracker.IsStarting(GetWorktreeEntityId(worktree)))"
+                                                    title="Start rebase agent to rebase onto @Project.DefaultBranch">
+                                                <i class="bi bi-arrow-repeat"></i> Rebase
                                             </button>
                                         }
 
@@ -644,6 +652,50 @@
         catch (Exception ex)
         {
             _errorMessage = $"Failed to stop session: {ex.Message}";
+        }
+        finally
+        {
+            _operationInProgress = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StartRebaseAgentAsync(WorktreeInfo worktree)
+    {
+        var branchName = GetShortBranchName(worktree.Branch);
+        var entityId = $"rebase-{branchName}";
+
+        StartupTracker.MarkAsStarting(entityId);
+        _operationInProgress = true;
+        StateHasChanged();
+
+        try
+        {
+            // Get recently merged PRs for context
+            var recentMergedPRs = await PullRequestWorkflowService.GetMergedPullRequestsWithTimeAsync(Project.Id);
+            var recentPRInfos = recentMergedPRs
+                .Take(10)
+                .Select(pr => pr.PullRequest)
+                .ToList();
+
+            var session = await RebaseAgentService.StartRebaseAgentAsync(
+                Project.Id,
+                worktree.Path,
+                branchName,
+                Project.DefaultBranch,
+                Project.DefaultModel ?? "sonnet",
+                recentPRInfos);
+
+            StartupTracker.MarkAsStarted(entityId);
+
+            // Navigate to the session
+            NavigationManager.NavigateTo($"/session/{session.Id}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start rebase agent for worktree {WorktreePath}", worktree.Path);
+            StartupTracker.MarkAsFailed(entityId, ex.Message);
+            _errorMessage = $"Failed to start rebase agent: {ex.Message}";
         }
         finally
         {

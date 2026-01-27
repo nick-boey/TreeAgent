@@ -109,6 +109,15 @@ public partial class AgentPromptService : IAgentPromptService
                 GetDefaultBuildMessage(),
                 SessionMode.Build);
         }
+
+        // Create Rebase prompt if it doesn't exist
+        if (!existingPrompts.Any(p => p.Name.Equals("Rebase", StringComparison.OrdinalIgnoreCase)))
+        {
+            await CreatePromptAsync(
+                "Rebase",
+                GetDefaultRebaseMessage(),
+                SessionMode.Build);
+        }
     }
 
     private static string GetDefaultPlanMessage()
@@ -148,6 +157,23 @@ public partial class AgentPromptService : IAgentPromptService
             ---
 
             Please implement this issue. Start by understanding the requirements and exploring the codebase, then proceed with the implementation.
+            """;
+    }
+
+    private static string GetDefaultRebaseMessage()
+    {
+        return """
+            ## Rebase Request
+
+            Please rebase branch `{{branch}}` onto the latest default branch.
+
+            Follow the workflow in your system prompt:
+            1. Fetch the latest changes
+            2. Analyze the commits to be rebased
+            3. Perform the rebase
+            4. Resolve any conflicts using the context provided
+            5. Run tests to verify no regressions
+            6. Push with --force-with-lease when ready
             """;
     }
 }
