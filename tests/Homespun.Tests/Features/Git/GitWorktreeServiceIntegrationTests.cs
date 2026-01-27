@@ -279,6 +279,97 @@ public class GitWorktreeServiceIntegrationTests
         Assert.That(Directory.Exists(worktreePath), Is.True);
     }
 
+    #region GetWorktreePathForBranchAsync Integration Tests
+
+    /// <summary>
+    /// Integration test for the bug reported in issue 7udaqv.
+    /// When a PR is synced from GitHub with a branch name containing "+", the worktree path
+    /// should be found even though the folder uses "-" instead of "+" due to sanitization.
+    /// </summary>
+    [Test]
+    public async Task GetWorktreePathForBranch_WithPlusInBranchName_MatchesSanitizedWorktreePath()
+    {
+        // Arrange
+        // The branch name as it would appear in GitHub PR (with + character)
+        // This simulates the branch naming convention: issues/type/name+issueId
+        var gitHubBranchName = "issues/feature/improve-tool-output+aLP3LH";
+
+        // Create the branch in git (git allows + in branch names)
+        _fixture.RunGit($"branch \"{gitHubBranchName}\"");
+
+        // Create a worktree for this branch - the path will be sanitized (+ becomes -)
+        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, gitHubBranchName);
+        Assert.That(worktreePath, Is.Not.Null);
+
+        // Verify the worktree path was sanitized (+ replaced with -)
+        Assert.That(worktreePath, Does.Contain("improve-tool-output-aLP3LH"));
+        Assert.That(worktreePath, Does.Not.Contain("+"));
+
+        // Act - Now simulate what happens during PR sync:
+        // Given only the GitHub branch name (with +), can we find the existing worktree?
+        var foundPath = await _service.GetWorktreePathForBranchAsync(_fixture.RepositoryPath, gitHubBranchName);
+
+        // Assert
+        Assert.That(foundPath, Is.Not.Null, "Should find the worktree path for the branch with + character");
+        Assert.That(NormalizePath(foundPath!), Is.EqualTo(NormalizePath(worktreePath!)));
+    }
+
+    [Test]
+    public async Task GetWorktreePathForBranch_WithNoExistingWorktree_ReturnsNull()
+    {
+        // Arrange
+        var branchName = "issues/feature/no-worktree+test";
+        _fixture.RunGit($"branch \"{branchName}\"");
+        // Note: We do NOT create a worktree for this branch
+
+        // Act
+        var foundPath = await _service.GetWorktreePathForBranchAsync(_fixture.RepositoryPath, branchName);
+
+        // Assert
+        Assert.That(foundPath, Is.Null);
+    }
+
+    [Test]
+    public async Task GetWorktreePathForBranch_WithRegularBranchName_MatchesDirectly()
+    {
+        // Arrange
+        var branchName = "feature/normal-branch";
+        _fixture.CreateBranch(branchName);
+
+        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
+        Assert.That(worktreePath, Is.Not.Null);
+
+        // Act
+        var foundPath = await _service.GetWorktreePathForBranchAsync(_fixture.RepositoryPath, branchName);
+
+        // Assert
+        Assert.That(foundPath, Is.Not.Null);
+        Assert.That(NormalizePath(foundPath!), Is.EqualTo(NormalizePath(worktreePath!)));
+    }
+
+    [Test]
+    public async Task GetWorktreePathForBranch_WithMultipleSpecialCharacters_MatchesSanitizedPath()
+    {
+        // Arrange - Test with multiple special characters that get sanitized
+        var branchName = "feature/test+foo@bar#baz";
+        _fixture.RunGit($"branch \"{branchName}\"");
+
+        var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
+        Assert.That(worktreePath, Is.Not.Null);
+
+        // Verify sanitization happened
+        Assert.That(worktreePath, Does.Contain("test-foo-bar-baz"));
+
+        // Act
+        var foundPath = await _service.GetWorktreePathForBranchAsync(_fixture.RepositoryPath, branchName);
+
+        // Assert
+        Assert.That(foundPath, Is.Not.Null);
+        Assert.That(NormalizePath(foundPath!), Is.EqualTo(NormalizePath(worktreePath!)));
+    }
+
+    #endregion
+
     #region ListLocalBranchesAsync Integration Tests
 
     [Test]
@@ -319,6 +410,7 @@ public class GitWorktreeServiceIntegrationTests
         // Arrange
         var branchName = "feature/worktree-branch";
         _fixture.CreateBranch(branchName);
+
         var worktreePath = await _service.CreateWorktreeAsync(_fixture.RepositoryPath, branchName);
         Assert.That(worktreePath, Is.Not.Null);
 

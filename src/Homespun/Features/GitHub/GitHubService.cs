@@ -1,4 +1,5 @@
 using Homespun.Features.Commands;
+using Homespun.Features.Git;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
@@ -13,6 +14,7 @@ public class GitHubService(
     IConfiguration configuration,
     IGitHubClientWrapper githubClient,
     IIssuePrLinkingService issuePrLinkingService,
+    IGitWorktreeService worktreeService,
     ILogger<GitHubService> logger)
     : IGitHubService
 {
@@ -311,14 +313,29 @@ public class GitHubService(
                     pullRequest.Title = pr.Title;
                     pullRequest.Description = pr.Body;
                     pullRequest.UpdatedAt = DateTime.UtcNow;
+
+                    // Try to find existing worktree if WorktreePath is not set
+                    // This handles cases where the worktree was created with a sanitized path
+                    // (e.g., branch "foo+bar" creates worktree folder "foo-bar")
+                    if (string.IsNullOrEmpty(pullRequest.WorktreePath) && !string.IsNullOrEmpty(pr.BranchName))
+                    {
+                        pullRequest.WorktreePath = await worktreeService.GetWorktreePathForBranchAsync(
+                            project.LocalPath, pr.BranchName);
+                        if (!string.IsNullOrEmpty(pullRequest.WorktreePath))
+                        {
+                            logger.LogInformation("Found existing worktree for PR #{PrNumber} at {WorktreePath}",
+                                pr.Number, pullRequest.WorktreePath);
+                        }
+                    }
+
                     await dataStore.UpdatePullRequestAsync(pullRequest);
-                    
+
                     // Try to link to beads issue if not already linked (backfill)
                     if (string.IsNullOrEmpty(pullRequest.BeadsIssueId))
                     {
                         await issuePrLinkingService.TryLinkByBranchNameAsync(projectId, pullRequest.Id);
                     }
-                    
+
                     result.Updated++;
                 }
                 else
@@ -335,11 +352,24 @@ public class GitHubService(
                         CreatedAt = pr.CreatedAt
                     };
 
+                    // Try to find existing worktree for this branch
+                    // This handles cases where a worktree was created before the PR was synced
+                    if (!string.IsNullOrEmpty(pr.BranchName))
+                    {
+                        pullRequest.WorktreePath = await worktreeService.GetWorktreePathForBranchAsync(
+                            project.LocalPath, pr.BranchName);
+                        if (!string.IsNullOrEmpty(pullRequest.WorktreePath))
+                        {
+                            logger.LogInformation("Found existing worktree for new PR #{PrNumber} at {WorktreePath}",
+                                pr.Number, pullRequest.WorktreePath);
+                        }
+                    }
+
                     await dataStore.AddPullRequestAsync(pullRequest);
-                    
+
                     // Try to link to beads issue by branch name
                     await issuePrLinkingService.TryLinkByBranchNameAsync(projectId, pullRequest.Id);
-                    
+
                     result.Imported++;
                 }
             }

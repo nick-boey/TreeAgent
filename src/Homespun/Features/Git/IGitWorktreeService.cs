@@ -12,6 +12,17 @@ public interface IGitWorktreeService
     Task<bool> WorktreeExistsAsync(string repoPath, string branchName);
 
     /// <summary>
+    /// Gets the worktree path for a given branch name, accounting for branch name sanitization.
+    /// First checks for a direct branch name match, then falls back to matching the sanitized
+    /// branch name against worktree paths.
+    /// </summary>
+    /// <param name="repoPath">Path to the repository</param>
+    /// <param name="branchName">The original branch name (may contain special characters like +)</param>
+    /// <returns>The worktree path if found, null otherwise</returns>
+    Task<string?> GetWorktreePathForBranchAsync(string repoPath, string branchName);
+
+
+    /// <summary>
     /// Pull the latest changes from the remote for a worktree.
     /// </summary>
     /// <param name="worktreePath">Path to the worktree directory</param>

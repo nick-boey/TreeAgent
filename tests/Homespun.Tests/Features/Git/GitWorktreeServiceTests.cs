@@ -196,6 +196,16 @@ public class GitWorktreeServiceTests
     }
 
     [Test]
+    public void SanitizeBranchName_WithPlusCharacter_ReplacesWithDash()
+    {
+        // Act - Plus character is used to separate branch name from issue ID
+        var result = GitWorktreeService.SanitizeBranchName("issues/feature/improve-tool-output+aLP3LH");
+
+        // Assert - Plus should be replaced with dash for filesystem compatibility
+        Assert.That(result, Is.EqualTo("issues/feature/improve-tool-output-aLP3LH"));
+    }
+
+    [Test]
     public async Task CreateWorktree_WithNewBranch_CreatesBranchFirst()
     {
         // Arrange
@@ -274,6 +284,134 @@ public class GitWorktreeServiceTests
         // Assert
         Assert.That(result, Is.False);
     }
+
+    #region GetWorktreePathForBranchAsync Tests
+
+    [Test]
+    public async Task GetWorktreePathForBranchAsync_WithDirectBranchMatch_ReturnsPath()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+        var branchName = "feature/test";
+        var expectedPath = Path.Combine(_tempDir, "feature/test");
+
+        // Mock git worktree list to return a worktree with matching branch
+        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = $"worktree {expectedPath}\nbranch refs/heads/{branchName}"
+            });
+
+        // Act
+        var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
+
+        // Assert
+        Assert.That(result, Is.EqualTo(expectedPath));
+    }
+
+    [Test]
+    public async Task GetWorktreePathForBranchAsync_WithSanitizedBranchName_MatchesByPath()
+    {
+        // Arrange - This is the scenario from the bug report
+        // Branch name has + but worktree folder has - (due to sanitization)
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+
+        // Original branch name from GitHub PR (with + character)
+        var branchName = "issues/feature/improve-tool-output+aLP3LH";
+
+        // The worktree was created with sanitized path (+ became -)
+        var sanitizedPath = Path.Combine(_tempDir, "issues/feature/improve-tool-output-aLP3LH");
+
+        // Mock git worktree list - branch name is still the original, but path is sanitized
+        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = $"worktree {sanitizedPath}\nbranch refs/heads/{branchName}"
+            });
+
+        // Act
+        var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
+
+        // Assert - Should find by direct branch match first (since branch name in git is preserved)
+        Assert.That(result, Is.EqualTo(sanitizedPath));
+    }
+
+    [Test]
+    public async Task GetWorktreePathForBranchAsync_WithSanitizedPath_FallsBackToPathMatch()
+    {
+        // Arrange - Test the path-based fallback when branch doesn't match directly
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+
+        // Original branch name from GitHub PR (with + character)
+        var branchName = "issues/feature/improve-tool-output+aLP3LH";
+
+        // The worktree was created with sanitized path
+        var sanitizedPath = Path.GetFullPath(Path.Combine(_tempDir, "issues/feature/improve-tool-output-aLP3LH"));
+
+        // Mock git worktree list - worktree exists at sanitized path but with a different branch name
+        // This simulates a case where git reports a slightly different branch name
+        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = $"worktree {sanitizedPath}\nbranch refs/heads/some-other-branch"
+            });
+
+        // Act
+        var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
+
+        // Assert - Should find by sanitized path match
+        Assert.That(result, Is.Not.Null);
+        Assert.That(Path.GetFullPath(result!), Is.EqualTo(sanitizedPath).IgnoreCase);
+    }
+
+    [Test]
+    public async Task GetWorktreePathForBranchAsync_NoMatchingWorktree_ReturnsNull()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+        var branchName = "feature/nonexistent+test";
+
+        // Mock git worktree list - only main worktree exists
+        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = $"worktree {repoPath}\nbranch refs/heads/main"
+            });
+
+        // Act
+        var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public async Task GetWorktreePathForBranchAsync_GitCommandFails_ReturnsNull()
+    {
+        // Arrange
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+        var branchName = "feature/test";
+
+        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
+            .ReturnsAsync(new CommandResult { Success = false, Error = "git error" });
+
+        // Act
+        var result = await _service.GetWorktreePathForBranchAsync(repoPath, branchName);
+
+        // Assert
+        Assert.That(result, Is.Null);
+    }
+
+    #endregion
 
     #region ListLocalBranchesAsync Tests
 
