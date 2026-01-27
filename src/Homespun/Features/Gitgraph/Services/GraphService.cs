@@ -6,6 +6,7 @@ using Homespun.Features.Gitgraph.Data;
 using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
+using Homespun.Features.PullRequests.Data;
 
 namespace Homespun.Features.Gitgraph.Services;
 
@@ -14,10 +15,11 @@ namespace Homespun.Features.Gitgraph.Services;
 /// Uses IFleeceService for fast issue access.
 /// </summary>
 public class GraphService(
-    ProjectService projectService,
+    IProjectService projectService,
     IGitHubService gitHubService,
     IFleeceService fleeceService,
     IClaudeSessionStore sessionStore,
+    IDataStore dataStore,
     ILogger<GraphService> logger) : IGraphService
 {
     private readonly GraphBuilder _graphBuilder = new();
@@ -41,11 +43,15 @@ public class GraphService(
         // Fetch issues from Fleece
         var issues = await GetIssuesAsync(project.LocalPath);
 
-        logger.LogDebug(
-            "Building graph for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues, maxPastPRs: {MaxPastPRs}",
-            projectId, openPrs.Count, closedPrs.Count, issues.Count, maxPastPRs);
+        // Filter out issues that are linked to PRs (they will be shown with the PR instead)
+        var linkedIssueIds = GetLinkedIssueIds(projectId);
+        var filteredIssues = issues.Where(i => !linkedIssueIds.Contains(i.Id)).ToList();
 
-        return _graphBuilder.Build(allPrs, issues, maxPastPRs);
+        logger.LogDebug(
+            "Building graph for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues ({FilteredCount} after filtering linked), maxPastPRs: {MaxPastPRs}",
+            projectId, openPrs.Count, closedPrs.Count, issues.Count, filteredIssues.Count, maxPastPRs);
+
+        return _graphBuilder.Build(allPrs, filteredIssues, maxPastPRs);
     }
 
     /// <inheritdoc />
@@ -114,6 +120,19 @@ public class GraphService(
             logger.LogWarning(ex, "Failed to fetch closed PRs for project {ProjectId}", projectId);
             return [];
         }
+    }
+
+    /// <summary>
+    /// Gets the set of issue IDs that are linked to PRs.
+    /// Issues linked to PRs should not be shown in the graph (their info is shown with the PR instead).
+    /// </summary>
+    private HashSet<string> GetLinkedIssueIds(string projectId)
+    {
+        var prs = dataStore.GetPullRequestsByProject(projectId);
+        return prs
+            .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId))
+            .Select(pr => pr.BeadsIssueId!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>

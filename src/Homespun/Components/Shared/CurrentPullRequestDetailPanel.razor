@@ -1,5 +1,7 @@
+@using Fleece.Core.Models
 @using Homespun.Features.ClaudeCode.Data
 @using Homespun.Features.ClaudeCode.Services
+@using Homespun.Features.Fleece.Services
 @using Homespun.Features.Git
 @using Homespun.Features.GitHub
 @using Homespun.Features.Projects
@@ -7,6 +9,7 @@
 @using Homespun.Features.PullRequests.Data
 @using Homespun.Features.PullRequests.Data.Entities
 
+@inject IFleeceService FleeceService
 @inject IClaudeSessionStore SessionStore
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
@@ -56,14 +59,41 @@
             <p class="card-text">@PullRequest.Description</p>
         }
 
+        @* Linked Issue Details Section *@
+        @if (_linkedIssue != null)
+        {
+            <div class="border rounded p-2 mb-3 bg-surface-secondary">
+                <h6 class="mb-2">
+                    <span class="badge bg-status-info text-text-primary mr-1">@_linkedIssue.Id</span>
+                    Linked Issue
+                </h6>
+                <p class="mb-1 font-bold">@_linkedIssue.Title</p>
+                <div class="mb-1">
+                    <span class="badge @GetIssueTypeBadgeClass(_linkedIssue.Type)">@_linkedIssue.Type</span>
+                    <span class="badge @GetIssueStatusBadgeClass(_linkedIssue.Status)">@_linkedIssue.Status</span>
+                    @if (_linkedIssue.Priority.HasValue)
+                    {
+                        <span class="badge bg-secondary">P@_linkedIssue.Priority</span>
+                    }
+                </div>
+                @if (!string.IsNullOrEmpty(_linkedIssue.Description))
+                {
+                    <p class="mb-0 text-sm text-text-muted">@TruncateDescription(_linkedIssue.Description, 150)</p>
+                }
+            </div>
+        }
+        else if (!string.IsNullOrEmpty(PullRequest.BeadsIssueId))
+        {
+            <div class="border rounded p-2 mb-3 bg-surface-secondary">
+                <h6 class="mb-2">
+                    <span class="badge bg-status-info text-text-primary mr-1">@PullRequest.BeadsIssueId</span>
+                    Linked Issue
+                    <span class="text-text-muted text-sm">(not found)</span>
+                </h6>
+            </div>
+        }
+
         <dl class="grid grid-cols-12 text-sm">
-            @if (!string.IsNullOrEmpty(PullRequest.BeadsIssueId))
-            {
-                <dt class="col-span-4">Linked Issue</dt>
-                <dd class="col-span-8">
-                    <span class="badge bg-status-info text-text-primary">@PullRequest.BeadsIssueId</span>
-                </dd>
-            }
             @if (!string.IsNullOrEmpty(PullRequest.BranchName))
             {
                 <dt class="col-span-4">Branch</dt>
@@ -221,11 +251,31 @@
     private WorktreeInfo? _worktreeInfo;
     private BranchInfo? _branchInfo;
     private bool _isRebasing;
+    private Issue? _linkedIssue;
 
     protected override async Task OnParametersSetAsync()
     {
         RefreshSessionStatus();
         await LoadWorktreeInfoAsync();
+        await LoadLinkedIssueAsync();
+    }
+
+    private async Task LoadLinkedIssueAsync()
+    {
+        _linkedIssue = null;
+
+        if (string.IsNullOrEmpty(PullRequest.BeadsIssueId) || _project == null)
+            return;
+
+        try
+        {
+            _linkedIssue = await FleeceService.GetIssueAsync(_project.LocalPath, PullRequest.BeadsIssueId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load linked issue {IssueId} for PR {PullRequestId}",
+                PullRequest.BeadsIssueId, PullRequest.Id);
+        }
     }
 
     private async Task LoadWorktreeInfoAsync()
@@ -404,10 +454,27 @@
             sb.AppendLine($"Branch: {PullRequest.BranchName}");
         }
 
-        if (!string.IsNullOrEmpty(PullRequest.BeadsIssueId))
+        // Include full linked issue details if available
+        if (_linkedIssue != null)
         {
             sb.AppendLine();
-            sb.AppendLine($"Linked Issue: {PullRequest.BeadsIssueId}");
+            sb.AppendLine($"Linked Issue: {_linkedIssue.Id}");
+            sb.AppendLine($"Issue Title: {_linkedIssue.Title}");
+            sb.AppendLine($"Issue Type: {_linkedIssue.Type}");
+            sb.AppendLine($"Issue Status: {_linkedIssue.Status}");
+            if (_linkedIssue.Priority.HasValue)
+            {
+                sb.AppendLine($"Issue Priority: {_linkedIssue.Priority}");
+            }
+            if (!string.IsNullOrEmpty(_linkedIssue.Description))
+            {
+                sb.AppendLine($"Issue Description: {_linkedIssue.Description}");
+            }
+        }
+        else if (!string.IsNullOrEmpty(PullRequest.BeadsIssueId))
+        {
+            sb.AppendLine();
+            sb.AppendLine($"Linked Issue ID: {PullRequest.BeadsIssueId}");
         }
 
         return sb.ToString();
@@ -576,5 +643,33 @@
     {
         var parts = model.Split('/');
         return parts.Length > 1 ? parts[1] : model;
+    }
+
+    private static string GetIssueTypeBadgeClass(IssueType type) => type switch
+    {
+        IssueType.Feature => "bg-primary",
+        IssueType.Bug => "bg-danger",
+        IssueType.Task => "bg-info text-dark",
+        IssueType.Chore => "bg-dark",
+        _ => "bg-secondary"
+    };
+
+    private static string GetIssueStatusBadgeClass(IssueStatus status) => status switch
+    {
+        IssueStatus.Idea => "bg-secondary",
+        IssueStatus.Spec => "bg-info text-dark",
+        IssueStatus.Next => "bg-warning text-dark",
+        IssueStatus.Progress => "bg-primary",
+        IssueStatus.Review => "bg-info text-dark",
+        IssueStatus.Complete => "bg-success",
+        IssueStatus.Closed => "bg-success",
+        _ => "bg-secondary"
+    };
+
+    private static string TruncateDescription(string text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
+            return text;
+        return text[..maxLength].TrimEnd() + "...";
     }
 }
