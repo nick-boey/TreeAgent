@@ -2,6 +2,8 @@
 @using Homespun.Features.ClaudeCode.Services
 @using Homespun.Features.Git
 @using Homespun.Features.GitHub
+@using Homespun.Features.Projects
+@using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data
 @using Homespun.Features.PullRequests.Data.Entities
 
@@ -9,7 +11,10 @@
 @inject IClaudeSessionService SessionService
 @inject IAgentStartupTracker StartupTracker
 @inject IAgentPromptService AgentPromptService
+@inject IRebaseAgentService RebaseAgentService
 @inject PullRequestDataService PullRequestDataService
+@inject PullRequestWorkflowService PullRequestWorkflowService
+@inject ProjectService ProjectService
 @inject IGitHubService GitHubService
 @inject IGitWorktreeService GitWorktreeService
 @inject NavigationManager NavigationManager
@@ -142,6 +147,19 @@
                         Disabled="@StartSessionDisabled"
                         IsStarting="@StartupTracker.IsStarting(PullRequest.Id)"
                         OnStart="HandleAgentStart" />
+
+                    @if (_worktreeInfo != null && _branchInfo?.BehindCount > 0)
+                    {
+                        <button class="btn btn-sm btn-outline-warning w-100"
+                                @onclick="StartRebaseAsync"
+                                disabled="@(_isRebasing || StartupTracker.IsStarting(PullRequest.Id))">
+                            @if (_isRebasing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                            }
+                            Rebase onto @_project?.DefaultBranch (@_branchInfo.BehindCount behind)
+                        </button>
+                    }
                 </div>
             }
 
@@ -192,10 +210,43 @@
     private string? _sessionErrorMessage;
     private ClaudeSession? _session;
     private string _selectedModel = "opus";
+    private Project? _project;
+    private WorktreeInfo? _worktreeInfo;
+    private BranchInfo? _branchInfo;
+    private bool _isRebasing;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         RefreshSessionStatus();
+        await LoadWorktreeInfoAsync();
+    }
+
+    private async Task LoadWorktreeInfoAsync()
+    {
+        _worktreeInfo = null;
+        _branchInfo = null;
+
+        // Load project if not already loaded from PullRequest
+        _project = PullRequest.Project ?? await ProjectService.GetByIdAsync(PullRequest.ProjectId);
+
+        if (_project == null || string.IsNullOrEmpty(PullRequest.WorktreePath))
+            return;
+
+        try
+        {
+            var worktrees = await GitWorktreeService.ListWorktreesAsync(_project.LocalPath);
+            _worktreeInfo = worktrees.FirstOrDefault(w => w.Path == PullRequest.WorktreePath);
+
+            if (_worktreeInfo != null && !string.IsNullOrEmpty(PullRequest.BranchName))
+            {
+                var branches = await GitWorktreeService.ListLocalBranchesAsync(_project.LocalPath);
+                _branchInfo = branches.FirstOrDefault(b => b.ShortName == PullRequest.BranchName);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load worktree info for PR {PullRequestId}", PullRequest.Id);
+        }
     }
 
     private void RefreshSessionStatus()
@@ -375,6 +426,56 @@
         finally
         {
             _isSessionLoading = false;
+        }
+    }
+
+    private async Task StartRebaseAsync()
+    {
+        if (_project == null || _worktreeInfo == null || string.IsNullOrEmpty(PullRequest.BranchName))
+        {
+            _errorMessage = "Project or worktree not available.";
+            return;
+        }
+
+        var entityId = $"rebase-{PullRequest.BranchName}";
+
+        StartupTracker.MarkAsStarting(entityId);
+        _isRebasing = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            // Get recently merged PRs for context
+            var recentMergedPRs = await PullRequestWorkflowService.GetMergedPullRequestsWithTimeAsync(_project.Id);
+            var recentPRInfos = recentMergedPRs
+                .Take(10)
+                .Select(pr => pr.PullRequest)
+                .ToList();
+
+            var session = await RebaseAgentService.StartRebaseAgentAsync(
+                _project.Id,
+                _worktreeInfo.Path,
+                PullRequest.BranchName,
+                _project.DefaultBranch,
+                _selectedModel,
+                recentPRInfos);
+
+            StartupTracker.MarkAsStarted(entityId);
+
+            // Navigate to the session
+            NavigationManager.NavigateTo($"/session/{session.Id}");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to start rebase agent for PR {PullRequestId}", PullRequest.Id);
+            StartupTracker.MarkAsFailed(entityId, ex.Message);
+            _errorMessage = $"Failed to start rebase agent: {ex.Message}";
+        }
+        finally
+        {
+            _isRebasing = false;
+            StateHasChanged();
         }
     }
 
