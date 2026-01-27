@@ -175,39 +175,42 @@
             </div>
         }
 
-        <!-- Debug Panel -->
-        <details class="debug-panel">
-            <summary @onclick="ToggleDebugMode" @onclick:preventDefault @onclick:stopPropagation>
-                <span>Debug SignalR Events</span>
+        @if (IsDebugBuild)
+        {
+            <!-- Debug Panel -->
+            <details class="debug-panel">
+                <summary @onclick="ToggleDebugMode" @onclick:preventDefault @onclick:stopPropagation>
+                    <span>Debug SignalR Events</span>
+                    @if (_debugMode)
+                    {
+                        <span class="debug-count">(@_debugLog.Count events)</span>
+                    }
+                </summary>
                 @if (_debugMode)
                 {
-                    <span class="debug-count">(@_debugLog.Count events)</span>
-                }
-            </summary>
-            @if (_debugMode)
-            {
-                <div class="debug-controls">
-                    <button class="btn btn-outline-secondary btn-sm" @onclick="ClearDebugLog">Clear Log</button>
-                </div>
-                <div class="debug-log">
-                    @if (_debugLog.Count == 0)
-                    {
-                        <div class="debug-empty">No events logged yet. Interact with the session to see SignalR events.</div>
-                    }
-                    else
-                    {
-                        @foreach (var entry in _debugLog.AsEnumerable().Reverse().Take(50))
+                    <div class="debug-controls">
+                        <button class="btn btn-outline-secondary btn-sm" @onclick="ClearDebugLog">Clear Log</button>
+                    </div>
+                    <div class="debug-log">
+                        @if (_debugLog.Count == 0)
                         {
-                            <div class="debug-entry @(entry.EventType == "ERROR" ? "error" : "")">
-                                <span class="debug-time">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
-                                <span class="debug-type">@entry.EventType</span>
-                                <span class="debug-message">@entry.Message</span>
-                            </div>
+                            <div class="debug-empty">No events logged yet. Interact with the session to see SignalR events.</div>
                         }
-                    }
-                </div>
-            }
-        </details>
+                        else
+                        {
+                            @foreach (var entry in _debugLog.AsEnumerable().Reverse().Take(50))
+                            {
+                                <div class="debug-entry @(entry.EventType == "ERROR" ? "error" : "")">
+                                    <span class="debug-time">@entry.Timestamp.ToString("HH:mm:ss.fff")</span>
+                                    <span class="debug-type">@entry.EventType</span>
+                                    <span class="debug-message">@entry.Message</span>
+                                </div>
+                            }
+                        }
+                    </div>
+                }
+            </details>
+        }
     }
 </div>
 
@@ -950,6 +953,17 @@
     private HubConnection? _hubConnection;
     private string? _signalRError;
 
+    // Debug log entry class (needs to be accessible in both Debug and Release for Razor compilation)
+    private class DebugLogEntry
+    {
+        public DateTime Timestamp { get; init; }
+        public required string EventType { get; init; }
+        public required string Message { get; init; }
+    }
+
+    // IsDebugBuild property for conditional rendering
+#if DEBUG
+    private static bool IsDebugBuild => true;
     // Debug mode for SignalR event logging
     private bool _debugMode = false;
     private List<DebugLogEntry> _debugLog = new();
@@ -988,13 +1002,15 @@
         _debugLog.Clear();
         StateHasChanged();
     }
-
-    private class DebugLogEntry
-    {
-        public DateTime Timestamp { get; init; }
-        public required string EventType { get; init; }
-        public required string Message { get; init; }
-    }
+#else
+    private static bool IsDebugBuild => false;
+    // Stubs for Release builds (never used since IsDebugBuild is false)
+    private bool _debugMode => false;
+    private List<DebugLogEntry> _debugLog => new();
+    private static void LogDebug(string eventType, string message) { }
+    private void ToggleDebugMode() { }
+    private void ClearDebugLog() { }
+#endif
 
     /// <summary>
     /// Gets the assistant message for the current turn (the one that comes after the last real user message).

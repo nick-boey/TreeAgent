@@ -186,29 +186,32 @@ else
                             }
                         </dl>
 
-                        <hr class="my-3" />
+                        @if (IsDebugBuild)
+                        {
+                            <hr class="my-3" />
 
-                        <div class="flex flex-col gap-2">
-                            <button class="btn btn-outline-primary btn-sm"
-                                    @onclick="StartTestAgentAsync"
-                                    disabled="@_isStartingTestAgent">
-                                @if (_isStartingTestAgent)
+                            <div class="flex flex-col gap-2">
+                                <button class="btn btn-outline-primary btn-sm"
+                                        @onclick="StartTestAgentAsync"
+                                        disabled="@_isStartingTestAgent">
+                                    @if (_isStartingTestAgent)
+                                    {
+                                        <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
+                                        <span>Starting...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Start Test Agent</span>
+                                    }
+                                </button>
+                                @if (!string.IsNullOrEmpty(_testAgentError))
                                 {
-                                    <span class="spinner-border spinner-border-sm mr-1" role="status"></span>
-                                    <span>Starting...</span>
+                                    <div class="alert alert-danger py-1 px-2 mb-0 text-sm">
+                                        @_testAgentError
+                                    </div>
                                 }
-                                else
-                                {
-                                    <span>Start Test Agent</span>
-                                }
-                            </button>
-                            @if (!string.IsNullOrEmpty(_testAgentError))
-                            {
-                                <div class="alert alert-danger py-1 px-2 mb-0 text-sm">
-                                    @_testAgentError
-                                </div>
-                            }
-                        </div>
+                            </div>
+                        }
                     </div>
                 </div>
             }
@@ -327,11 +330,21 @@ else
     // Tab navigation state
     private string _activeTab = "issues";
 
+    // IsDebugBuild property for conditional rendering
+#if DEBUG
+    private static bool IsDebugBuild => true;
     // Test agent state
     private bool _isStartingTestAgent;
     private string? _testAgentError;
     private const string TestAgentEntityId = "test-agent";
     private const string TestBranchName = "hsp/test";
+#else
+    private static bool IsDebugBuild => false;
+    // Stubs for Release build (never used since IsDebugBuild is false)
+    private bool _isStartingTestAgent => false;
+    private string? _testAgentError => null;
+    private Task StartTestAgentAsync() => Task.CompletedTask;
+#endif
 
     // Fleece sync state
     private bool _isSyncingFleece;
@@ -752,6 +765,7 @@ else
         return state?.ErrorMessage;
     }
 
+#if DEBUG
     private async Task StartTestAgentAsync()
     {
         if (_project == null)
@@ -845,6 +859,7 @@ else
             StateHasChanged();
         }
     }
+#endif
 
     private async Task SyncFleeceIssuesAsync()
     {
