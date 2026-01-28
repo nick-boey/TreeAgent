@@ -27,16 +27,19 @@ public class GraphBuilder
     /// <param name="pullRequests">All pull requests to include in the graph.</param>
     /// <param name="issues">All issues to include in the graph.</param>
     /// <param name="maxPastPRs">Maximum number of past (closed/merged) PRs to show. If null, shows all.</param>
+    /// <param name="issuePrStatuses">Optional dictionary mapping issue IDs to their linked PR statuses.</param>
     public Graph Build(
         IEnumerable<PullRequestInfo> pullRequests,
         IEnumerable<Issue> issues,
-        int? maxPastPRs = null)
+        int? maxPastPRs = null,
+        IReadOnlyDictionary<string, PullRequestStatus>? issuePrStatuses = null)
     {
         var nodes = new List<IGraphNode>();
         var branches = new Dictionary<string, GraphBranch>();
 
         var prList = pullRequests.ToList();
         var issueList = issues.ToList();
+        var prStatusLookup = issuePrStatuses ?? new Dictionary<string, PullRequestStatus>();
 
         // Build dependency lookup from ParentIssues (issue -> list of issues that block it)
         var blockingDependencies = BuildDependencyLookup(issueList);
@@ -56,10 +59,10 @@ public class GraphBuilder
 
         // Phase 3: Add issues with dependencies (depth-first from roots)
         var (rootIssues, orphanIssues, dependentIssues) = ClassifyIssues(issueList, blockingDependencies);
-        AddIssuesDepthFirst(rootIssues, dependentIssues, blockingDependencies, nodes, branches, closedPrNodes.LastOrDefault());
+        AddIssuesDepthFirst(rootIssues, dependentIssues, blockingDependencies, nodes, branches, closedPrNodes.LastOrDefault(), prStatusLookup);
 
         // Phase 4: Add orphan issues in a chain
-        AddOrphanIssues(orphanIssues, nodes, branches, closedPrNodes.LastOrDefault());
+        AddOrphanIssues(orphanIssues, nodes, branches, closedPrNodes.LastOrDefault(), prStatusLookup);
 
         return new Graph(nodes, branches, _mainBranchName, hasMorePastPRs, closedPrNodes.Count);
     }
@@ -237,7 +240,8 @@ public class GraphBuilder
         Dictionary<string, List<string>> blockingDependencies,
         List<IGraphNode> nodes,
         Dictionary<string, GraphBranch> branches,
-        PullRequestNode? latestMergedPr)
+        PullRequestNode? latestMergedPr,
+        IReadOnlyDictionary<string, PullRequestStatus> prStatusLookup)
     {
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var allIssues = rootIssues.Concat(dependentIssues).ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
@@ -281,17 +285,21 @@ public class GraphBuilder
             }
 
             var branchName = $"issue-{issue.Id}";
+            // Check if this issue has a linked PR status
+            prStatusLookup.TryGetValue(issue.Id, out var issuePrStatus);
+            var branchColor = issuePrStatus != default ? GetPrStatusColor(issuePrStatus) : GetIssueTypeColor(issue.Type);
+
             branches[branchName] = new GraphBranch
             {
                 Name = branchName,
-                Color = GetIssueTypeColor(issue.Type),
+                Color = branchColor,
                 ParentBranch = parentIds.Count > 0 && parentIds[0].StartsWith("issue-")
                     ? parentIds[0].Replace("issue-", "issue-")
                     : _mainBranchName,
                 ParentCommitId = parentIds.FirstOrDefault()
             };
 
-            var node = new IssueNode(issue, parentIds, currentTimeDimension + depth, isOrphan: false);
+            var node = new IssueNode(issue, parentIds, currentTimeDimension + depth, isOrphan: false, prStatus: issuePrStatus != default ? issuePrStatus : null);
             nodes.Add(node);
 
             // Visit children (issues that this issue blocks)
@@ -345,7 +353,8 @@ public class GraphBuilder
         List<Issue> orphanIssues,
         List<IGraphNode> nodes,
         Dictionary<string, GraphBranch> branches,
-        PullRequestNode? latestMergedPr)
+        PullRequestNode? latestMergedPr,
+        IReadOnlyDictionary<string, PullRequestStatus> prStatusLookup)
     {
         if (orphanIssues.Count == 0) return;
 
@@ -405,7 +414,8 @@ public class GraphBuilder
                     ? new List<string> { previousId }
                     : new List<string>();
 
-                var node = new IssueNode(issue, parentIds, timeDimension, isOrphan: true, customBranchName: orphanBranchName);
+                prStatusLookup.TryGetValue(issue.Id, out var issuePrStatus);
+                var node = new IssueNode(issue, parentIds, timeDimension, isOrphan: true, customBranchName: orphanBranchName, prStatus: issuePrStatus != default ? issuePrStatus : null);
                 nodes.Add(node);
 
                 previousId = node.Id;
@@ -440,7 +450,8 @@ public class GraphBuilder
                     ? new List<string> { previousId }
                     : new List<string>();
 
-                var node = new IssueNode(issue, parentIds, timeDimension, isOrphan: true);
+                prStatusLookup.TryGetValue(issue.Id, out var issuePrStatus);
+                var node = new IssueNode(issue, parentIds, timeDimension, isOrphan: true, prStatus: issuePrStatus != default ? issuePrStatus : null);
                 nodes.Add(node);
 
                 previousId = node.Id;
