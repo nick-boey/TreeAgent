@@ -36,7 +36,8 @@ public class SessionOptionsFactory
         {
             Cwd = workingDirectory,
             Model = model,
-            SystemPrompt = systemPrompt
+            SystemPrompt = systemPrompt,
+            SettingSources = [SettingSource.User]  // Enable loading user-level plugins
         };
 
         if (mode == SessionMode.Plan)
