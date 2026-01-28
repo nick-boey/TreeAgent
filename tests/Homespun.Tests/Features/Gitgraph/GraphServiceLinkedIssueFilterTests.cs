@@ -8,7 +8,7 @@ using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data.Entities;
-using Homespun.Tests.Helpers;
+using Homespun.Features.Testing;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -21,7 +21,7 @@ namespace Homespun.Tests.Features.Gitgraph;
 [TestFixture]
 public class GraphServiceLinkedIssueFilterTests
 {
-    private TestDataStore _dataStore = null!;
+    private MockDataStore _dataStore = null!;
     private Mock<IProjectService> _mockProjectService = null!;
     private Mock<IGitHubService> _mockGitHubService = null!;
     private Mock<IFleeceService> _mockFleeceService = null!;
@@ -33,7 +33,7 @@ public class GraphServiceLinkedIssueFilterTests
     [SetUp]
     public async Task SetUp()
     {
-        _dataStore = new TestDataStore();
+        _dataStore = new MockDataStore();
 
         // Create test project - use a temp path that exists with .fleece directory
         var testPath = Path.Combine(Path.GetTempPath(), $"graphservice-test-{Guid.NewGuid()}");
