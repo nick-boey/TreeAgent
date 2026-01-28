@@ -178,6 +178,72 @@ public class MockClaudeSessionService : IClaudeSessionService
         return _sessionStore.GetAll();
     }
 
+    public Task<ClaudeSession> ResumeSessionAsync(
+        string sessionId,
+        string entityId,
+        string projectId,
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] ResumeSession {SessionId} for entity {EntityId}", sessionId, entityId);
+
+        var session = new ClaudeSession
+        {
+            Id = Guid.NewGuid().ToString(),
+            EntityId = entityId,
+            ProjectId = projectId,
+            WorkingDirectory = workingDirectory,
+            Mode = SessionMode.Build,
+            Model = "opus",
+            Status = ClaudeSessionStatus.WaitingForInput,
+            CreatedAt = DateTime.UtcNow,
+            LastActivityAt = DateTime.UtcNow
+        };
+
+        // Add an initial message indicating this is a resumed session
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = session.Id,
+            Role = ClaudeMessageRole.Assistant,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.Text,
+                    Text = $"[Mock Resumed Session] Resumed from session {sessionId}. " +
+                           "This is a mock session - no actual Claude API calls will be made."
+                }
+            ],
+            CreatedAt = DateTime.UtcNow
+        });
+
+        _sessionStore.Add(session);
+
+        return Task.FromResult(session);
+    }
+
+    public Task<IReadOnlyList<ResumableSession>> GetResumableSessionsAsync(
+        string entityId,
+        string workingDirectory,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogDebug("[Mock] GetResumableSessions for entity {EntityId}", entityId);
+
+        // Return a mock resumable session
+        var sessions = new List<ResumableSession>
+        {
+            new ResumableSession(
+                SessionId: Guid.NewGuid().ToString(),
+                LastActivityAt: DateTime.UtcNow.AddHours(-1),
+                Mode: SessionMode.Build,
+                Model: "opus",
+                MessageCount: 5
+            )
+        };
+
+        return Task.FromResult<IReadOnlyList<ResumableSession>>(sessions);
+    }
+
     private static string GenerateMockResponse(string userMessage, SessionMode mode)
     {
         var truncatedMessage = userMessage.Length > 50

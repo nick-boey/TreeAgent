@@ -124,6 +124,22 @@ public class MockGitWorktreeService : IGitWorktreeService
         return Task.FromResult(false);
     }
 
+    public Task<string?> GetWorktreePathForBranchAsync(string repoPath, string branchName)
+    {
+        _logger.LogDebug("[Mock] GetWorktreePathForBranch {BranchName} in {RepoPath}", branchName, repoPath);
+
+        if (_worktreesByRepo.TryGetValue(repoPath, out var worktrees))
+        {
+            lock (worktrees)
+            {
+                var worktree = worktrees.FirstOrDefault(w => w.Branch == branchName);
+                return Task.FromResult(worktree?.Path);
+            }
+        }
+
+        return Task.FromResult<string?>(null);
+    }
+
     public Task<bool> PullLatestAsync(string worktreePath)
     {
         _logger.LogDebug("[Mock] PullLatest in {WorktreePath}", worktreePath);
