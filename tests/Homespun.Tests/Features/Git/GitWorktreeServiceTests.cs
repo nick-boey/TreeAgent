@@ -288,6 +288,57 @@ public class GitWorktreeServiceTests
     #region GetWorktreePathForBranchAsync Tests
 
     [Test]
+    [Description("Regression test for bug MlB2lN: Worktree lookup should match branch when git returns refs/heads/ format but we search with short name")]
+    public async Task GetWorktreePathForBranchAsync_WithRefsHeadsFormat_MatchesShortBranchName()
+    {
+        // Arrange - This is the exact scenario from bug MlB2lN
+        // Git returns branch as "refs/heads/feature/my-pr" but we search with "feature/my-pr"
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+        var shortBranchName = "feature/my-pr-branch";
+        var expectedPath = Path.Combine(_tempDir, "feature/my-pr-branch");
+
+        // Mock git worktree list returning the full refs/heads/ format
+        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = $"worktree {expectedPath}\nbranch refs/heads/{shortBranchName}"
+            });
+
+        // Act - Search using short branch name (as PullRequest.BranchName would be)
+        var result = await _service.GetWorktreePathForBranchAsync(repoPath, shortBranchName);
+
+        // Assert - Should find the worktree despite format difference
+        Assert.That(result, Is.EqualTo(expectedPath));
+    }
+
+    [Test]
+    [Description("Regression test for bug MlB2lN: WorktreeExists should work with refs/heads/ format")]
+    public async Task WorktreeExistsAsync_WithRefsHeadsFormat_ReturnsTrue()
+    {
+        // Arrange - Verifying WorktreeExistsAsync handles the format correctly (it did before the bug)
+        var repoPath = Path.Combine(_tempDir, "main");
+        Directory.CreateDirectory(repoPath);
+        var shortBranchName = "feature/my-pr-branch";
+        var worktreePath = Path.Combine(_tempDir, "feature/my-pr-branch");
+
+        // Mock git worktree list returning the full refs/heads/ format
+        _mockRunner.Setup(r => r.RunAsync("git", "worktree list --porcelain", repoPath))
+            .ReturnsAsync(new CommandResult
+            {
+                Success = true,
+                Output = $"worktree {worktreePath}\nbranch refs/heads/{shortBranchName}"
+            });
+
+        // Act - Check existence using short branch name
+        var result = await _service.WorktreeExistsAsync(repoPath, shortBranchName);
+
+        // Assert - Should find the worktree
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
     public async Task GetWorktreePathForBranchAsync_WithDirectBranchMatch_ReturnsPath()
     {
         // Arrange
