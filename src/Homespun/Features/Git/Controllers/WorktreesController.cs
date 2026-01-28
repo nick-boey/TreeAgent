@@ -11,7 +11,7 @@ namespace Homespun.Features.Git.Controllers;
 [Produces("application/json")]
 public class WorktreesController(
     IGitWorktreeService worktreeService,
-    ProjectService projectService) : ControllerBase
+    IProjectService projectService) : ControllerBase
 {
     /// <summary>
     /// List worktrees for a project.

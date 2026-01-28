@@ -77,6 +77,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install OpenCode, Claude Code, and Claude Code UI (cloudcli) globally
 RUN npm install -g opencode-ai@latest @anthropic-ai/claude-code @siteboon/claude-code-ui
 
+# Install Playwright MCP and Chromium browser with all dependencies
+# --with-deps automatically installs system libraries (libatk, libcups, libdrm, etc.)
+RUN npm install -g @playwright/mcp@latest \
+    && npx playwright install chromium --with-deps
+
 # Install Fleece CLI for issue tracking
 # Install as root, then make tools accessible to all users
 RUN dotnet tool install Fleece.Cli -g \
@@ -109,6 +114,10 @@ RUN chmod 777 /home/homespun \
     && mkdir -p /home/homespun/.local/share /home/homespun/.config /home/homespun/.cache \
     && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig \
     && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude
+
+# Configure Playwright MCP for Claude Code agents (headless mode for container)
+RUN echo '{"mcpServers":{"playwright":{"command":"npx","args":["@playwright/mcp@latest","--headless"]}}}' \
+    > /home/homespun/.claude/settings.json
 
 # Configure git to trust mounted directories (avoids "dubious ownership" errors)
 RUN git config --global --add safe.directory '*'

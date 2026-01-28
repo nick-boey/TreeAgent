@@ -13,16 +13,27 @@ using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.Shared.Services;
 using Homespun.Features.SignalR;
+using Homespun.Features.Testing;
 using Homespun.Components;
 using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Check for mock mode
+var mockModeOptions = new MockModeOptions();
+builder.Configuration.GetSection(MockModeOptions.SectionName).Bind(mockModeOptions);
+
+// Allow environment variable override
+if (Environment.GetEnvironmentVariable("HOMESPUN_MOCK_MODE") == "true")
+{
+    mockModeOptions.Enabled = true;
+}
+
 // Configure console logging with readable output
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 
-// Resolve data path from configuration or use default
+// Resolve data path from configuration or use default (used by production and for data protection keys)
 var homespunDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".homespun");
 var defaultDataPath = Path.Combine(homespunDir, "homespun-data.json");
 var dataPath = builder.Configuration["HOMESPUN_DATA_PATH"] ?? defaultDataPath;
@@ -33,13 +44,6 @@ if (!string.IsNullOrEmpty(dataDirectory) && !Directory.Exists(dataDirectory))
 {
     Directory.CreateDirectory(dataDirectory);
 }
-
-// Register JSON data store as singleton
-builder.Services.AddSingleton<IDataStore>(sp =>
-{
-    var logger = sp.GetRequiredService<ILogger<JsonDataStore>>();
-    return new JsonDataStore(dataPath, logger);
-});
 
 // Configure Data Protection to persist keys in the data directory
 // This ensures keys survive container restarts and prevents antiforgery token errors
@@ -53,65 +57,91 @@ builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
     .SetApplicationName("Homespun");
 
-// Core services
-builder.Services.AddScoped<IProjectService, ProjectService>();
-builder.Services.AddScoped<ProjectService>(); // Keep concrete registration for existing injection points
-builder.Services.AddSingleton<IGitHubEnvironmentService, GitHubEnvironmentService>();
-builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
-builder.Services.AddSingleton<IGitWorktreeService, GitWorktreeService>();
-builder.Services.AddScoped<PullRequestDataService>();
-builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
-builder.Services.AddScoped<IGitHubService, GitHubService>();
-builder.Services.AddScoped<PullRequestWorkflowService>();
-
-// Fleece services (file-based issue tracking)
-builder.Services.AddSingleton<IFleeceService, FleeceService>();
-builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
-builder.Services.AddSingleton<IFleeceIssuesSyncService, FleeceIssuesSyncService>();
-
-// Markdown rendering service
-builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
-
-// Gitgraph services
-builder.Services.AddScoped<IGraphService, GraphService>();
-
-// Issue-PR linking service (must be registered before GitHubService as it depends on it)
-builder.Services.AddScoped<IIssuePrLinkingService, IssuePrLinkingService>();
-
-// Notification services
-builder.Services.AddSingleton<INotificationService, NotificationService>();
-
-// Navigation services
-builder.Services.AddScoped<IBreadcrumbService, BreadcrumbService>();
-
-// Claude Code SDK services
-builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
-builder.Services.AddSingleton<SessionOptionsFactory>();
-
-// Session discovery service - reads from Claude's native session storage at ~/.claude/projects/
-builder.Services.AddSingleton<IClaudeSessionDiscovery>(sp =>
+// Register services based on mock mode
+if (mockModeOptions.Enabled)
 {
-    var claudeDir = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".claude", "projects");
-    return new ClaudeSessionDiscovery(claudeDir, sp.GetRequiredService<ILogger<ClaudeSessionDiscovery>>());
-});
+    // Mock mode - use in-memory mock services
+    builder.Services.AddMockServices(mockModeOptions);
 
-// Session metadata store - maps Claude sessions to our entities (PR/issue)
-var metadataPath = Path.Combine(homespunDir, "session-metadata.json");
-builder.Services.AddSingleton<ISessionMetadataStore>(sp =>
-    new SessionMetadataStore(metadataPath, sp.GetRequiredService<ILogger<SessionMetadataStore>>()));
+    // Services that are shared between mock and production mode
+    builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
+    builder.Services.AddSingleton<INotificationService, NotificationService>();
+    builder.Services.AddScoped<IBreadcrumbService, BreadcrumbService>();
+    builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
+    builder.Services.AddSingleton<SessionOptionsFactory>();
+    builder.Services.AddScoped<PullRequestDataService>();
+    builder.Services.AddScoped<PullRequestWorkflowService>();
+}
+else
+{
+    // Production mode - use real services with external dependencies
 
-builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
-builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
-builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
-builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
-builder.Services.AddSingleton<IRebaseAgentService, RebaseAgentService>();
+    // Register JSON data store as singleton
+    builder.Services.AddSingleton<IDataStore>(sp =>
+    {
+        var logger = sp.GetRequiredService<ILogger<JsonDataStore>>();
+        return new JsonDataStore(dataPath, logger);
+    });
 
-// GitHub sync polling service (PR sync, review polling, issue linking)
-builder.Services.Configure<GitHubSyncPollingOptions>(
-    builder.Configuration.GetSection(GitHubSyncPollingOptions.SectionName));
-builder.Services.AddHostedService<GitHubSyncPollingService>();
+    // Core services
+    builder.Services.AddScoped<IProjectService, ProjectService>();
+    builder.Services.AddSingleton<IGitHubEnvironmentService, GitHubEnvironmentService>();
+    builder.Services.AddSingleton<ICommandRunner, CommandRunner>();
+    builder.Services.AddSingleton<IGitWorktreeService, GitWorktreeService>();
+    builder.Services.AddScoped<PullRequestDataService>();
+    builder.Services.AddSingleton<IGitHubClientWrapper, GitHubClientWrapper>();
+    builder.Services.AddScoped<IGitHubService, GitHubService>();
+    builder.Services.AddScoped<PullRequestWorkflowService>();
+
+    // Fleece services (file-based issue tracking)
+    builder.Services.AddSingleton<IFleeceService, FleeceService>();
+    builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
+    builder.Services.AddSingleton<IFleeceIssuesSyncService, FleeceIssuesSyncService>();
+
+    // Markdown rendering service
+    builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
+
+    // Gitgraph services
+    builder.Services.AddScoped<IGraphService, GraphService>();
+
+    // Issue-PR linking service (must be registered before GitHubService as it depends on it)
+    builder.Services.AddScoped<IIssuePrLinkingService, IssuePrLinkingService>();
+
+    // Notification services
+    builder.Services.AddSingleton<INotificationService, NotificationService>();
+
+    // Navigation services
+    builder.Services.AddScoped<IBreadcrumbService, BreadcrumbService>();
+
+    // Claude Code SDK services
+    builder.Services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
+    builder.Services.AddSingleton<SessionOptionsFactory>();
+
+    // Session discovery service - reads from Claude's native session storage at ~/.claude/projects/
+    builder.Services.AddSingleton<IClaudeSessionDiscovery>(sp =>
+    {
+        var claudeDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".claude", "projects");
+        return new ClaudeSessionDiscovery(claudeDir, sp.GetRequiredService<ILogger<ClaudeSessionDiscovery>>());
+    });
+
+    // Session metadata store - maps Claude sessions to our entities (PR/issue)
+    var metadataPath = Path.Combine(homespunDir, "session-metadata.json");
+    builder.Services.AddSingleton<ISessionMetadataStore>(sp =>
+        new SessionMetadataStore(metadataPath, sp.GetRequiredService<ILogger<SessionMetadataStore>>()));
+
+    builder.Services.AddSingleton<IToolResultParser, ToolResultParser>();
+    builder.Services.AddSingleton<IClaudeSessionService, ClaudeSessionService>();
+    builder.Services.AddSingleton<IAgentStartupTracker, AgentStartupTracker>();
+    builder.Services.AddSingleton<IAgentPromptService, AgentPromptService>();
+    builder.Services.AddSingleton<IRebaseAgentService, RebaseAgentService>();
+
+    // GitHub sync polling service (PR sync, review polling, issue linking)
+    builder.Services.Configure<GitHubSyncPollingOptions>(
+        builder.Configuration.GetSection(GitHubSyncPollingOptions.SectionName));
+    builder.Services.AddHostedService<GitHubSyncPollingService>();
+}
 
 // SignalR URL provider (uses internal URL in Docker, localhost in development)
 builder.Services.Configure<SignalROptions>(

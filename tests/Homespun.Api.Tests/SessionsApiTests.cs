@@ -73,7 +73,7 @@ public class SessionsApiTests
     {
         // Arrange
         var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/path", DefaultBranch = "main" };
-        _factory.TestDataStore.SeedProject(project);
+        _factory.MockDataStore.SeedProject(project);
 
         // Act
         var response = await _client.GetAsync("/api/sessions/project/proj1");

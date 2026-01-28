@@ -1,17 +1,17 @@
 using Homespun.Features.ClaudeCode.Data;
-using Homespun.Tests.Helpers;
+using Homespun.Features.Testing;
 
 namespace Homespun.Tests.Features.ClaudeCode;
 
 [TestFixture]
 public class AgentPromptDataTests
 {
-    private TestDataStore _dataStore = null!;
+    private MockDataStore _dataStore = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _dataStore = new TestDataStore();
+        _dataStore = new MockDataStore();
     }
 
     [Test]

@@ -2,7 +2,7 @@ using Homespun.Features.Commands;
 using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data.Entities;
-using Homespun.Tests.Helpers;
+using Homespun.Features.Testing;
 using Microsoft.Extensions.Configuration;
 using Moq;
 using Octokit;
@@ -15,7 +15,7 @@ namespace Homespun.Tests.Features.PullRequests;
 [TestFixture]
 public class PullRequestWorkflowTests
 {
-    private TestDataStore _dataStore = null!;
+    private MockDataStore _dataStore = null!;
     private Mock<ICommandRunner> _mockRunner = null!;
     private Mock<IConfiguration> _mockConfig = null!;
     private Mock<IGitHubClientWrapper> _mockGitHubClient = null!;
@@ -24,7 +24,7 @@ public class PullRequestWorkflowTests
     [SetUp]
     public void SetUp()
     {
-        _dataStore = new TestDataStore();
+        _dataStore = new MockDataStore();
         _mockRunner = new Mock<ICommandRunner>();
         _mockConfig = new Mock<IConfiguration>();
         _mockGitHubClient = new Mock<IGitHubClientWrapper>();

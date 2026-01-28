@@ -1,4 +1,5 @@
 using Homespun.Features.Git;
+using Homespun.Features.Testing;
 using Homespun.Tests.Helpers;
 
 namespace Homespun.Tests.Features.Git;

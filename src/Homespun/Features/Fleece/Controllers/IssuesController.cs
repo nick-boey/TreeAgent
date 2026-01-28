@@ -13,7 +13,7 @@ namespace Homespun.Features.Fleece.Controllers;
 [Produces("application/json")]
 public class IssuesController(
     IFleeceService fleeceService,
-    ProjectService projectService) : ControllerBase
+    IProjectService projectService) : ControllerBase
 {
     /// <summary>
     /// Get all issues for a project.

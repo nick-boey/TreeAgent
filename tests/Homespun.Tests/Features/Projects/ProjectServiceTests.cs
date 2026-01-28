@@ -1,7 +1,7 @@
 using Homespun.Features.Commands;
 using Homespun.Features.GitHub;
 using Homespun.Features.Projects;
-using Homespun.Tests.Helpers;
+using Homespun.Features.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -11,7 +11,7 @@ namespace Homespun.Tests.Features.Projects;
 [TestFixture]
 public class ProjectServiceTests
 {
-    private TestDataStore _dataStore = null!;
+    private MockDataStore _dataStore = null!;
     private Mock<IGitHubService> _mockGitHubService = null!;
     private Mock<ICommandRunner> _mockCommandRunner = null!;
     private Mock<IConfiguration> _mockConfiguration = null!;
@@ -21,7 +21,7 @@ public class ProjectServiceTests
     [SetUp]
     public void SetUp()
     {
-        _dataStore = new TestDataStore();
+        _dataStore = new MockDataStore();
         _mockGitHubService = new Mock<IGitHubService>();
         _mockCommandRunner = new Mock<ICommandRunner>();
         _mockConfiguration = new Mock<IConfiguration>();

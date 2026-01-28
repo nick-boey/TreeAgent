@@ -2,7 +2,7 @@ using Homespun.Features.Commands;
 using Homespun.Features.Git;
 using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests.Data.Entities;
-using Homespun.Tests.Helpers;
+using Homespun.Features.Testing;
 using Microsoft.Extensions.Configuration;
 using Moq;
 
@@ -16,12 +16,12 @@ namespace Homespun.Tests.Features.GitHub;
 [Category("Integration")]
 public class GitHubServiceIntegrationTests
 {
-    private TestDataStore _dataStore = null!;
+    private MockDataStore _dataStore = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _dataStore = new TestDataStore();
+        _dataStore = new MockDataStore();
     }
 
     [TearDown]

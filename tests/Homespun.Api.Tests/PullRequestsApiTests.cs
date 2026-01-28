@@ -33,7 +33,7 @@ public class PullRequestsApiTests
     {
         // Arrange
         var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/path", DefaultBranch = "main" };
-        _factory.TestDataStore.SeedProject(project);
+        _factory.MockDataStore.SeedProject(project);
 
         // Act
         var response = await _client.GetAsync("/api/projects/proj1/pull-requests");
@@ -62,9 +62,9 @@ public class PullRequestsApiTests
         var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/path", DefaultBranch = "main" };
         var pr1 = new PullRequest { Id = "pr1", ProjectId = "proj1", Title = "PR1" };
         var pr2 = new PullRequest { Id = "pr2", ProjectId = "proj1", Title = "PR2" };
-        _factory.TestDataStore.SeedProject(project);
-        _factory.TestDataStore.SeedPullRequest(pr1);
-        _factory.TestDataStore.SeedPullRequest(pr2);
+        _factory.MockDataStore.SeedProject(project);
+        _factory.MockDataStore.SeedPullRequest(pr1);
+        _factory.MockDataStore.SeedPullRequest(pr2);
 
         // Act
         var response = await _client.GetAsync("/api/projects/proj1/pull-requests");
@@ -81,7 +81,7 @@ public class PullRequestsApiTests
     {
         // Arrange
         var pr = new PullRequest { Id = "pr1", ProjectId = "proj1", Title = "Test PR" };
-        _factory.TestDataStore.SeedPullRequest(pr);
+        _factory.MockDataStore.SeedPullRequest(pr);
 
         // Act
         var response = await _client.GetAsync("/api/pull-requests/pr1");
@@ -109,7 +109,7 @@ public class PullRequestsApiTests
     {
         // Arrange
         var project = new Project { Id = "proj1", Name = "TestProject", LocalPath = "/path", DefaultBranch = "main" };
-        _factory.TestDataStore.SeedProject(project);
+        _factory.MockDataStore.SeedProject(project);
 
         var createRequest = new CreatePullRequestRequest
         {
@@ -153,7 +153,7 @@ public class PullRequestsApiTests
     {
         // Arrange
         var pr = new PullRequest { Id = "pr1", ProjectId = "proj1", Title = "Original Title" };
-        _factory.TestDataStore.SeedPullRequest(pr);
+        _factory.MockDataStore.SeedPullRequest(pr);
 
         var updateRequest = new UpdatePullRequestRequest
         {
@@ -190,14 +190,14 @@ public class PullRequestsApiTests
     {
         // Arrange
         var pr = new PullRequest { Id = "pr1", ProjectId = "proj1", Title = "Test PR" };
-        _factory.TestDataStore.SeedPullRequest(pr);
+        _factory.MockDataStore.SeedPullRequest(pr);
 
         // Act
         var response = await _client.DeleteAsync("/api/pull-requests/pr1");
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
-        Assert.That(_factory.TestDataStore.GetPullRequest("pr1"), Is.Null);
+        Assert.That(_factory.MockDataStore.GetPullRequest("pr1"), Is.Null);
     }
 
     [Test]

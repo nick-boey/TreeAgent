@@ -47,8 +47,8 @@ public class ProjectsApiTests
         // Arrange
         var project1 = new Project { Id = "p1", Name = "Project1", LocalPath = "/path/1", DefaultBranch = "main" };
         var project2 = new Project { Id = "p2", Name = "Project2", LocalPath = "/path/2", DefaultBranch = "main" };
-        _factory.TestDataStore.SeedProject(project1);
-        _factory.TestDataStore.SeedProject(project2);
+        _factory.MockDataStore.SeedProject(project1);
+        _factory.MockDataStore.SeedProject(project2);
 
         // Act
         var response = await _client.GetAsync("/api/projects");
@@ -65,7 +65,7 @@ public class ProjectsApiTests
     {
         // Arrange
         var project = new Project { Id = "test-id", Name = "TestProject", LocalPath = "/path", DefaultBranch = "main" };
-        _factory.TestDataStore.SeedProject(project);
+        _factory.MockDataStore.SeedProject(project);
 
         // Act
         var response = await _client.GetAsync("/api/projects/test-id");
@@ -93,7 +93,7 @@ public class ProjectsApiTests
     {
         // Arrange
         var project = new Project { Id = "test-id", Name = "TestProject", LocalPath = "/path", DefaultBranch = "main" };
-        _factory.TestDataStore.SeedProject(project);
+        _factory.MockDataStore.SeedProject(project);
 
         var updateRequest = new UpdateProjectRequest { DefaultModel = "claude-sonnet-4-20250514" };
 
@@ -125,14 +125,14 @@ public class ProjectsApiTests
     {
         // Arrange
         var project = new Project { Id = "test-id", Name = "TestProject", LocalPath = "/path", DefaultBranch = "main" };
-        _factory.TestDataStore.SeedProject(project);
+        _factory.MockDataStore.SeedProject(project);
 
         // Act
         var response = await _client.DeleteAsync("/api/projects/test-id");
 
         // Assert
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
-        Assert.That(_factory.TestDataStore.GetProject("test-id"), Is.Null);
+        Assert.That(_factory.MockDataStore.GetProject("test-id"), Is.Null);
     }
 
     [Test]

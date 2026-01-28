@@ -3,7 +3,7 @@ using Homespun.Features.Fleece.Services;
 using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.PullRequests.Data.Entities;
-using Homespun.Tests.Helpers;
+using Homespun.Features.Testing;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -12,7 +12,7 @@ namespace Homespun.Tests.Features.GitHub;
 [TestFixture]
 public class IssuePrLinkingServiceTests
 {
-    private TestDataStore _dataStore = null!;
+    private MockDataStore _dataStore = null!;
     private Mock<IFleeceService> _mockFleeceService = null!;
     private Mock<ILogger<IssuePrLinkingService>> _mockLogger = null!;
     private IssuePrLinkingService _service = null!;
@@ -20,7 +20,7 @@ public class IssuePrLinkingServiceTests
     [SetUp]
     public void SetUp()
     {
-        _dataStore = new TestDataStore();
+        _dataStore = new MockDataStore();
         _mockFleeceService = new Mock<IFleeceService>();
         _mockLogger = new Mock<ILogger<IssuePrLinkingService>>();
         _service = new IssuePrLinkingService(_dataStore, _mockFleeceService.Object, _mockLogger.Object);
