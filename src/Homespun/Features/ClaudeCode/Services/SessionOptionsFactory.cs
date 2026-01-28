@@ -37,7 +37,18 @@ public class SessionOptionsFactory
             Cwd = workingDirectory,
             Model = model,
             SystemPrompt = systemPrompt,
-            SettingSources = [SettingSource.User]  // Enable loading user-level plugins
+            SettingSources = [SettingSource.User],  // Enable loading user-level plugins
+            // Configure Playwright MCP server for browser automation
+            // Use dictionary with lowercase keys to match Claude CLI's expected JSON format
+            McpServers = new Dictionary<string, object>
+            {
+                ["playwright"] = new Dictionary<string, object>
+                {
+                    ["type"] = "stdio",
+                    ["command"] = "npx",
+                    ["args"] = new[] { "@playwright/mcp@latest", "--headless" }
+                }
+            }
         };
 
         if (mode == SessionMode.Plan)

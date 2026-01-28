@@ -129,10 +129,6 @@ RUN chmod 777 /home/homespun \
     && mkdir -p /home/homespun/.claude/todos /home/homespun/.claude/debug /home/homespun/.claude/projects /home/homespun/.claude/statsig \
     && chmod -R 777 /home/homespun/.local /home/homespun/.config /home/homespun/.cache /home/homespun/.claude
 
-# Configure Playwright MCP for Claude Code agents (headless mode for container)
-RUN echo '{"mcpServers":{"playwright":{"command":"npx","args":["@playwright/mcp@latest","--headless"]}}}' \
-    > /home/homespun/.claude/settings.json
-
 # Configure git to trust mounted directories (avoids "dubious ownership" errors)
 RUN git config --global --add safe.directory '*'
 

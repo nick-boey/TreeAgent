@@ -106,4 +106,33 @@ public class SessionOptionsFactoryTests
         // Act & Assert
         Assert.DoesNotThrow(() => _factory.Create(SessionMode.Plan, workingDirectory, model, null));
     }
+
+    [Test]
+    public void Create_ConfiguresPlaywrightMcpServer()
+    {
+        // Arrange
+        var workingDirectory = "/test/path";
+        var model = "claude-sonnet-4-20250514";
+
+        // Act
+        var options = _factory.Create(SessionMode.Build, workingDirectory, model);
+
+        // Assert
+        Assert.That(options.McpServers, Is.Not.Null);
+        Assert.That(options.McpServers, Is.InstanceOf<Dictionary<string, object>>());
+
+        var mcpServers = (Dictionary<string, object>)options.McpServers!;
+        Assert.That(mcpServers.ContainsKey("playwright"), Is.True, "McpServers should contain 'playwright' key");
+
+        // Config uses lowercase keys to match Claude CLI's expected JSON format
+        var playwrightConfig = mcpServers["playwright"] as Dictionary<string, object>;
+        Assert.That(playwrightConfig, Is.Not.Null);
+        Assert.That(playwrightConfig!["type"], Is.EqualTo("stdio"));
+        Assert.That(playwrightConfig["command"], Is.EqualTo("npx"));
+
+        var args = playwrightConfig["args"] as string[];
+        Assert.That(args, Is.Not.Null);
+        Assert.That(args, Does.Contain("@playwright/mcp@latest"));
+        Assert.That(args, Does.Contain("--headless"));
+    }
 }

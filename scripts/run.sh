@@ -43,7 +43,8 @@ set -e
 #     export TAILSCALE_AUTH_KEY=tskey-auth-...
 #
 # Volume Mounts:
-#   Claude Code config (~/.claude) is automatically mounted for OAuth authentication
+#   SSH directory (~/.ssh) is mounted read-only for git operations
+#   Note: We do NOT mount ~/.claude - the container uses its own MCP server config
 
 # Get script directory and repository root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -239,7 +240,6 @@ else
     DATA_DIR="$HOME/.homespun-container/data"
 fi
 SSH_DIR="$HOME/.ssh"
-CLAUDE_DIR="$HOME/.claude"
 
 if [ ! -d "$DATA_DIR" ]; then
     mkdir -p "$DATA_DIR"
@@ -259,14 +259,12 @@ else
     log_warn "      SSH directory not found: $SSH_DIR"
 fi
 
-# Check Claude directory
-CLAUDE_MOUNT=""
-if [ -d "$CLAUDE_DIR" ]; then
-    CLAUDE_MOUNT="-v $CLAUDE_DIR:/home/homespun/.claude"
-    log_success "      Claude config found: $CLAUDE_DIR"
-else
-    log_warn "      Claude config not found: $CLAUDE_DIR"
-fi
+# Note: We intentionally do NOT mount the host's ~/.claude directory.
+# Reason: The container has its own settings.json with MCP server config (created in Dockerfile).
+# Mounting the host's ~/.claude would overwrite this config and cause plugin path issues
+# since installed_plugins.json contains absolute host paths that don't exist in the container.
+# OAuth authentication is handled via CLAUDE_CODE_OAUTH_TOKEN environment variable.
+log_info "      Using container's Claude config (MCP servers enabled)"
 
 # Read external hostname
 if [ -z "$EXTERNAL_HOSTNAME" ]; then
@@ -298,9 +296,6 @@ echo "  Data mount:  $DATA_DIR"
 if [ -n "$SSH_MOUNT" ]; then
     echo "  SSH mount:   $SSH_DIR (read-only)"
 fi
-if [ -n "$CLAUDE_MOUNT" ]; then
-    echo "  Claude auth: $CLAUDE_DIR"
-fi
 if [ -n "$TAILSCALE_AUTH_KEY" ]; then
     echo "  Tailscale:   Enabled (will connect on startup)"
 fi
@@ -329,7 +324,6 @@ DOCKER_CMD="$DOCKER_CMD --user $HOST_UID:$HOST_GID"
 DOCKER_CMD="$DOCKER_CMD -p 8080:8080"
 DOCKER_CMD="$DOCKER_CMD -v $DATA_DIR:/data"
 DOCKER_CMD="$DOCKER_CMD $SSH_MOUNT"
-DOCKER_CMD="$DOCKER_CMD $CLAUDE_MOUNT"
 DOCKER_CMD="$DOCKER_CMD -e HOME=/home/homespun"
 DOCKER_CMD="$DOCKER_CMD -e ASPNETCORE_ENVIRONMENT=Production"
 DOCKER_CMD="$DOCKER_CMD -e HSP_HOST_DATA_PATH=$DATA_DIR"
