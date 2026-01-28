@@ -1,0 +1,495 @@
+@using Homespun.Features.ClaudeCode.Data
+@using Homespun.Features.Gitgraph.Data
+@using Homespun.Features.Gitgraph.Services
+@using Microsoft.AspNetCore.SignalR.Client
+@inject IGraphService GraphService
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
+
+<div class="timeline-wrapper">
+    @if (_isLoading)
+    {
+        <div class="timeline-loading">
+            <span class="spinner-border spinner-border-sm" role="status"></span>
+            <span>Loading timeline...</span>
+        </div>
+    }
+    else if (_error != null)
+    {
+        <div class="timeline-error">
+            <span>Failed to load timeline: @_error</span>
+        </div>
+    }
+    else if (_graph != null && _layout != null)
+    {
+        <div class="timeline-container">
+            @if (_graph.HasMorePastPRs)
+            {
+                <div class="timeline-load-more" @onclick="LoadMorePastPRs">
+                    <div class="timeline-load-more-graph">
+                        @((MarkupString)GenerateLoadMoreSvg())
+                    </div>
+                    <div class="timeline-load-more-content">
+                        <span class="timeline-load-more-text">Load more past PRs</span>
+                    </div>
+                </div>
+            }
+            @for (var i = 0; i < _graph.Nodes.Count; i++)
+            {
+                var node = _graph.Nodes[i];
+                var laneInfo = _layout.RowInfos[i];
+                var isSelected = node.Id == SelectedNodeId ||
+                                (node.PullRequestNumber.HasValue && $"pr-{node.PullRequestNumber}" == SelectedNodeId) ||
+                                (node.IssueId != null && $"issue-{node.IssueId}" == SelectedNodeId);
+                var agentStatus = GetAgentStatus(node);
+
+                <TimelineRow
+                    Node="node"
+                    LaneInfo="laneInfo"
+                    MaxLanes="_layout.MaxLanes"
+                    IsSelected="isSelected"
+                    AgentStatus="agentStatus"
+                    LaneColors="_laneColors"
+                    OnNodeClick="HandleNodeClick"
+                    OnNodeLeave="HandleNodeLeave" />
+            }
+        </div>
+    }
+</div>
+
+@* Tooltip element *@
+@if (_tooltipVisible && _tooltipNode != null)
+{
+    <div class="timeline-tooltip" style="left: @(_tooltipX)px; top: @(_tooltipY)px;">
+        @if (_tooltipNode.PullRequestNumber.HasValue)
+        {
+            <div class="tooltip-header">PR #@_tooltipNode.PullRequestNumber: @_tooltipNode.Title</div>
+            <div class="tooltip-meta">
+                <span class="tooltip-badge" style="background-color: @(_tooltipNode.Color ?? "#6b7280");">@_tooltipNode.Status</span>
+                <span>Branch: <code>@_tooltipNode.BranchName</code></span>
+            </div>
+        }
+        else
+        {
+            <div class="tooltip-header">@_tooltipNode.IssueId: @_tooltipNode.Title</div>
+            <div class="tooltip-meta">
+                <span class="tooltip-badge" style="background-color: @(_tooltipNode.Color ?? "#6b7280");">@_tooltipNode.Tag</span>
+            </div>
+        }
+    </div>
+}
+
+<style>
+    .timeline-wrapper {
+        width: 100%;
+        min-height: 200px;
+    }
+
+    .timeline-container {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .timeline-loading,
+    .timeline-error {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1rem;
+        color: var(--text-secondary);
+    }
+
+    .timeline-error {
+        color: var(--status-error);
+    }
+
+    /* Row styles */
+    .timeline-row {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        min-height: 40px;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+
+    .timeline-row:hover {
+        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+    }
+
+    .timeline-row-selected {
+        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.1));
+    }
+
+    .timeline-row-selected .timeline-graph-cell svg circle,
+    .timeline-row-selected .timeline-graph-cell svg path[fill]:not([fill="none"]) {
+        filter: drop-shadow(0 0 4px var(--color-ocean, #51A5C1));
+    }
+
+    .timeline-graph-cell {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .timeline-graph-cell svg {
+        display: block;
+    }
+
+    .timeline-content-cell {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 1rem 0.5rem 0.5rem;
+        overflow: hidden;
+    }
+
+    .timeline-title {
+        color: var(--text-primary, #eaeaea);
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .timeline-tag {
+        flex-shrink: 0;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 11px;
+        border: 1px solid;
+    }
+
+    /* Agent status badge */
+    .agent-status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        flex-shrink: 0;
+    }
+
+    .agent-status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: currentColor;
+    }
+
+    .agent-status-dot-active {
+        animation: agent-pulse 1.5s ease-in-out infinite;
+    }
+
+    @@keyframes agent-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+    }
+
+    .agent-status-running {
+        background-color: rgba(16, 185, 129, 0.2);
+        color: #10b981;
+        border: 1px solid #10b981;
+    }
+
+    .agent-status-waiting {
+        background-color: rgba(59, 130, 246, 0.2);
+        color: #3b82f6;
+        border: 1px solid #3b82f6;
+    }
+
+    .agent-status-starting {
+        background-color: rgba(245, 158, 11, 0.2);
+        color: #f59e0b;
+        border: 1px solid #f59e0b;
+    }
+
+    .agent-status-error {
+        background-color: rgba(239, 68, 68, 0.2);
+        color: #ef4444;
+        border: 1px solid #ef4444;
+    }
+
+    .agent-status-inactive {
+        background-color: rgba(107, 114, 128, 0.2);
+        color: #6b7280;
+        border: 1px solid #6b7280;
+    }
+
+    /* Load more button */
+    .timeline-load-more {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        align-items: center;
+        min-height: 40px;
+        cursor: pointer;
+        transition: background-color 0.15s ease;
+    }
+
+    .timeline-load-more:hover {
+        background-color: var(--bg-secondary, rgba(255, 255, 255, 0.05));
+    }
+
+    .timeline-load-more-graph {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .timeline-load-more-content {
+        padding: 0.5rem 1rem 0.5rem 0.5rem;
+    }
+
+    .timeline-load-more-text {
+        color: var(--color-ocean, #51A5C1);
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    /* Tooltip */
+    .timeline-tooltip {
+        position: fixed;
+        background: var(--bg-primary, #1a1a2e);
+        border: 1px solid var(--text-muted, #6c757d);
+        border-radius: 8px;
+        padding: 12px;
+        max-width: 350px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 1000;
+        pointer-events: none;
+        font-size: 13px;
+        line-height: 1.4;
+    }
+
+    .tooltip-header {
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: var(--text-primary, #eaeaea);
+    }
+
+    .tooltip-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-secondary, #a0a0a0);
+    }
+
+    .tooltip-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        color: white;
+        font-size: 11px;
+    }
+
+    .tooltip-meta code {
+        background: var(--bg-secondary, #16213e);
+        padding: 2px 4px;
+        border-radius: 3px;
+    }
+</style>
+
+@code {
+    [Parameter] public required string ProjectId { get; set; }
+    [Parameter] public EventCallback<int> OnPullRequestClick { get; set; }
+    [Parameter] public EventCallback<string> OnIssueClick { get; set; }
+    [Parameter] public string? SelectedNodeId { get; set; }
+
+    private HubConnection? _hubConnection;
+    private bool _isLoading = true;
+    private string? _error;
+    private Graph? _graph;
+    private TimelineLaneLayout? _layout;
+    private Dictionary<string, AgentStatusData> _agentStatuses = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<int, string> _laneColors = [];
+    private int _currentMaxPastPRs = 5;
+
+    // Tooltip state
+    private bool _tooltipVisible;
+    private IGraphNode? _tooltipNode;
+    private double _tooltipX;
+    private double _tooltipY;
+
+    private readonly TimelineLaneCalculator _laneCalculator = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadGraphAsync();
+        await SetupSignalRConnectionAsync();
+    }
+
+    private async Task SetupSignalRConnectionAsync()
+    {
+        try
+        {
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/claudecode"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            _hubConnection.On<string, ClaudeSessionStatus>("SessionStatusChanged", async (sessionId, status) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await LoadGraphAsync();
+                });
+            });
+
+            _hubConnection.On<ClaudeSession>("SessionStarted", async (session) =>
+            {
+                if (session.ProjectId == ProjectId)
+                {
+                    await InvokeAsync(async () =>
+                    {
+                        await LoadGraphAsync();
+                    });
+                }
+            });
+
+            _hubConnection.On<string>("SessionStopped", async (sessionId) =>
+            {
+                await InvokeAsync(async () =>
+                {
+                    await LoadGraphAsync();
+                });
+            });
+
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to set up SignalR connection for timeline: {ex.Message}");
+        }
+    }
+
+    private async Task LoadGraphAsync()
+    {
+        try
+        {
+            var jsonData = await GraphService.BuildGraphJsonAsync(ProjectId, _currentMaxPastPRs);
+            _graph = await GraphService.BuildGraphAsync(ProjectId, _currentMaxPastPRs);
+
+            // Calculate lane layout
+            _layout = _laneCalculator.Calculate(_graph.Nodes);
+
+            // Build agent status lookup
+            _agentStatuses.Clear();
+            foreach (var commit in jsonData.Commits)
+            {
+                if (commit.IssueId != null && commit.AgentStatus != null)
+                {
+                    _agentStatuses[commit.IssueId] = commit.AgentStatus;
+                }
+            }
+
+            // Build lane color lookup
+            BuildLaneColors();
+
+            _isLoading = false;
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _isLoading = false;
+        }
+
+        StateHasChanged();
+    }
+
+    private void BuildLaneColors()
+    {
+        _laneColors.Clear();
+
+        if (_graph == null || _layout == null) return;
+
+        // Assign colors to lanes based on first node in each lane
+        foreach (var node in _graph.Nodes)
+        {
+            if (_layout.LaneAssignments.TryGetValue(node.Id, out var lane))
+            {
+                if (!_laneColors.ContainsKey(lane))
+                {
+                    _laneColors[lane] = node.Color ?? "#6b7280";
+                }
+            }
+        }
+
+        // Ensure lane 0 (main) has a color
+        if (!_laneColors.ContainsKey(0))
+        {
+            _laneColors[0] = "#6b7280";
+        }
+    }
+
+    private AgentStatusData? GetAgentStatus(IGraphNode node)
+    {
+        if (node.IssueId != null && _agentStatuses.TryGetValue(node.IssueId, out var status))
+        {
+            return status;
+        }
+        return null;
+    }
+
+    private async Task HandleNodeClick(IGraphNode node)
+    {
+        if (node.PullRequestNumber.HasValue)
+        {
+            await OnPullRequestClick.InvokeAsync(node.PullRequestNumber.Value);
+        }
+        else if (node.IssueId != null)
+        {
+            await OnIssueClick.InvokeAsync(node.IssueId);
+        }
+    }
+
+    private void HandleNodeLeave()
+    {
+        _tooltipVisible = false;
+        StateHasChanged();
+    }
+
+    private async Task LoadMorePastPRs()
+    {
+        _currentMaxPastPRs += 5;
+        await LoadGraphAsync();
+    }
+
+    private string GenerateLoadMoreSvg()
+    {
+        var maxLanes = _layout?.MaxLanes ?? 1;
+        return TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: 0,
+            activeLanes: new HashSet<int> { 0 },
+            connectorFromLane: null,
+            maxLanes: maxLanes,
+            nodeColor: "#51A5C1", // ocean color
+            isIssue: false,
+            isLoadMore: true,
+            laneColors: _laneColors
+        );
+    }
+
+    public async Task RefreshAsync()
+    {
+        await LoadGraphAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            try
+            {
+                await _hubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+    }
+}

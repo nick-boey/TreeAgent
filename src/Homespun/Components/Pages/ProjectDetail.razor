@@ -78,7 +78,7 @@ else
     {
         <div class="project-layout">
             <div class="timeline-column">
-                <GitgraphVisualization
+                <TimelineVisualization
                     @ref="_graphVisualization"
                     ProjectId="@Id"
                     OnPullRequestClick="@SelectPullRequestByNumber"
@@ -323,7 +323,7 @@ else
     private List<PullRequestWithTime>? _pastPRs;
     private List<Issue>? _openIssues;
     private List<Issue>? _inProgressIssues;
-    private GitgraphVisualization? _graphVisualization;
+    private TimelineVisualization? _graphVisualization;
     private HubConnection? _hubConnection;
     private bool _isRefreshing;
 

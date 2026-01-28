@@ -1,0 +1,103 @@
+@using Homespun.Features.Gitgraph.Data
+@using Homespun.Features.Gitgraph.Services
+
+<div class="timeline-row @(IsSelected ? "timeline-row-selected" : "")"
+     @onclick="HandleClick"
+     @onmouseenter="HandleMouseEnter"
+     @onmouseleave="HandleMouseLeave">
+    <div class="timeline-graph-cell">
+        @((MarkupString)SvgContent)
+    </div>
+    <div class="timeline-content-cell">
+        <span class="timeline-title">@Node.Title</span>
+        @if (AgentStatus != null)
+        {
+            <span class="agent-status-badge @GetAgentStatusClass()">
+                <span class="agent-status-dot @(AgentStatus.IsActive ? "agent-status-dot-active" : "")"></span>
+                <span>@GetAgentStatusLabel()</span>
+            </span>
+        }
+        @if (!string.IsNullOrEmpty(Node.Tag))
+        {
+            <span class="timeline-tag" style="background-color: @(Node.Color ?? "#6b7280")20; border-color: @(Node.Color ?? "#6b7280"); color: @(Node.Color ?? "#6b7280");">
+                @Node.Tag
+            </span>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public required IGraphNode Node { get; set; }
+    [Parameter] public required RowLaneInfo LaneInfo { get; set; }
+    [Parameter] public required int MaxLanes { get; set; }
+    [Parameter] public bool IsSelected { get; set; }
+    [Parameter] public bool IsLoadMore { get; set; }
+    [Parameter] public AgentStatusData? AgentStatus { get; set; }
+    [Parameter] public IReadOnlyDictionary<int, string>? LaneColors { get; set; }
+    [Parameter] public EventCallback<IGraphNode> OnNodeClick { get; set; }
+    [Parameter] public EventCallback<(IGraphNode Node, ElementReference Element)> OnNodeHover { get; set; }
+    [Parameter] public EventCallback OnNodeLeave { get; set; }
+
+    private string SvgContent = "";
+
+    protected override void OnParametersSet()
+    {
+        var isIssue = Node.NodeType == GraphNodeType.Issue || Node.NodeType == GraphNodeType.OrphanIssue;
+        var nodeColor = Node.Color ?? "#6b7280";
+
+        SvgContent = TimelineSvgRenderer.GenerateRowSvg(
+            nodeLane: LaneInfo.NodeLane,
+            activeLanes: LaneInfo.ActiveLanes,
+            connectorFromLane: LaneInfo.ConnectorFromLane,
+            maxLanes: MaxLanes,
+            nodeColor: nodeColor,
+            isIssue: isIssue,
+            isLoadMore: IsLoadMore,
+            laneColors: LaneColors
+        );
+    }
+
+    private async Task HandleClick()
+    {
+        await OnNodeClick.InvokeAsync(Node);
+    }
+
+    private async Task HandleMouseEnter()
+    {
+        // TODO: Implement tooltip hover
+    }
+
+    private async Task HandleMouseLeave()
+    {
+        await OnNodeLeave.InvokeAsync();
+    }
+
+    private string GetAgentStatusClass()
+    {
+        if (AgentStatus == null || !AgentStatus.IsActive) return "agent-status-inactive";
+
+        return AgentStatus.Status switch
+        {
+            "Running" => "agent-status-running",
+            "WaitingForInput" => "agent-status-waiting",
+            "Starting" => "agent-status-starting",
+            "Error" => "agent-status-error",
+            _ => "agent-status-inactive"
+        };
+    }
+
+    private string GetAgentStatusLabel()
+    {
+        if (AgentStatus == null) return "";
+
+        return AgentStatus.Status switch
+        {
+            "Running" => "Working",
+            "WaitingForInput" => "Waiting",
+            "Starting" => "Starting",
+            "Error" => "Error",
+            "Stopped" => "Stopped",
+            _ => AgentStatus.Status
+        };
+    }
+}
