@@ -2,7 +2,7 @@ using Homespun.Features.Commands;
 using Homespun.Features.GitHub;
 using Homespun.Features.PullRequests;
 using Homespun.Features.PullRequests.Data.Entities;
-using Homespun.Tests.Helpers;
+using Homespun.Features.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -16,7 +16,7 @@ namespace Homespun.Tests.Features.GitHub;
 [TestFixture]
 public class IssuePrStatusServiceTests
 {
-    private TestDataStore _dataStore = null!;
+    private MockDataStore _dataStore = null!;
     private Mock<IConfiguration> _mockConfig = null!;
     private Mock<IGitHubClientWrapper> _mockGitHubClient = null!;
     private Mock<ICommandRunner> _mockCommandRunner = null!;
@@ -26,7 +26,7 @@ public class IssuePrStatusServiceTests
     [SetUp]
     public void SetUp()
     {
-        _dataStore = new TestDataStore();
+        _dataStore = new MockDataStore();
         _mockConfig = new Mock<IConfiguration>();
         _mockGitHubClient = new Mock<IGitHubClientWrapper>();
         _mockCommandRunner = new Mock<ICommandRunner>();
