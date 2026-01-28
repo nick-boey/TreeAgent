@@ -333,3 +333,52 @@ The application exposes a health check endpoint at `/health` that monitors:
 SignalR is used for real-time updates:
 - `/hubs/claudecode` - Claude Code session message streaming, content blocks, session status
 - `/hubs/notifications` - Toast notifications for system events
+
+## UI Development with Mock Mode
+
+### Overview
+
+The mock mode provides a development environment with:
+- Pre-seeded demo data (projects, features, issues)
+- No external dependencies (GitHub, Claude API)
+- Isolated from production data
+
+### Starting Mock Mode
+
+```bash
+# Using script
+./scripts/mock.sh       # Linux/Mac
+./scripts/mock.ps1      # Windows
+
+# Or directly
+dotnet run --project src/Homespun --launch-profile mock
+```
+
+The application runs at: https://localhost:5094
+
+### Visual UI Development with Playwright
+
+Use the `/ui-dev` skill for browser-assisted UI development:
+
+```
+/ui-dev
+```
+
+This provides:
+- Playwright MCP tools for screenshots and interaction
+- Guidance for the visual iteration workflow
+- Mock server management
+
+### Playwright MCP Tools
+
+Key tools for UI inspection:
+- `browser_navigate` - Navigate to URLs
+- `browser_take_screenshot` - Capture visual state
+- `browser_snapshot` - Get accessibility tree
+- `browser_click` / `browser_type` - Interact with elements
+- `browser_console_messages` - Check for JS errors
+
+### Environment Variables
+
+- `HOMESPUN_MOCK_MODE=true`: Activates mock services
+- `ASPNETCORE_ENVIRONMENT=Development`: Enables dev tooling

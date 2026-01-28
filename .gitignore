@@ -10,6 +10,12 @@
 # Claude Code temp files
 tmpclaude-*
 
+# Claude Code user-specific commands
+.claude/commands/
+
+# Playwright MCP screenshot artifacts
+.playwright-mcp/
+
 # Serena cache files
 .serena/cache/
 
