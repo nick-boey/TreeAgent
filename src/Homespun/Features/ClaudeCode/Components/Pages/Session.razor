@@ -60,11 +60,18 @@
                 {
                     @foreach (var message in _session.Messages)
                     {
-                        <div class="message @(message.Role == ClaudeMessageRole.User ? "user-message" : "assistant-message")">
-                            <div class="message-header">
-                                <span class="message-role">@(message.Role == ClaudeMessageRole.User ? "You" : "Claude")</span>
-                                <span class="message-time">@message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
-                            </div>
+                        @* Tool result messages (role=user but only ToolResult content) should be styled as tool output, not user messages *@
+                        var isToolResultMessage = message.Role == ClaudeMessageRole.User && !IsRealUserMessage(message);
+                        var messageClass = isToolResultMessage ? "tool-result-message" :
+                                          (message.Role == ClaudeMessageRole.User ? "user-message" : "assistant-message");
+                        <div class="message @messageClass">
+                            @if (!isToolResultMessage)
+                            {
+                                <div class="message-header">
+                                    <span class="message-role">@(message.Role == ClaudeMessageRole.User ? "You" : "Claude")</span>
+                                    <span class="message-time">@message.CreatedAt.ToLocalTime().ToString("HH:mm:ss")</span>
+                                </div>
+                            }
                             <div class="message-content">
                                 @foreach (var content in message.Content)
                                 {
@@ -107,19 +114,17 @@
                                             case ClaudeContentType.ToolUse:
                                                 <div class="tool-use-block">
                                                     <div class="tool-header">
-                                                        <span class="tool-icon">🔧</span>
+                                                        <span class="tool-icon">@GetToolIcon(content.ToolName ?? "Tool")</span>
                                                         <span class="tool-name">@content.ToolName</span>
                                                         @if (content.IsStreaming)
                                                         {
                                                             <span class="tool-streaming-indicator">
                                                                 <span class="spinner-border spinner-border-sm ml-2" role="status"></span>
+                                                                <span class="tool-status">Running...</span>
                                                             </span>
                                                         }
                                                     </div>
-                                                    @if (!string.IsNullOrEmpty(content.ToolInput))
-                                                    {
-                                                        <pre class="tool-input">@content.ToolInput@(content.IsStreaming ? "▌" : "")</pre>
-                                                    }
+                                                    @* Hide raw JSON input - the ToolResult will show formatted output *@
                                                 </div>
                                                 break;
 
@@ -295,6 +300,23 @@
         border: 1px solid var(--border-color);
     }
 
+    /* Tool result messages are styled as part of the assistant's tool flow */
+    .tool-result-message {
+        background: var(--bg-primary);
+        margin-right: 10%;
+        margin-top: calc(-1 * var(--spacing-md)); /* Visually connect to previous message */
+        border: 1px solid var(--border-color);
+        border-top: none;
+        border-radius: 0 0 var(--radius-md) var(--radius-md);
+        padding-top: 0;
+    }
+
+    /* When tool result follows assistant message, round the assistant's bottom corners */
+    .assistant-message:has(+ .tool-result-message) {
+        border-radius: var(--radius-md) var(--radius-md) 0 0;
+        margin-bottom: 0;
+    }
+
     .message-header {
         display: flex;
         justify-content: space-between;
@@ -343,9 +365,8 @@
 
     .tool-use-block {
         background: var(--bg-tertiary);
-        padding: var(--spacing-sm);
+        padding: var(--spacing-xs) var(--spacing-sm);
         border-radius: var(--radius-sm);
-        font-family: monospace;
         font-size: 0.875rem;
     }
 
@@ -353,19 +374,27 @@
         display: flex;
         align-items: center;
         gap: var(--spacing-xs);
-        margin-bottom: var(--spacing-xs);
     }
 
-    .tool-input {
-        margin: 0;
-        padding: var(--spacing-sm);
-        background: var(--bg-primary);
-        border-radius: var(--radius-sm);
-        overflow-x: auto;
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 200px;
-        overflow-y: auto;
+    .tool-header .tool-icon {
+        font-size: 1rem;
+    }
+
+    .tool-header .tool-name {
+        font-weight: 500;
+        color: var(--text-secondary);
+    }
+
+    .tool-header .tool-streaming-indicator {
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+        margin-left: var(--spacing-sm);
+    }
+
+    .tool-header .tool-status {
+        font-size: 0.75rem;
+        color: var(--text-muted);
     }
 
     /* Tool Result Block Styles */
@@ -1507,6 +1536,21 @@
         ClaudeContentType.ToolUse => "tool-use-block",
         ClaudeContentType.ToolResult => "tool-result-block",
         _ => ""
+    };
+
+    private static string GetToolIcon(string toolName) => toolName.ToLowerInvariant() switch
+    {
+        "read" => "📖",
+        "write" => "✏️",
+        "edit" => "📝",
+        "bash" => "💻",
+        "task" => "🤖",
+        "explore" => "🔭",
+        "grep" => "🔍",
+        "glob" => "📁",
+        "webfetch" => "🌐",
+        "websearch" => "🔎",
+        _ => "🔧"
     };
 
     private static string FormatDuration(long ms)

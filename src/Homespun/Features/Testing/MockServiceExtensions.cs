@@ -56,6 +56,7 @@ public static class MockServiceExtensions
 
         // Claude Code services - use the real session store (already in-memory)
         services.AddSingleton<IClaudeSessionStore, ClaudeSessionStore>();
+        services.AddSingleton<IToolResultParser, ToolResultParser>();
         services.AddSingleton<IClaudeSessionService, MockClaudeSessionService>();
         services.AddSingleton<IRebaseAgentService, MockRebaseAgentService>();
         services.AddSingleton<IAgentPromptService, MockAgentPromptService>();

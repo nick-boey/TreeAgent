@@ -16,17 +16,23 @@ public class MockDataSeederService : IHostedService
     private readonly MockDataStore _dataStore;
     private readonly MockFleeceService _fleeceService;
     private readonly IAgentPromptService _agentPromptService;
+    private readonly IClaudeSessionStore _sessionStore;
+    private readonly IToolResultParser _toolResultParser;
     private readonly ILogger<MockDataSeederService> _logger;
 
     public MockDataSeederService(
         MockDataStore dataStore,
         MockFleeceService fleeceService,
         IAgentPromptService agentPromptService,
+        IClaudeSessionStore sessionStore,
+        IToolResultParser toolResultParser,
         ILogger<MockDataSeederService> logger)
     {
         _dataStore = dataStore;
         _fleeceService = fleeceService;
         _agentPromptService = agentPromptService;
+        _sessionStore = sessionStore;
+        _toolResultParser = toolResultParser;
         _logger = logger;
     }
 
@@ -40,6 +46,7 @@ public class MockDataSeederService : IHostedService
             await SeedPullRequestsAsync();
             await SeedIssuesAsync();
             await SeedAgentPromptsAsync();
+            SeedDemoSessions();
 
             _logger.LogInformation("Mock data seeding completed successfully");
         }
@@ -321,5 +328,303 @@ Create an integration test to confirm that this does occur, then fix it - the br
 
         await _dataStore.AddAgentPromptAsync(customPrompt);
         _logger.LogDebug("Seeded custom agent prompt: {PromptName}", customPrompt.Name);
+    }
+
+    /// <summary>
+    /// Seeds demo Claude Code sessions with tool results for testing the tool display UI.
+    /// </summary>
+    private void SeedDemoSessions()
+    {
+        var now = DateTime.UtcNow;
+        var sessionId = "demo-session-001";
+
+        // Create a demo session with various tool results
+        var session = new ClaudeSession
+        {
+            Id = sessionId,
+            EntityId = "task/abc123",
+            ProjectId = "demo-project",
+            WorkingDirectory = "/mock/projects/demo-project",
+            Mode = SessionMode.Build,
+            Model = "claude-sonnet-4-20250514",
+            Status = ClaudeSessionStatus.WaitingForInput,
+            CreatedAt = now.AddMinutes(-15),
+            LastActivityAt = now.AddMinutes(-2),
+            TotalCostUsd = 0.0234m,
+            TotalDurationMs = 45000
+        };
+
+        // Add initial assistant greeting
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = sessionId,
+            Role = ClaudeMessageRole.Assistant,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.Text,
+                    Text = "I'm ready to help with your task. What would you like me to do?"
+                }
+            ],
+            CreatedAt = now.AddMinutes(-15)
+        });
+
+        // Add user message
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = sessionId,
+            Role = ClaudeMessageRole.User,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.Text,
+                    Text = "Please analyze the project structure and run the tests."
+                }
+            ],
+            CreatedAt = now.AddMinutes(-14)
+        });
+
+        // Add assistant message with tool use
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = sessionId,
+            Role = ClaudeMessageRole.Assistant,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.Thinking,
+                    Text = "I'll first read the project structure to understand the codebase, then run the tests."
+                },
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.ToolUse,
+                    ToolName = "Read",
+                    ToolUseId = "toolu_demo_001",
+                    ToolInput = "{\"file_path\": \"/src/Homespun/Program.cs\"}"
+                }
+            ],
+            CreatedAt = now.AddMinutes(-13)
+        });
+
+        // Add tool result for Read
+        var readContent = """
+                 1→using Microsoft.AspNetCore.Builder;
+                 2→using Microsoft.Extensions.DependencyInjection;
+                 3→
+                 4→var builder = WebApplication.CreateBuilder(args);
+                 5→
+                 6→// Add services to the container
+                 7→builder.Services.AddRazorPages();
+                 8→builder.Services.AddServerSideBlazor();
+                 9→
+                10→var app = builder.Build();
+                11→
+                12→app.UseStaticFiles();
+                13→app.UseRouting();
+                14→app.MapBlazorHub();
+                15→app.MapFallbackToPage("/_Host");
+                16→
+                17→app.Run();
+            """;
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = sessionId,
+            Role = ClaudeMessageRole.User,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.ToolResult,
+                    ToolUseId = "toolu_demo_001",
+                    ToolName = "Read",
+                    ToolSuccess = true,
+                    Text = readContent,
+                    ParsedToolResult = _toolResultParser.Parse("Read", readContent, false)
+                }
+            ],
+            CreatedAt = now.AddMinutes(-12)
+        });
+
+        // Add assistant message with Grep tool use
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = sessionId,
+            Role = ClaudeMessageRole.Assistant,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.ToolUse,
+                    ToolName = "Grep",
+                    ToolUseId = "toolu_demo_002",
+                    ToolInput = "{\"pattern\": \"AddService\", \"path\": \"src/\"}"
+                }
+            ],
+            CreatedAt = now.AddMinutes(-11)
+        });
+
+        // Add tool result for Grep
+        var grepContent = """
+            src/Homespun/Program.cs:7:builder.Services.AddRazorPages();
+            src/Homespun/Program.cs:8:builder.Services.AddServerSideBlazor();
+            src/Homespun/Features/ClaudeCode/ServiceCollectionExtensions.cs:15:services.AddScoped<IClaudeSessionService, ClaudeSessionService>();
+            src/Homespun/Features/ClaudeCode/ServiceCollectionExtensions.cs:16:services.AddScoped<IToolResultParser, ToolResultParser>();
+            """;
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = sessionId,
+            Role = ClaudeMessageRole.User,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.ToolResult,
+                    ToolUseId = "toolu_demo_002",
+                    ToolName = "Grep",
+                    ToolSuccess = true,
+                    Text = grepContent,
+                    ParsedToolResult = _toolResultParser.Parse("Grep", grepContent, false)
+                }
+            ],
+            CreatedAt = now.AddMinutes(-10)
+        });
+
+        // Add assistant message with Bash tool use
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = sessionId,
+            Role = ClaudeMessageRole.Assistant,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.Text,
+                    Text = "I found the service registrations. Now let me run the tests:"
+                },
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.ToolUse,
+                    ToolName = "Bash",
+                    ToolUseId = "toolu_demo_003",
+                    ToolInput = "{\"command\": \"dotnet test\"}"
+                }
+            ],
+            CreatedAt = now.AddMinutes(-9)
+        });
+
+        // Add tool result for Bash
+        var bashContent = """
+            Running tests...
+
+            Test run for /src/Homespun/tests/bin/Debug/net8.0/Homespun.Tests.dll (.NETCoreApp,Version=v8.0)
+            Microsoft (R) Test Execution Command Line Tool Version 17.8.0
+
+            Starting test execution, please wait...
+            A total of 42 test files matched the specified pattern.
+
+            Passed!  - Failed:     0, Passed:    42, Skipped:     0, Total:    42
+            """;
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = sessionId,
+            Role = ClaudeMessageRole.User,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.ToolResult,
+                    ToolUseId = "toolu_demo_003",
+                    ToolName = "Bash",
+                    ToolSuccess = true,
+                    Text = bashContent,
+                    ParsedToolResult = _toolResultParser.Parse("Bash", bashContent, false)
+                }
+            ],
+            CreatedAt = now.AddMinutes(-5)
+        });
+
+        // Add assistant message with Glob tool use
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = sessionId,
+            Role = ClaudeMessageRole.Assistant,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.ToolUse,
+                    ToolName = "Glob",
+                    ToolUseId = "toolu_demo_004",
+                    ToolInput = "{\"pattern\": \"**/*.cs\"}"
+                }
+            ],
+            CreatedAt = now.AddMinutes(-4)
+        });
+
+        // Add tool result for Glob
+        var globContent = """
+            src/Homespun/Program.cs
+            src/Homespun/Features/ClaudeCode/Services/ClaudeSessionService.cs
+            src/Homespun/Features/ClaudeCode/Services/ToolResultParser.cs
+            src/Homespun/Features/ClaudeCode/Data/ToolResultData.cs
+            src/Homespun/Features/Testing/Services/MockClaudeSessionService.cs
+            src/Homespun/Components/Pages/Home.razor.cs
+            """;
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = sessionId,
+            Role = ClaudeMessageRole.User,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.ToolResult,
+                    ToolUseId = "toolu_demo_004",
+                    ToolName = "Glob",
+                    ToolSuccess = true,
+                    Text = globContent,
+                    ParsedToolResult = _toolResultParser.Parse("Glob", globContent, false)
+                }
+            ],
+            CreatedAt = now.AddMinutes(-3)
+        });
+
+        // Add final assistant summary
+        session.Messages.Add(new ClaudeMessage
+        {
+            SessionId = sessionId,
+            Role = ClaudeMessageRole.Assistant,
+            Content =
+            [
+                new ClaudeMessageContent
+                {
+                    Type = ClaudeContentType.Text,
+                    Text = """
+                        ## Analysis Complete
+
+                        I've analyzed the project structure and run the tests. Here's a summary:
+
+                        **Project Structure:**
+                        - The project is a Blazor Server application
+                        - It uses dependency injection for services
+                        - There are 6 C# source files in the main codebase
+
+                        **Test Results:**
+                        - All 42 tests passed successfully
+                        - No failures or skipped tests
+
+                        The codebase appears to be in good shape. Is there anything specific you'd like me to look at or modify?
+                        """
+                }
+            ],
+            CreatedAt = now.AddMinutes(-2)
+        });
+
+        _sessionStore.Add(session);
+        _logger.LogDebug("Seeded demo session: {SessionId} with {MessageCount} messages",
+            sessionId, session.Messages.Count);
     }
 }

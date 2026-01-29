@@ -361,6 +361,58 @@ public class ClaudeSessionService : IClaudeSessionService, IAsyncDisposable
             case SystemMessage systemMsg:
                 _logger.LogDebug("System message received: {Subtype}", systemMsg.Subtype);
                 break;
+
+            case UserMessage userMsg:
+                // Handle user messages containing tool results
+                await ProcessUserMessageAsync(sessionId, session, userMsg, cancellationToken);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Processes a UserMessage from the SDK, which may contain tool results.
+    /// In Claude's API protocol, tool results are sent back as user messages.
+    /// </summary>
+    private async Task ProcessUserMessageAsync(
+        string sessionId,
+        ClaudeSession session,
+        UserMessage userMsg,
+        CancellationToken cancellationToken)
+    {
+        // Check if content contains tool results (content is a list of content blocks)
+        if (userMsg.Content is not List<object> contentBlocks)
+        {
+            _logger.LogDebug("UserMessage content is not a list of blocks, skipping tool result processing");
+            return;
+        }
+
+        var toolResultContents = new List<ClaudeMessageContent>();
+
+        foreach (var block in contentBlocks)
+        {
+            if (block is ToolResultBlock toolResultBlock)
+            {
+                var content = ConvertToolResultBlock(sessionId, toolResultBlock);
+                toolResultContents.Add(content);
+                _logger.LogDebug("Processed tool result for tool use ID: {ToolUseId}, tool: {ToolName}",
+                    toolResultBlock.ToolUseId, content.ToolName);
+            }
+        }
+
+        if (toolResultContents.Count > 0)
+        {
+            var toolResultMessage = new ClaudeMessage
+            {
+                SessionId = sessionId,
+                Role = ClaudeMessageRole.User,
+                Content = toolResultContents
+            };
+            session.Messages.Add(toolResultMessage);
+
+            // Broadcast to clients for real-time UI updates
+            await _hubContext.BroadcastMessageReceived(sessionId, toolResultMessage);
+            _logger.LogDebug("Broadcasted {Count} tool result(s) for session {SessionId}",
+                toolResultContents.Count, sessionId);
         }
     }
 
