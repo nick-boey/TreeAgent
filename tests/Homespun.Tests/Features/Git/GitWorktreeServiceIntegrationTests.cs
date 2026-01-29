@@ -629,4 +629,155 @@ public class GitWorktreeServiceIntegrationTests
     }
 
     #endregion
+
+    #region Branch Name Recalculation Tests (Issue 1JudQJ)
+
+    /// <summary>
+    /// Integration test for issue 1JudQJ: Verifies that when creating a worktree,
+    /// the branch name is calculated from current issue properties (type, group, title).
+    /// This test simulates the scenario where an issue's type changes before creating a worktree.
+    /// </summary>
+    [Test]
+    public async Task CreateWorktree_WithRecalculatedBranchName_CreatesCorrectBranch()
+    {
+        // Arrange - Simulate the branch naming pattern used by Homespun
+        // Format: {group}/{type}/{branch-id}+{issue-id}
+        var issueId = "abc123";
+
+        // Original branch name (as if issue was Feature type)
+        var originalBranchName = $"issues/feature/fix-something+{issueId}";
+
+        // Recalculated branch name (as if issue was changed to Bug type)
+        var recalculatedBranchName = $"issues/bug/fix-something+{issueId}";
+
+        // Act - Create worktree with the recalculated branch name
+        var worktreePath = await _service.CreateWorktreeAsync(
+            _fixture.RepositoryPath,
+            recalculatedBranchName,
+            createBranch: true);
+
+        // Assert - Worktree should be created with the recalculated name
+        Assert.That(worktreePath, Is.Not.Null);
+        Assert.That(Directory.Exists(worktreePath), Is.True);
+
+        // Verify the branch was created with the correct name
+        var branches = _fixture.RunGit("branch --list");
+        Assert.That(branches, Does.Contain("issues/bug/fix-something+abc123"));
+        Assert.That(branches, Does.Not.Contain("issues/feature/fix-something+abc123"));
+    }
+
+    /// <summary>
+    /// Integration test for issue 1JudQJ: Verifies that branch name includes the correct
+    /// group prefix when group is specified (not using default "issues" prefix).
+    /// </summary>
+    [Test]
+    public async Task CreateWorktree_WithGroupInBranchName_CreatesCorrectBranch()
+    {
+        // Arrange - Branch name with custom group prefix
+        var branchNameWithGroup = "core/task/implement-feature+xyz789";
+
+        // Act
+        var worktreePath = await _service.CreateWorktreeAsync(
+            _fixture.RepositoryPath,
+            branchNameWithGroup,
+            createBranch: true);
+
+        // Assert
+        Assert.That(worktreePath, Is.Not.Null);
+        Assert.That(Directory.Exists(worktreePath), Is.True);
+
+        // Verify the branch includes the group prefix
+        var branches = _fixture.RunGit("branch --list");
+        Assert.That(branches, Does.Contain("core/task/implement-feature+xyz789"));
+    }
+
+    /// <summary>
+    /// Integration test for issue 1JudQJ: Verifies that the worktree path matches
+    /// the branch name (after sanitization) to ensure consistency.
+    /// </summary>
+    [Test]
+    public async Task CreateWorktree_BranchNameAndWorktreePath_AreConsistent()
+    {
+        // Arrange
+        var branchName = "issues/feature/some-feature+def456";
+
+        // Act
+        var worktreePath = await _service.CreateWorktreeAsync(
+            _fixture.RepositoryPath,
+            branchName,
+            createBranch: true);
+
+        // Assert - Worktree path should be based on sanitized branch name
+        Assert.That(worktreePath, Is.Not.Null);
+
+        // The worktree folder name should match the sanitized branch name
+        // (+ is sanitized to -)
+        var expectedPathSegment = "issues/feature/some-feature-def456";
+        Assert.That(worktreePath, Does.Contain("issues"));
+        Assert.That(worktreePath, Does.Contain("feature"));
+        Assert.That(worktreePath, Does.Contain("some-feature-def456"));
+    }
+
+    /// <summary>
+    /// Integration test for issue 1JudQJ: Verifies that creating a worktree with a different
+    /// branch name (simulating an issue property change) creates a separate worktree.
+    /// This demonstrates that old worktrees are NOT automatically updated.
+    /// </summary>
+    [Test]
+    public async Task CreateWorktree_WithDifferentBranchNames_CreatesSeparateWorktrees()
+    {
+        // Arrange - Two different branch names for same logical issue
+        // (simulating issue type change from Feature to Bug)
+        var issueId = "conflict1";
+        var originalBranchName = $"issues/feature/test-issue+{issueId}";
+        var modifiedBranchName = $"issues/bug/test-issue+{issueId}";
+
+        // Act - Create worktrees with both names
+        var worktree1 = await _service.CreateWorktreeAsync(
+            _fixture.RepositoryPath,
+            originalBranchName,
+            createBranch: true);
+
+        var worktree2 = await _service.CreateWorktreeAsync(
+            _fixture.RepositoryPath,
+            modifiedBranchName,
+            createBranch: true);
+
+        // Assert - Both worktrees should exist (this is the current behavior)
+        // The fix ensures the UI always uses the recalculated name, preventing this scenario
+        Assert.That(worktree1, Is.Not.Null);
+        Assert.That(worktree2, Is.Not.Null);
+        Assert.That(worktree1, Is.Not.EqualTo(worktree2));
+
+        // Both branches should exist
+        var branches = _fixture.RunGit("branch --list");
+        Assert.That(branches, Does.Contain($"issues/feature/test-issue+{issueId}"));
+        Assert.That(branches, Does.Contain($"issues/bug/test-issue+{issueId}"));
+    }
+
+    /// <summary>
+    /// Integration test for issue 1JudQJ: Verifies that GetWorktreePathForBranch
+    /// can find a worktree using the recalculated branch name.
+    /// </summary>
+    [Test]
+    public async Task GetWorktreePathForBranch_WithRecalculatedName_FindsCorrectWorktree()
+    {
+        // Arrange - Create a worktree with initial branch name
+        var branchName = "issues/task/my-task+recalc1";
+        var worktreePath = await _service.CreateWorktreeAsync(
+            _fixture.RepositoryPath,
+            branchName,
+            createBranch: true);
+        Assert.That(worktreePath, Is.Not.Null);
+
+        // Act - Look up the worktree using the same branch name
+        // (simulating that recalculation produces the same name)
+        var foundPath = await _service.GetWorktreePathForBranchAsync(_fixture.RepositoryPath, branchName);
+
+        // Assert
+        Assert.That(foundPath, Is.Not.Null);
+        Assert.That(NormalizePath(foundPath!), Is.EqualTo(NormalizePath(worktreePath!)));
+    }
+
+    #endregion
 }

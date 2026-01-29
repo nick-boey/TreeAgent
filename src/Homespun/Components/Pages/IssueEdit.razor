@@ -3,7 +3,9 @@
 @using Homespun.Features.Fleece.Services
 @using Homespun.Features.Navigation
 @using Homespun.Features.Projects
+@using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data.Entities
+@using static Homespun.Features.PullRequests.BranchNameGenerator
 @inject IProjectService ProjectService
 @inject IFleeceService FleeceService
 @inject IBreadcrumbService BreadcrumbService
@@ -336,39 +338,14 @@ else
         }
     }
 
+    /// <summary>
+    /// Gets the branch name preview based on current form values.
+    /// Uses the shared BranchNameGenerator to ensure consistency with IssueDetailPanel.
+    /// </summary>
     private string GetBranchPreview()
     {
-        var type = _type.ToString().ToLowerInvariant();
-        // Use working branch ID if set, otherwise generate from title
-        var branchId = !string.IsNullOrWhiteSpace(_workingBranchId)
-            ? _workingBranchId.Trim()
-            : SanitizeForBranch(_title);
-
-        // If group is set, use group-based format; otherwise use issues/ prefix
-        if (!string.IsNullOrWhiteSpace(_group))
-        {
-            return $"{_group.Trim()}/{type}/{branchId}+{IssueId}";
-        }
-
-        return $"issues/{type}/{branchId}+{IssueId}";
-    }
-
-    private static string SanitizeForBranch(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return "<title>";
-
-        // Convert to lowercase, replace spaces with hyphens, remove special chars
-        var sanitized = input.ToLowerInvariant()
-            .Replace(" ", "-")
-            .Replace("_", "-");
-
-        // Remove any character that isn't alphanumeric or hyphen
-        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "[^a-z0-9-]", "");
-
-        // Remove consecutive hyphens
-        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "-+", "-");
-
-        // Trim hyphens from start and end
-        return sanitized.Trim('-');
+        // Use the shared generator to ensure branch name calculation is consistent
+        // across the application (edit form preview matches what will be created)
+        return GenerateBranchNamePreview(IssueId, _type, _title, _group, _workingBranchId);
     }
 }
