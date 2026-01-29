@@ -358,24 +358,36 @@
 
         try
         {
-            // Create worktree for the issue's branch
+            // Get or create worktree for the issue's branch
             var branchName = GetBranchPreview();
-            Logger.LogInformation("Creating worktree for branch {BranchName} from {ProjectPath}", branchName, _project.LocalPath);
 
-            var worktreePath = await GitWorktreeService.CreateWorktreeAsync(
-                _project.LocalPath,
-                branchName,
-                createBranch: true,
-                baseBranch: _project.DefaultBranch);
+            // Check if worktree already exists for this branch
+            var worktreePath = await GitWorktreeService.GetWorktreePathForBranchAsync(_project.LocalPath, branchName);
 
-            if (string.IsNullOrEmpty(worktreePath))
+            if (!string.IsNullOrEmpty(worktreePath))
             {
-                _errorMessage = "Failed to create worktree for issue branch.";
-                StartupTracker.MarkAsFailed(Issue.Id, _errorMessage);
-                return;
+                Logger.LogInformation("Found existing worktree at {WorktreePath} for branch {BranchName}", worktreePath, branchName);
             }
+            else
+            {
+                // Create new worktree for the issue's branch
+                Logger.LogInformation("Creating worktree for branch {BranchName} from {ProjectPath}", branchName, _project.LocalPath);
 
-            Logger.LogInformation("Created worktree at {WorktreePath} for issue {IssueId}", worktreePath, Issue.Id);
+                worktreePath = await GitWorktreeService.CreateWorktreeAsync(
+                    _project.LocalPath,
+                    branchName,
+                    createBranch: true,
+                    baseBranch: _project.DefaultBranch);
+
+                if (string.IsNullOrEmpty(worktreePath))
+                {
+                    _errorMessage = "Failed to create worktree for issue branch.";
+                    StartupTracker.MarkAsFailed(Issue.Id, _errorMessage);
+                    return;
+                }
+
+                Logger.LogInformation("Created worktree at {WorktreePath} for issue {IssueId}", worktreePath, Issue.Id);
+            }
 
             // Use the prompt's mode, or default to Build if no prompt selected
             var mode = prompt?.Mode ?? SessionMode.Build;
