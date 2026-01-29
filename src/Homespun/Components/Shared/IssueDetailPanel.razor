@@ -8,6 +8,7 @@
 @using Homespun.Features.PullRequests
 @using Homespun.Features.PullRequests.Data.Entities
 @using Homespun.Features.Shared.Services
+@using static Homespun.Features.PullRequests.BranchNameGenerator
 
 @inject IClaudeSessionStore SessionStore
 @inject IClaudeSessionService SessionService
@@ -327,26 +328,16 @@
         OnClose.InvokeAsync();
     }
 
+    /// <summary>
+    /// Gets the branch name for this issue by recalculating from current issue properties.
+    /// This ensures the branch name always reflects the current state of the issue,
+    /// including any changes to type, group, title, or working branch ID.
+    /// </summary>
     private string GetBranchPreview()
     {
-        return $"issues/{Issue.Type.ToString().ToLowerInvariant()}/{SanitizeForBranch(Issue.Title)}+{Issue.Id}";
-    }
-
-    private static string SanitizeForBranch(string input)
-    {
-        // Convert to lowercase, replace spaces with hyphens, remove special chars
-        var sanitized = input.ToLowerInvariant()
-            .Replace(" ", "-")
-            .Replace("_", "-");
-
-        // Remove any character that isn't alphanumeric or hyphen
-        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "[^a-z0-9-]", "");
-
-        // Remove consecutive hyphens
-        sanitized = System.Text.RegularExpressions.Regex.Replace(sanitized, "-+", "-");
-
-        // Trim hyphens from start and end
-        return sanitized.Trim('-');
+        // Always recalculate from current issue data to ensure consistency
+        // This fixes the bug where branch names were cached/stale after issue edits
+        return GenerateBranchName(Issue);
     }
 
     private async Task HandleAgentStart(AgentPrompt? selectedPrompt)

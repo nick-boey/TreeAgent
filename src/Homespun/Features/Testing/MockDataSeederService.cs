@@ -248,6 +248,39 @@ public class MockDataSeederService : IHostedService
                 Group = "technical-debt",
                 CreatedAt = now.AddDays(-7),
                 LastUpdate = now.AddDays(-4)
+            },
+            // Issue X4LlBY - Referenced in issue 1JudQJ
+            // This issue demonstrates the branch naming pattern with custom working branch ID
+            new()
+            {
+                Id = "X4LlBY",
+                Title = "Improve tool output formatting",
+                Description = "Enhance the output formatting for CLI tools to be more readable and include color coding.",
+                Type = IssueType.Feature,
+                Status = IssueStatus.Progress,
+                Priority = 2,
+                Group = "core",
+                WorkingBranchId = "improve-tool-output",
+                CreatedAt = now.AddDays(-3),
+                LastUpdate = now.AddHours(-6)
+            },
+            // Issue demonstrating the bug scenario (1JudQJ):
+            // Originally created as a Feature, then changed to Bug type
+            // The branch name should reflect the current type (Bug), not the original (Feature)
+            new()
+            {
+                Id = "1JudQJ",
+                Title = "Fix issues with worktree and branch naming",
+                Description = @"When a new worktree is created for an issue, it currently creates the new worktree with a default automatically generated branch name. It appears that this is being persisted independent to the {group}/{type}/{branch-id} pattern, so when these details are changed for an issue they are not recalculated and updated prior to creating the branch and worktree.
+
+Create an integration test to confirm that this does occur, then fix it - the branch name and worktree folder name should always match and should always be recalculated just before creating the branch and worktree.",
+                Type = IssueType.Bug, // This was originally Feature, now Bug
+                Status = IssueStatus.Progress,
+                Priority = 1,
+                Group = "issues", // Using "issues" group
+                WorkingBranchId = "fix-issues-with-worktree-and-branch-naming",
+                CreatedAt = now.AddDays(-1),
+                LastUpdate = now
             }
         };
 
