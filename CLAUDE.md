@@ -354,7 +354,16 @@ The mock mode provides a development environment with:
 dotnet run --project src/Homespun --launch-profile mock
 ```
 
-The application runs at: https://localhost:5094
+**Default URLs (from launchSettings.json):**
+- HTTPS: https://localhost:5094
+- HTTP: http://localhost:5095
+
+**Important:** In containerized or CI environments, the `HTTP_PORTS`/`HTTPS_PORTS` environment variables may override the launch profile URLs. Check the console output for the actual listening URL:
+```
+Now listening on: http://localhost:5093
+```
+
+When using Playwright MCP tools in such environments, use the HTTP URL shown in the console output rather than the HTTPS URL from the launch profile.
 
 ### Visual UI Development with Playwright
 
@@ -377,6 +386,40 @@ Key tools for UI inspection:
 - `browser_snapshot` - Get accessibility tree
 - `browser_click` / `browser_type` - Interact with elements
 - `browser_console_messages` - Check for JS errors
+
+### Workflow Example: Visual UI Iteration
+
+1. **Start the mock server:**
+   ```bash
+   cd src/Homespun
+   dotnet build
+   HOMESPUN_MOCK_MODE=true dotnet run --no-build &
+   ```
+
+2. **Wait for server startup and verify:**
+   ```bash
+   sleep 10
+   curl -s http://localhost:5093/health  # Check if server is healthy
+   ```
+
+3. **Navigate using Playwright MCP:**
+   ```
+   browser_navigate to http://localhost:5093/projects/demo-project
+   ```
+
+   **Note:** Use `http://` not `https://` when running in environments where HTTPS is not available or certificates are not set up.
+
+4. **Take screenshots to verify visual changes:**
+   ```
+   browser_take_screenshot with filename "my-feature.png"
+   ```
+
+5. **Make CSS/component changes, then refresh the page to see updates**
+
+6. **Stop the server when done:**
+   ```bash
+   pkill -f "dotnet run"
+   ```
 
 ### Environment Variables
 
