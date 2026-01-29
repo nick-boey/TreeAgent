@@ -415,12 +415,24 @@
             {
                 ProjectName = group.Key,
                 Sessions = group.Select(x => x.Session)
-                    .OrderBy(s => _entityInfoCache.GetValueOrDefault(s.EntityId)?.Title ?? s.EntityId)
+                    // Sort by status: waiting sessions first, then running sessions, then others
+                    .OrderBy(s => GetStatusSortOrder(s.Status))
+                    .ThenBy(s => _entityInfoCache.GetValueOrDefault(s.EntityId)?.Title ?? s.EntityId)
                     .ToList()
             })
             .OrderBy(g => g.ProjectName)
             .ToList();
     }
+
+    private static int GetStatusSortOrder(ClaudeSessionStatus status) => status switch
+    {
+        ClaudeSessionStatus.WaitingForInput => 0,  // Waiting at top
+        ClaudeSessionStatus.Starting => 1,
+        ClaudeSessionStatus.Running => 2,          // Working at bottom
+        ClaudeSessionStatus.Stopped => 3,
+        ClaudeSessionStatus.Error => 4,
+        _ => 5
+    };
 
     private async Task StopSession(string sessionId)
     {
