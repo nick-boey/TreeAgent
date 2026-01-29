@@ -26,6 +26,7 @@ public class GraphServiceLinkedIssueFilterTests
     private Mock<IGitHubService> _mockGitHubService = null!;
     private Mock<IFleeceService> _mockFleeceService = null!;
     private Mock<IClaudeSessionStore> _mockSessionStore = null!;
+    private Mock<PullRequestWorkflowService> _mockWorkflowService = null!;
     private Mock<ILogger<GraphService>> _mockLogger = null!;
     private GraphService _service = null!;
     private Project _testProject = null!;
@@ -69,6 +70,14 @@ public class GraphServiceLinkedIssueFilterTests
         _mockSessionStore.Setup(s => s.GetByProjectId(_testProject.Id))
             .Returns(new List<ClaudeSession>());
 
+        _mockWorkflowService = new Mock<PullRequestWorkflowService>(
+            MockBehavior.Loose,
+            _dataStore,
+            null!,
+            null!,
+            null!,
+            null!);
+
         _mockLogger = new Mock<ILogger<GraphService>>();
 
         _service = new GraphService(
@@ -77,6 +86,7 @@ public class GraphServiceLinkedIssueFilterTests
             _mockFleeceService.Object,
             _mockSessionStore.Object,
             _dataStore,
+            _mockWorkflowService.Object,
             _mockLogger.Object);
     }
 

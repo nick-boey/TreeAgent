@@ -1,4 +1,5 @@
 using Fleece.Core.Models;
+using Homespun.Features.PullRequests;
 
 namespace Homespun.Features.Gitgraph.Data;
 
@@ -12,19 +13,22 @@ public class IssueNode : IGraphNode
     private readonly int _timeDimension;
     private readonly bool _isOrphan;
     private readonly string? _customBranchName;
+    private readonly PullRequestStatus? _prStatus;
 
     public IssueNode(
         Issue issue,
         IReadOnlyList<string> parentIds,
         int timeDimension,
         bool isOrphan = false,
-        string? customBranchName = null)
+        string? customBranchName = null,
+        PullRequestStatus? prStatus = null)
     {
         _issue = issue;
         _parentIds = parentIds;
         _timeDimension = timeDimension;
         _isOrphan = isOrphan;
         _customBranchName = customBranchName;
+        _prStatus = prStatus;
     }
 
     public string Id => $"issue-{_issue.Id}";
@@ -63,9 +67,14 @@ public class IssueNode : IGraphNode
 
     public string? Url => null;
 
-    public string? Color => GetTypeColor(_issue.Type);
+    public string? Color => _prStatus.HasValue ? GetPrStatusColor(_prStatus.Value) : GetTypeColor(_issue.Type);
 
-    public string? Tag => _issue.Type.ToString();
+    public string? Tag => _prStatus.HasValue ? GetPrStatusTag(_prStatus.Value) : _issue.Type.ToString();
+
+    /// <summary>
+    /// The PR status for this issue, if a linked PR exists.
+    /// </summary>
+    public PullRequestStatus? LinkedPrStatus => _prStatus;
 
     public int? PullRequestNumber => null;
 
@@ -93,5 +102,29 @@ public class IssueNode : IGraphNode
         IssueType.Task => "#3b82f6",     // Blue
         IssueType.Chore => "#6b7280",    // Gray
         _ => "#6b7280"                   // Gray
+    };
+
+    private static string GetPrStatusColor(PullRequestStatus status) => status switch
+    {
+        PullRequestStatus.ChecksFailing => "#ef4444",   // Red - attention needed
+        PullRequestStatus.Conflict => "#f97316",        // Orange - conflicts
+        PullRequestStatus.InProgress => "#3b82f6",      // Blue - work in progress
+        PullRequestStatus.ReadyForReview => "#eab308",  // Yellow - awaiting review
+        PullRequestStatus.ReadyForMerging => "#22c55e", // Green - ready to merge
+        PullRequestStatus.Merged => "#a855f7",          // Purple - merged
+        PullRequestStatus.Closed => "#6b7280",          // Gray - closed
+        _ => "#6b7280"                                  // Gray
+    };
+
+    private static string GetPrStatusTag(PullRequestStatus status) => status switch
+    {
+        PullRequestStatus.ChecksFailing => "Checks Failing",
+        PullRequestStatus.Conflict => "Conflicts",
+        PullRequestStatus.InProgress => "In Progress",
+        PullRequestStatus.ReadyForReview => "Ready for Review",
+        PullRequestStatus.ReadyForMerging => "Ready to Merge",
+        PullRequestStatus.Merged => "Merged",
+        PullRequestStatus.Closed => "Closed",
+        _ => "PR"
     };
 }

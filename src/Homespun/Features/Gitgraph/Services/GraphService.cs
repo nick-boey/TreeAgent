@@ -20,6 +20,7 @@ public class GraphService(
     IFleeceService fleeceService,
     IClaudeSessionStore sessionStore,
     IDataStore dataStore,
+    PullRequestWorkflowService workflowService,
     ILogger<GraphService> logger) : IGraphService
 {
     private readonly GraphBuilder _graphBuilder = new();
@@ -47,11 +48,14 @@ public class GraphService(
         var linkedIssueIds = GetLinkedIssueIds(projectId);
         var filteredIssues = issues.Where(i => !linkedIssueIds.Contains(i.Id)).ToList();
 
-        logger.LogDebug(
-            "Building graph for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues ({FilteredCount} after filtering linked), maxPastPRs: {MaxPastPRs}",
-            projectId, openPrs.Count, closedPrs.Count, issues.Count, filteredIssues.Count, maxPastPRs);
+        // Build lookup of issue ID to PR status for remaining issues with linked PRs
+        var issuePrStatuses = await GetIssuePrStatusesAsync(projectId, filteredIssues);
 
-        return _graphBuilder.Build(allPrs, filteredIssues, maxPastPRs);
+        logger.LogDebug(
+            "Building graph for project {ProjectId}: {OpenPrCount} open PRs, {ClosedPrCount} closed PRs, {IssueCount} issues ({FilteredCount} after filtering linked), {LinkedPrCount} with PR status, maxPastPRs: {MaxPastPRs}",
+            projectId, openPrs.Count, closedPrs.Count, issues.Count, filteredIssues.Count, issuePrStatuses.Count, maxPastPRs);
+
+        return _graphBuilder.Build(allPrs, filteredIssues, maxPastPRs, issuePrStatuses);
     }
 
     /// <inheritdoc />
@@ -94,6 +98,46 @@ public class GraphService(
                 };
             }
         }
+    }
+
+    /// <summary>
+    /// Gets PR status for issues that have linked PRs.
+    /// </summary>
+    private async Task<Dictionary<string, PullRequestStatus>> GetIssuePrStatusesAsync(string projectId, List<Issue> issues)
+    {
+        var result = new Dictionary<string, PullRequestStatus>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            // Get tracked PRs linked to issues
+            var trackedPrs = dataStore.GetPullRequestsByProject(projectId)
+                .Where(pr => !string.IsNullOrEmpty(pr.BeadsIssueId) && pr.GitHubPRNumber.HasValue)
+                .ToList();
+
+            if (trackedPrs.Count == 0)
+                return result;
+
+            // Get open PRs with status from GitHub
+            var openPrsWithStatus = await workflowService.GetOpenPullRequestsWithStatusAsync(projectId);
+            var prStatusByNumber = openPrsWithStatus.ToDictionary(p => p.PullRequest.Number, p => p.Status);
+
+            foreach (var trackedPr in trackedPrs)
+            {
+                if (trackedPr.BeadsIssueId != null && trackedPr.GitHubPRNumber.HasValue)
+                {
+                    if (prStatusByNumber.TryGetValue(trackedPr.GitHubPRNumber.Value, out var status))
+                    {
+                        result[trackedPr.BeadsIssueId] = status;
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to get PR statuses for issues in project {ProjectId}", projectId);
+        }
+
+        return result;
     }
 
     private async Task<List<PullRequestInfo>> GetOpenPullRequestsSafe(string projectId)

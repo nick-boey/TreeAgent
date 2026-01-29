@@ -101,6 +101,9 @@ else
     // Markdown rendering service
     builder.Services.AddSingleton<IMarkdownRenderingService, MarkdownRenderingService>();
 
+    // Issue PR status service (for getting PR status linked to issues)
+    builder.Services.AddScoped<IIssuePrStatusService, IssuePrStatusService>();
+
     // Gitgraph services
     builder.Services.AddScoped<IGraphService, GraphService>();
 
