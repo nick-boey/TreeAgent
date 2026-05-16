@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useCallback, useEffect, useRef, Fragment } from 'react'
+import { useMemo, useState, useCallback, useRef, Fragment } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { OptionListProps, OptionListSelection, OptionListOption } from './schema'
 import { normalizeSelectionForOptions, parseSelectionToIdSet } from './selection'
@@ -250,23 +250,25 @@ export function OptionList({
   }, [options, selectedIds, selectionMode, effectiveMaxSelections, selectedCount])
 
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([])
-  const [activeIndex, setActiveIndex] = useState(() => {
+  const [rawActiveIndex, setActiveIndex] = useState(() => {
     const firstSelected = optionStates.findIndex((s) => s.isSelected && !s.isDisabled)
     if (firstSelected >= 0) return firstSelected
     const firstEnabled = optionStates.findIndex((s) => !s.isDisabled)
     return firstEnabled >= 0 ? firstEnabled : 0
   })
 
-  useEffect(() => {
-    if (optionStates.length === 0) return
-    setActiveIndex((prev) => {
-      if (prev < 0 || prev >= optionStates.length || optionStates[prev].isDisabled) {
-        const firstEnabled = optionStates.findIndex((s) => !s.isDisabled)
-        return firstEnabled >= 0 ? firstEnabled : 0
-      }
-      return prev
-    })
-  }, [optionStates])
+  const activeIndex = useMemo(() => {
+    if (optionStates.length === 0) return 0
+    if (
+      rawActiveIndex < 0 ||
+      rawActiveIndex >= optionStates.length ||
+      optionStates[rawActiveIndex]?.isDisabled
+    ) {
+      const firstEnabled = optionStates.findIndex((s) => !s.isDisabled)
+      return firstEnabled >= 0 ? firstEnabled : 0
+    }
+    return rawActiveIndex
+  }, [rawActiveIndex, optionStates])
 
   const updateSelection = useCallback(
     (next: Set<string>) => {

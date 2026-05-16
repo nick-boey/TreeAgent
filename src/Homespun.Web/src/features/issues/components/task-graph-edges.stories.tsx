@@ -41,7 +41,6 @@ function issueLine(overrides: Partial<TaskGraphIssueRenderLine>): TaskGraphIssue
 
 function NodeMarkers({ lines, maxLanes }: { lines: TaskGraphRenderLine[]; maxLanes: number }) {
   const width = calculateSvgWidth(maxLanes)
-  let y = 0
   return (
     <svg
       width={width}
@@ -50,9 +49,8 @@ function NodeMarkers({ lines, maxLanes }: { lines: TaskGraphRenderLine[]; maxLan
       aria-hidden="true"
     >
       {lines.map((line, i) => {
-        const cy = y + getRowCenterY()
-        y += ROW_HEIGHT
         if (line.type !== 'issue') return null
+        const cy = i * ROW_HEIGHT + getRowCenterY()
         const cx = getLaneCenterX(line.lane)
         return <circle key={i} cx={cx} cy={cy} r={6} fill="#3b82f6" />
       })}
