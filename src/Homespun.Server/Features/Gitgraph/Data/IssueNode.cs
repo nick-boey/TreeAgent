@@ -57,7 +57,7 @@ public class IssueNode : IGraphNode
         : $"issue-{_issue.Id}");
 
     public DateTime SortDate => _issue.Status is IssueStatus.Closed or IssueStatus.Complete
-        ? _issue.StatusLastUpdate.DateTime
+        ? _issue.LastUpdate.DateTime
         : _issue.CreatedAt.DateTime;
 
     public int TimeDimension => _timeDimension;

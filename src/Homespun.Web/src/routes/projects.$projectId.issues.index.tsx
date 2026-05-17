@@ -384,8 +384,6 @@ function IssuesList() {
   useToolbarShortcuts({
     onCreateAbove: handleCreateAbove,
     onCreateBelow: handleCreateBelow,
-    onUndo: () => {}, // Handled by useIssueHistory in toolbar
-    onRedo: () => {}, // Handled by useIssueHistory in toolbar
     onOpenAgentLauncher: handleOpenAgentLauncher,
     onDecreaseDepth: () => setDepth((d) => Math.max(1, d - 1)),
     onIncreaseDepth: () => setDepth((d) => d + 1),
@@ -409,7 +407,6 @@ function IssuesList() {
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Toolbar */}
       <ProjectToolbar
-        projectId={projectId}
         selectedIssueId={selectedIssueId}
         onCreateAbove={handleCreateAbove}
         onCreateBelow={handleCreateBelow}

@@ -37,6 +37,7 @@ public class TaskQueueTests
                 Title = $"Test Issue {issueId}",
                 Status = IssueStatus.Progress,
                 Type = IssueType.Task,
+                CreatedAt = DateTimeOffset.UtcNow,
                 LastUpdate = DateTimeOffset.UtcNow
             },
             BranchName = $"task/test-{issueId}+{issueId}"

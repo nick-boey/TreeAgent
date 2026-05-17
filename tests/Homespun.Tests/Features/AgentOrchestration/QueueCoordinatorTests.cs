@@ -68,6 +68,7 @@ public class QueueCoordinatorTests
             Status = status,
             Type = IssueType.Task,
             ExecutionMode = executionMode,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
     }

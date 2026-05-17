@@ -216,7 +216,7 @@ public class IssuePrLinkingServiceTests
 
         _mockFleeceService
             .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow });
+            .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Closed, Type = IssueType.Task, CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow });
 
         // Act
         var result = await _service.CloseLinkedIssueAsync(project.Id, pr.Id, "PR #42 merged");
@@ -269,6 +269,7 @@ public class IssuePrLinkingServiceTests
             Title = "Test Issue",
             Status = IssueStatus.Review,
             Type = IssueType.Task,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 
@@ -278,7 +279,7 @@ public class IssuePrLinkingServiceTests
 
         _mockFleeceService
             .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Complete, null, null, null, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Complete, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow });
+            .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Complete, Type = IssueType.Task, CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow });
 
         // Act
         var result = await _service.UpdateIssueStatusFromPRAsync(project.Id, "hsp-123", PullRequestStatus.Merged, 42);
@@ -299,6 +300,7 @@ public class IssuePrLinkingServiceTests
             Title = "Test Issue",
             Status = IssueStatus.Review,
             Type = IssueType.Task,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 
@@ -308,7 +310,7 @@ public class IssuePrLinkingServiceTests
 
         _mockFleeceService
             .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Closed, null, null, null, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Closed, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow });
+            .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Closed, Type = IssueType.Task, CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow });
 
         // Act
         var result = await _service.UpdateIssueStatusFromPRAsync(project.Id, "hsp-123", PullRequestStatus.Closed, 42);
@@ -334,6 +336,7 @@ public class IssuePrLinkingServiceTests
             Title = "Test Issue",
             Status = IssueStatus.Progress,
             Type = IssueType.Task,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 
@@ -343,7 +346,7 @@ public class IssuePrLinkingServiceTests
 
         _mockFleeceService
             .Setup(f => f.UpdateIssueAsync(project.LocalPath, "hsp-123", null, IssueStatus.Review, null, null, null, null, null, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Review, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow });
+            .ReturnsAsync(new Issue { Id = "hsp-123", Title = "Test Issue", Status = IssueStatus.Review, Type = IssueType.Task, CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow });
 
         // Act
         var result = await _service.UpdateIssueStatusFromPRAsync(project.Id, "hsp-123", prStatus, 42);
@@ -364,6 +367,7 @@ public class IssuePrLinkingServiceTests
             Title = "Test Issue",
             Status = IssueStatus.Complete,  // Already Complete
             Type = IssueType.Task,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 

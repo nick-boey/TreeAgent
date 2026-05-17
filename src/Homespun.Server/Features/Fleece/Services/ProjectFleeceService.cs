@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
 using Fleece.Core.Models;
 using Fleece.Core.Models.Graph;
 using Fleece.Core.Services;
@@ -20,19 +19,16 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, Issue>> _issueCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, bool> _cacheInitialized = new(StringComparer.OrdinalIgnoreCase);
     private readonly IIssueSerializationQueue _serializationQueue;
-    private readonly IIssueHistoryService _historyService;
     private readonly IIssueLayoutService _issueLayoutService;
     private readonly ILogger<ProjectFleeceService> _logger;
     private bool _disposed;
 
     public ProjectFleeceService(
         IIssueSerializationQueue serializationQueue,
-        IIssueHistoryService historyService,
         IIssueLayoutService issueLayoutService,
         ILogger<ProjectFleeceService> logger)
     {
         _serializationQueue = serializationQueue;
-        _historyService = historyService;
         _issueLayoutService = issueLayoutService;
         _logger = logger;
     }
@@ -42,7 +38,7 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         return _fleeceServices.GetOrAdd(projectPath, path =>
         {
             _logger.LogDebug("Creating new IFleeceService for project: {ProjectPath}", path);
-            var filePath = ResolveJsonlFilePath(path);
+            var filePath = EnsureSnapshotFile(path);
             var settingsService = new SettingsService(path);
             var gitConfigService = new GitConfigService(settingsService);
             return FleeceService.ForFile(filePath, settingsService, gitConfigService);
@@ -50,47 +46,21 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
     }
 
     /// <summary>
-    /// Resolves the JSONL file path for a project, using a stable filename.
-    /// ForFile() with hash-patterned filenames (issues_*.jsonl) triggers internal hash-based
-    /// rename-on-save behavior that breaks subsequent reads. Using a stable name avoids this.
-    /// If existing hash-named files exist, consolidates them into the stable file.
+    /// Ensures the stable snapshot file (.fleece/issues.jsonl) exists. The Fleece 3.1
+    /// event-sourced storage projects events into this single file, so the legacy
+    /// hash-file consolidation done at 3.0 is no longer needed — `fleece migrate`
+    /// handled that once during the upgrade.
     /// </summary>
-    private static readonly string StableFileName = "issues.jsonl";
-
-    private string ResolveJsonlFilePath(string projectPath)
+    private static string EnsureSnapshotFile(string projectPath)
     {
         var fleeceDir = Path.Combine(projectPath, ".fleece");
         Directory.CreateDirectory(fleeceDir);
 
-        var stableFilePath = Path.Combine(fleeceDir, StableFileName);
+        var snapshotPath = Path.Combine(fleeceDir, "issues.jsonl");
+        if (!File.Exists(snapshotPath))
+            File.WriteAllText(snapshotPath, "");
 
-        // If stable file already exists and no other files, use it directly
-        var hashFiles = Directory.GetFiles(fleeceDir, "issues_*.jsonl");
-        if (hashFiles.Length == 0 && File.Exists(stableFilePath))
-            return stableFilePath;
-
-        if (hashFiles.Length > 0)
-        {
-            // Consolidate hash-named files into the stable file
-            _logger.LogDebug("Consolidating {Count} JSONL files into {StableFile} for project: {ProjectPath}",
-                hashFiles.Length, StableFileName, projectPath);
-            var issues = FleeceFileHelper.LoadIssuesAsync(projectPath).GetAwaiter().GetResult();
-
-            // Remove hash-named files
-            foreach (var file in hashFiles) File.Delete(file);
-
-            // Write consolidated content to stable file
-            var lines = issues.Select(issue =>
-                System.Text.Json.JsonSerializer.Serialize(issue, FleeceFileHelper.SerializerOptions));
-            File.WriteAllLines(stableFilePath, lines);
-        }
-        else if (!File.Exists(stableFilePath))
-        {
-            // No files at all — create empty stable file
-            File.WriteAllText(stableFilePath, "");
-        }
-
-        return stableFilePath;
+        return snapshotPath;
     }
 
     private async Task<ConcurrentDictionary<string, Issue>> EnsureCacheLoadedAsync(string projectPath, CancellationToken ct)
@@ -210,6 +180,19 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             .ToList();
     }
 
+    public async Task<IReadOnlyList<Issue>> GetAllIssuesFromPathAsync(string path, CancellationToken ct = default)
+    {
+        var fleeceDir = Path.Combine(path, ".fleece");
+        if (!Directory.Exists(fleeceDir))
+            return [];
+
+        var snapshotPath = EnsureSnapshotFile(path);
+        var settingsService = new SettingsService(path);
+        var gitConfigService = new GitConfigService(settingsService);
+        var service = FleeceService.ForFile(snapshotPath, settingsService, gitConfigService);
+        return await service.GetAllAsync(ct);
+    }
+
     #endregion
 
     #region Write Operations
@@ -246,7 +229,6 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             executionMode.HasValue ? $" [ExecutionMode: {executionMode}]" : "",
             status.HasValue && status.Value != IssueStatus.Open ? $" [Status: {status}]" : "");
 
-        await RecordHistorySnapshotAsync(projectPath, "Create", issue.Id, $"Created '{title}'", ct);
         return issue;
     }
 
@@ -293,8 +275,6 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             if (assignedTo != null) changes.Add($"assignedTo='{assignedTo}'");
 
             _logger.LogInformation("Updated issue '{IssueId}': {Changes}", issueId, string.Join(", ", changes));
-            var historyDescription = changes.Count > 0 ? $"Updated: {string.Join(", ", changes)}" : "Updated issue";
-            await RecordHistorySnapshotAsync(projectPath, "Update", issueId, historyDescription, ct);
             return issue;
         }
         catch (KeyNotFoundException)
@@ -323,7 +303,6 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
                 QueuedAt: DateTimeOffset.UtcNow), ct);
 
             _logger.LogInformation("Deleted issue '{IssueId}'", issueId);
-            await RecordHistorySnapshotAsync(projectPath, "Delete", issueId, $"Deleted issue '{issueId}'", ct);
         }
         else
         {
@@ -351,7 +330,6 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         var issue = await service.AddDependencyAsync(parentId, childId, position, cancellationToken: ct);
         cache[childId] = issue;
         _logger.LogInformation("Added parent '{ParentId}' to issue '{ChildId}'", parentId, childId);
-        await RecordHistorySnapshotAsync(projectPath, "AddParent", childId, $"Linked '{childId}' to parent '{parentId}'", ct);
         return issue;
     }
 
@@ -365,7 +343,6 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         issue = issue with { ParentIssues = issue.ParentIssues.Where(p => p.Active).ToList() };
         cache[childId] = issue;
         _logger.LogInformation("Removed parent '{ParentId}' from issue '{ChildId}'", parentId, childId);
-        await RecordHistorySnapshotAsync(projectPath, "RemoveParent", childId, $"Unlinked '{childId}' from parent '{parentId}'", ct);
         return issue;
     }
 
@@ -394,7 +371,6 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             QueuedAt: DateTimeOffset.UtcNow), ct);
 
         _logger.LogInformation("Removed all parents from issue '{IssueId}'", issueId);
-        await RecordHistorySnapshotAsync(projectPath, "RemoveAllParents", issueId, $"Removed all parents from '{issueId}'", ct);
         return issue;
     }
 
@@ -434,10 +410,6 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             cache[childId] = issue;
 
             _logger.LogInformation("Set parent '{ParentId}' for issue '{ChildId}' (addToExisting: {AddToExisting})", parentId, childId, addToExisting);
-            var description = addToExisting
-                ? $"Added '{parentId}' as additional parent of '{childId}'"
-                : $"Set '{parentId}' as sole parent of '{childId}'";
-            await RecordHistorySnapshotAsync(projectPath, "SetParent", childId, description, ct);
             return issue;
         }
         catch (Exception ex) when (ex.Message.Contains("cycle", StringComparison.OrdinalIgnoreCase)
@@ -478,54 +450,7 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         if (result.UpdatedIssue != null) cache[issueId] = result.UpdatedIssue;
 
         _logger.LogInformation("Moved issue '{IssueId}' {Direction} under parent '{ParentId}'", issueId, direction, parentId);
-        await RecordHistorySnapshotAsync(projectPath, "MoveSeriesSibling", issueId,
-            $"Moved '{issue.Title}' {direction.ToString().ToLower()} in sibling order", ct);
         return result.UpdatedIssue ?? issue;
-    }
-
-    #endregion
-
-    #region History Operations
-
-    private async Task RecordHistorySnapshotAsync(string projectPath, string operationType, string? issueId, string? description, CancellationToken ct)
-    {
-        try
-        {
-            var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-            var issues = cache.Values.ToList();
-            await _historyService.RecordSnapshotAsync(projectPath, issues, operationType, issueId, description, ct);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to record history snapshot for {OperationType}", operationType);
-        }
-    }
-
-    public async Task ApplyHistorySnapshotAsync(string projectPath, IReadOnlyList<Issue> issues, CancellationToken ct = default)
-    {
-        var cache = _issueCache.GetOrAdd(projectPath, _ => new ConcurrentDictionary<string, Issue>(StringComparer.OrdinalIgnoreCase));
-        cache.Clear();
-        foreach (var issue in issues) cache[issue.Id] = issue;
-        _cacheInitialized[projectPath] = true;
-
-        var fleeceDir = Path.Combine(projectPath, ".fleece");
-        Directory.CreateDirectory(fleeceDir);
-        var existingFiles = Directory.GetFiles(fleeceDir, "issues_*.jsonl");
-        foreach (var file in existingFiles) File.Delete(file);
-
-        var issuesFile = Path.Combine(fleeceDir, $"issues_{Guid.NewGuid().ToString()[..6]}.jsonl");
-        var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-        await using (var writer = new StreamWriter(issuesFile, false))
-        {
-            foreach (var issue in issues)
-            {
-                var json = JsonSerializer.Serialize(issue, jsonOptions);
-                await writer.WriteLineAsync(json);
-            }
-        }
-
-        _fleeceServices.TryRemove(projectPath, out _);
-        _logger.LogInformation("Applied history snapshot with {Count} issues to project {ProjectPath}", issues.Count, projectPath);
     }
 
     #endregion

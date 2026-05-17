@@ -9,8 +9,6 @@ describe('useToolbarShortcuts', () => {
     callbacks = {
       onCreateAbove: vi.fn(),
       onCreateBelow: vi.fn(),
-      onUndo: vi.fn(),
-      onRedo: vi.fn(),
       onOpenAgentLauncher: vi.fn(),
       onDecreaseDepth: vi.fn(),
       onIncreaseDepth: vi.fn(),
@@ -46,45 +44,6 @@ describe('useToolbarShortcuts', () => {
 
     dispatchKeyDown('o')
     expect(callbacks.onCreateBelow).toHaveBeenCalled()
-  })
-
-  it('calls onUndo when u is pressed', () => {
-    renderHook(() => useToolbarShortcuts(callbacks))
-
-    dispatchKeyDown('u')
-    expect(callbacks.onUndo).toHaveBeenCalled()
-  })
-
-  it('calls onUndo when Ctrl+Z is pressed', () => {
-    renderHook(() => useToolbarShortcuts(callbacks))
-
-    dispatchKeyDown('z', { ctrlKey: true })
-    expect(callbacks.onUndo).toHaveBeenCalled()
-  })
-
-  it('calls onUndo when Cmd+Z is pressed (Mac)', () => {
-    renderHook(() => useToolbarShortcuts(callbacks))
-
-    dispatchKeyDown('z', { metaKey: true })
-    expect(callbacks.onUndo).toHaveBeenCalled()
-  })
-
-  it('does not call onUndo when Ctrl+Z is pressed and canUndo is false', () => {
-    const callbacksWithDisabled = {
-      ...callbacks,
-      canUndo: false,
-    }
-    renderHook(() => useToolbarShortcuts(callbacksWithDisabled))
-
-    dispatchKeyDown('z', { ctrlKey: true })
-    expect(callbacksWithDisabled.onUndo).not.toHaveBeenCalled()
-  })
-
-  it('calls onRedo when Ctrl+Shift+Z is pressed', () => {
-    renderHook(() => useToolbarShortcuts(callbacks))
-
-    dispatchKeyDown('z', { ctrlKey: true, shiftKey: true })
-    expect(callbacks.onRedo).toHaveBeenCalled()
   })
 
   it('calls onOpenAgentLauncher when e is pressed', () => {
@@ -157,13 +116,13 @@ describe('useToolbarShortcuts', () => {
     textarea.focus()
 
     const event = new KeyboardEvent('keydown', {
-      key: 'u',
+      key: 'o',
       bubbles: true,
     })
     Object.defineProperty(event, 'target', { value: textarea })
     document.dispatchEvent(event)
 
-    expect(callbacks.onUndo).not.toHaveBeenCalled()
+    expect(callbacks.onCreateBelow).not.toHaveBeenCalled()
 
     document.body.removeChild(textarea)
   })
@@ -176,32 +135,6 @@ describe('useToolbarShortcuts', () => {
 
     expect(removeEventListenerSpy).toHaveBeenCalledWith('keydown', expect.any(Function))
     removeEventListenerSpy.mockRestore()
-  })
-
-  it('does not call disabled callbacks', () => {
-    const callbacksWithDisabled = {
-      ...callbacks,
-      onUndo: vi.fn(),
-      canUndo: false,
-    }
-
-    renderHook(() => useToolbarShortcuts(callbacksWithDisabled))
-
-    dispatchKeyDown('u')
-    expect(callbacksWithDisabled.onUndo).not.toHaveBeenCalled()
-  })
-
-  it('calls enabled callbacks', () => {
-    const callbacksWithEnabled = {
-      ...callbacks,
-      onUndo: vi.fn(),
-      canUndo: true,
-    }
-
-    renderHook(() => useToolbarShortcuts(callbacksWithEnabled))
-
-    dispatchKeyDown('u')
-    expect(callbacksWithEnabled.onUndo).toHaveBeenCalled()
   })
 
   it('calls onToggleFilter when f is pressed', () => {

@@ -28,7 +28,6 @@ public class IssuesController(
     IDataStore dataStore,
     IHubContext<NotificationHub> notificationHub,
     IIssueBranchResolverService branchResolverService,
-    IIssueHistoryService historyService,
     IClaudeSessionService sessionService,
     IGitCloneService cloneService,
     IBranchIdBackgroundService branchIdBackgroundService,
@@ -685,104 +684,6 @@ public class IssuesController(
         }
 
         return Ok(result);
-    }
-
-    #endregion
-
-    #region History Operations
-
-    /// <summary>
-    /// Get the current history state for a project.
-    /// </summary>
-    [HttpGet("projects/{projectId}/issues/history/state")]
-    [ProducesResponseType<IssueHistoryState>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<IssueHistoryState>> GetHistoryState(string projectId)
-    {
-        var project = await projectService.GetByIdAsync(projectId);
-        if (project == null)
-        {
-            return NotFound("Project not found");
-        }
-
-        var state = await historyService.GetStateAsync(project.LocalPath);
-        return Ok(state);
-    }
-
-    /// <summary>
-    /// Undo the last change to issues.
-    /// </summary>
-    [HttpPost("projects/{projectId}/issues/history/undo")]
-    [ProducesResponseType<IssueHistoryOperationResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<IssueHistoryOperationResponse>> Undo(string projectId)
-    {
-        var project = await projectService.GetByIdAsync(projectId);
-        if (project == null)
-        {
-            return NotFound("Project not found");
-        }
-
-        var issues = await historyService.UndoAsync(project.LocalPath);
-        if (issues == null)
-        {
-            return Ok(new IssueHistoryOperationResponse
-            {
-                Success = false,
-                ErrorMessage = "Nothing to undo"
-            });
-        }
-
-        // Apply the snapshot to the FleeceService cache and disk
-        await fleeceService.ApplyHistorySnapshotAsync(project.LocalPath, issues);
-
-        // Bulk event — undo can change every issue at once.
-        await notificationHub.BroadcastIssueChanged(projectId, IssueChangeType.Updated, null, null);
-
-        var state = await historyService.GetStateAsync(project.LocalPath);
-        return Ok(new IssueHistoryOperationResponse
-        {
-            Success = true,
-            State = state
-        });
-    }
-
-    /// <summary>
-    /// Redo a previously undone change.
-    /// </summary>
-    [HttpPost("projects/{projectId}/issues/history/redo")]
-    [ProducesResponseType<IssueHistoryOperationResponse>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<IssueHistoryOperationResponse>> Redo(string projectId)
-    {
-        var project = await projectService.GetByIdAsync(projectId);
-        if (project == null)
-        {
-            return NotFound("Project not found");
-        }
-
-        var issues = await historyService.RedoAsync(project.LocalPath);
-        if (issues == null)
-        {
-            return Ok(new IssueHistoryOperationResponse
-            {
-                Success = false,
-                ErrorMessage = "Nothing to redo"
-            });
-        }
-
-        // Apply the snapshot to the FleeceService cache and disk
-        await fleeceService.ApplyHistorySnapshotAsync(project.LocalPath, issues);
-
-        // Bulk event — redo can change every issue at once.
-        await notificationHub.BroadcastIssueChanged(projectId, IssueChangeType.Updated, null, null);
-
-        var state = await historyService.GetStateAsync(project.LocalPath);
-        return Ok(new IssueHistoryOperationResponse
-        {
-            Success = true,
-            State = state
-        });
     }
 
     #endregion

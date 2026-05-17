@@ -54,6 +54,9 @@ interface LayoutIssueRaw {
 
 interface ParentIssueRefRaw {
   parentIssue: string
+  /** Fleece 3.1 wire-format name. */
+  lexOrder?: string
+  /** Legacy 3.0 wire-format name; still read for transitional compatibility. */
   sortOrder?: string
   active?: boolean
 }
@@ -105,7 +108,7 @@ const normalizeIssue = (raw: LayoutIssueRaw): LayoutIssue => ({
   parentIssues:
     raw.parentIssues?.map<ParentIssueRef>((p) => ({
       parentIssue: p.parentIssue,
-      sortOrder: p.sortOrder ?? null,
+      sortOrder: p.lexOrder ?? p.sortOrder ?? null,
       active: p.active ?? true,
     })) ?? [],
   priority: raw.priority ?? null,

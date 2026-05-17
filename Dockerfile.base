@@ -56,7 +56,7 @@ RUN --mount=type=cache,target=/root/.npm \
 # Install Fleece CLI for issue tracking
 # Use --tool-path to install directly to /usr/local/bin so both the shim and .store
 # directory are in the same location, accessible to all users regardless of runtime UID
-RUN dotnet tool install Fleece.Cli --version 3.0.0 --tool-path /usr/local/bin
+RUN dotnet tool install Fleece.Cli --version 3.1.0 --tool-path /usr/local/bin
 
 # Clean up build dependencies to reduce image size
 RUN apt-get update && apt-get remove -y build-essential && apt-get autoremove -y \

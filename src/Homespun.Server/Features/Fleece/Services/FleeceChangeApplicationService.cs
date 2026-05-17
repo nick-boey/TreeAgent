@@ -1,6 +1,6 @@
 using Fleece.Core.Models;
-using Fleece.Core.Services;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.Commands;
 using Homespun.Features.Git;
 using Homespun.Features.Projects;
 using Homespun.Shared.Models.Issues;
@@ -10,6 +10,12 @@ namespace Homespun.Features.Fleece.Services;
 
 /// <summary>
 /// Implementation of change application service.
+/// Under Fleece 3.1 event-sourced storage, applying an agent's changes is a
+/// <c>git merge</c> of the agent branch into main: each clone owns one
+/// <c>.fleece/changes/change_{guid}.jsonl</c> event log, the GUIDs guarantee no
+/// file-level conflicts, and replay over the merged event set produces the
+/// field-level last-writer-wins state for free. No <c>IssueMerger</c> step
+/// is needed.
 /// </summary>
 public class FleeceChangeApplicationService : IFleeceChangeApplicationService
 {
@@ -18,8 +24,9 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
     private readonly IProjectFleeceService _fleeceService;
     private readonly IFleeceChangeDetectionService _changeDetectionService;
     private readonly IFleeceConflictDetectionService _conflictDetectionService;
+    private readonly IGitCloneService _cloneService;
+    private readonly ICommandRunner _commandRunner;
     private readonly ILogger<FleeceChangeApplicationService> _logger;
-    private readonly IssueMerger _issueMerger = new();
 
     // Store pending conflicts for manual resolution
     private readonly Dictionary<string, List<IssueConflictDto>> _pendingConflicts = new();
@@ -30,6 +37,8 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
         IProjectFleeceService fleeceService,
         IFleeceChangeDetectionService changeDetectionService,
         IFleeceConflictDetectionService conflictDetectionService,
+        IGitCloneService cloneService,
+        ICommandRunner commandRunner,
         ILogger<FleeceChangeApplicationService> logger)
     {
         _projectService = projectService;
@@ -37,6 +46,8 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
         _fleeceService = fleeceService;
         _changeDetectionService = changeDetectionService;
         _conflictDetectionService = conflictDetectionService;
+        _cloneService = cloneService;
+        _commandRunner = commandRunner;
         _logger = logger;
     }
 
@@ -49,7 +60,6 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
     {
         try
         {
-            // Get project
             var project = await _projectService.GetByIdAsync(projectId);
             if (project == null)
             {
@@ -60,7 +70,6 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
                 };
             }
 
-            // Get session
             var session = _sessionService.GetSession(sessionId);
             if (session == null)
             {
@@ -71,7 +80,6 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
                 };
             }
 
-            // Validate session state
             if (session.Status == ClaudeSessionStatus.Running || session.Status == ClaudeSessionStatus.RunningHooks)
             {
                 return new ApplyAgentChangesResponse
@@ -81,7 +89,6 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
                 };
             }
 
-            // Detect changes
             var changes = await _changeDetectionService.DetectChangesAsync(projectId, sessionId, cancellationToken);
             if (!changes.Any())
             {
@@ -94,11 +101,9 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
                 };
             }
 
-            // Detect conflicts
             var conflicts = await _conflictDetectionService.DetectConflictsAsync(
                 projectId, sessionId, changes, cancellationToken);
 
-            // Handle conflicts based on strategy
             if (conflicts.Any())
             {
                 switch (conflictStrategy)
@@ -116,7 +121,6 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
                     case ConflictResolutionStrategy.Manual:
                         if (!dryRun)
                         {
-                            // Store conflicts for later resolution
                             _pendingConflicts[$"{projectId}:{sessionId}"] = conflicts;
                         }
                         return new ApplyAgentChangesResponse
@@ -130,12 +134,10 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
 
                     case ConflictResolutionStrategy.AgentWins:
                     case ConflictResolutionStrategy.MainWins:
-                        // Will be handled during application
                         break;
                 }
             }
 
-            // If dry run, return preview
             if (dryRun)
             {
                 return new ApplyAgentChangesResponse
@@ -148,60 +150,26 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
                 };
             }
 
-            // Use file merge approach for AgentWins strategy (the common case)
-            // This uses IssueMerger with field-level LWW merging, which is the proven
-            // approach used by FleeceIssuesSyncService
-            if (conflictStrategy == ConflictResolutionStrategy.AgentWins)
+            if (conflictStrategy == ConflictResolutionStrategy.MainWins)
             {
-                return await ApplyChangesViaFileMergeAsync(
-                    project.LocalPath, session.WorkingDirectory, cancellationToken);
-            }
+                _logger.LogInformation(
+                    "Apply with MainWins strategy: skipping agent branch merge for session {SessionId}",
+                    sessionId);
 
-            // Apply changes one-by-one for other strategies
-            var appliedChanges = new List<IssueChangeDto>();
-            var errors = new List<string>();
+                await _fleeceService.ReloadFromDiskAsync(project.LocalPath, cancellationToken);
 
-            foreach (var change in changes)
-            {
-                try
+                return new ApplyAgentChangesResponse
                 {
-                    // Check if this change has conflicts
-                    var changeConflicts = conflicts.FirstOrDefault(c => c.IssueId == change.IssueId);
-
-                    if (changeConflicts != null && conflictStrategy == ConflictResolutionStrategy.MainWins)
-                    {
-                        // Skip changes that have conflicts when main wins
-                        _logger.LogInformation("Skipping change to issue {IssueId} due to MainWins conflict strategy", change.IssueId);
-                        continue;
-                    }
-
-                    await ApplyChangeAsync(project.LocalPath, change, changeConflicts, conflictStrategy, cancellationToken);
-                    appliedChanges.Add(change);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error applying change to issue {IssueId}", change.IssueId);
-                    errors.Add($"Failed to apply change to {change.IssueId}: {ex.Message}");
-                }
+                    Success = true,
+                    Message = "Main wins: agent's changes were not merged.",
+                    Changes = changes,
+                    Conflicts = conflicts
+                };
             }
 
-            var success = errors.Count == 0;
-            var message = success
-                ? $"Applied {appliedChanges.Count} changes successfully"
-                : $"Applied {appliedChanges.Count} changes with {errors.Count} errors";
-
-            if (errors.Any())
-            {
-                message += "\nErrors:\n" + string.Join("\n", errors);
-            }
-
-            return new ApplyAgentChangesResponse
-            {
-                Success = success,
-                Message = message,
-                Changes = appliedChanges,
-                Conflicts = conflicts
-            };
+            // AgentWins or no conflicts: git merge the agent's branch into main.
+            return await ApplyChangesViaGitMergeAsync(
+                project.LocalPath, session.WorkingDirectory, changes, conflicts, sessionId, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -232,7 +200,6 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
                 };
             }
 
-            // Get project
             var project = await _projectService.GetByIdAsync(projectId);
             if (project == null)
             {
@@ -246,7 +213,6 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
             var appliedChanges = new List<IssueChangeDto>();
             var errors = new List<string>();
 
-            // Apply resolutions
             foreach (var resolution in resolutions)
             {
                 var conflict = conflicts.FirstOrDefault(c => c.IssueId == resolution.IssueId);
@@ -274,7 +240,6 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
                 }
             }
 
-            // Clear pending conflicts if all resolved
             if (errors.Count == 0)
             {
                 _pendingConflicts.Remove(key);
@@ -303,111 +268,73 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
         }
     }
 
-    private async Task ApplyChangeAsync(
-        string projectPath,
-        IssueChangeDto change,
-        IssueConflictDto? conflicts,
-        ConflictResolutionStrategy conflictStrategy,
+    private async Task<ApplyAgentChangesResponse> ApplyChangesViaGitMergeAsync(
+        string mainPath,
+        string agentClonePath,
+        List<IssueChangeDto> changes,
+        List<IssueConflictDto> conflicts,
+        string sessionId,
         CancellationToken cancellationToken)
     {
-        switch (change.ChangeType)
+        _logger.LogInformation(
+            "Applying changes via git merge: main={MainPath}, agent={AgentPath}",
+            mainPath, agentClonePath);
+
+        var branchName = await _cloneService.GetCurrentBranchAsync(agentClonePath);
+        if (string.IsNullOrEmpty(branchName))
         {
-            case ChangeType.Created:
-                // Create new issue
-                var issue = await _fleeceService.CreateIssueAsync(
-                    projectPath,
-                    change.ModifiedIssue!.Title,
-                    change.ModifiedIssue.Type,
-                    change.ModifiedIssue.Description,
-                    change.ModifiedIssue.Priority,
-                    change.ModifiedIssue.ExecutionMode,
-                    change.ModifiedIssue.Status,
-                    change.ModifiedIssue.AssignedTo,
-                    cancellationToken);
-
-                // Update additional fields if needed
-                if (change.ModifiedIssue.WorkingBranchId != issue.WorkingBranchId ||
-                    change.ModifiedIssue.AssignedTo != issue.AssignedTo)
-                {
-                    await _fleeceService.UpdateIssueAsync(
-                        projectPath,
-                        issue.Id,
-                        workingBranchId: change.ModifiedIssue.WorkingBranchId);
-                }
-
-                // Apply parent relationships
-                foreach (var parentRef in change.ModifiedIssue.ParentIssues)
-                {
-                    await _fleeceService.AddParentAsync(
-                        projectPath, issue.Id, parentRef.ParentIssue, ct: cancellationToken);
-                }
-                break;
-
-            case ChangeType.Updated:
-                // Handle conflicts if any
-                var modifiedIssue = change.ModifiedIssue!;
-                if (conflicts != null && conflictStrategy == ConflictResolutionStrategy.AgentWins)
-                {
-                    // Agent wins - use all agent values
-                    await UpdateIssueAsync(projectPath, change.IssueId, modifiedIssue, cancellationToken);
-                }
-                else if (conflicts == null)
-                {
-                    // No conflicts - apply all changes
-                    await UpdateIssueAsync(projectPath, change.IssueId, modifiedIssue, cancellationToken);
-                }
-                break;
-
-            case ChangeType.Deleted:
-                await _fleeceService.DeleteIssueAsync(projectPath, change.IssueId, cancellationToken);
-                break;
+            return new ApplyAgentChangesResponse
+            {
+                Success = false,
+                Message = $"Could not resolve agent branch name from clone at {agentClonePath}"
+            };
         }
-    }
 
-    private async Task UpdateIssueAsync(
-        string projectPath,
-        string issueId,
-        Homespun.Shared.Models.Issues.IssueDto modifiedIssue,
-        CancellationToken cancellationToken)
-    {
-        // Update basic fields
-        await _fleeceService.UpdateIssueAsync(
-            projectPath,
-            issueId,
-            modifiedIssue.Title,
-            modifiedIssue.Status,
-            modifiedIssue.Type,
-            modifiedIssue.Description,
-            modifiedIssue.Priority,
-            modifiedIssue.ExecutionMode,
-            modifiedIssue.WorkingBranchId,
-            modifiedIssue.AssignedTo,
-            cancellationToken);
+        // The agent's working tree may still hold uncommitted .fleece/changes/ events;
+        // commit them inside the clone first so the merge has something to bring across.
+        // The `fleece install` pre-commit hook auto-stages .fleece/changes/, so a plain
+        // `git commit` is sufficient.
+        var commitMsg = $"chore(fleece): pending agent changes for session {sessionId}";
+        await _commandRunner.RunAsync("git", $"commit -m \"{commitMsg}\" --allow-empty", agentClonePath);
 
-        // Update parent relationships if changed
-        var currentIssue = await _fleeceService.GetIssueAsync(projectPath, issueId, cancellationToken);
-        if (currentIssue != null)
+        var fetchResult = await _commandRunner.RunAsync(
+            "git", $"fetch \"{agentClonePath}\" \"{branchName}\"", mainPath);
+        if (!fetchResult.Success)
         {
-            // Remove parents that are no longer in the modified issue
-            var parentsToRemove = currentIssue.ParentIssues
-                .Where(p => !modifiedIssue.ParentIssues.Any(mp => mp.ParentIssue == p.ParentIssue))
-                .ToList();
-
-            foreach (var parent in parentsToRemove)
+            _logger.LogWarning("git fetch from agent clone failed: {Error}", fetchResult.Error);
+            return new ApplyAgentChangesResponse
             {
-                await _fleeceService.RemoveParentAsync(projectPath, issueId, parent.ParentIssue, cancellationToken);
-            }
-
-            // Add new parents
-            var parentsToAdd = modifiedIssue.ParentIssues
-                .Where(mp => !currentIssue.ParentIssues.Any(p => p.ParentIssue == mp.ParentIssue))
-                .ToList();
-
-            foreach (var parent in parentsToAdd)
-            {
-                await _fleeceService.AddParentAsync(projectPath, issueId, parent.ParentIssue, ct: cancellationToken);
-            }
+                Success = false,
+                Message = $"Failed to fetch agent branch into main: {fetchResult.Error}"
+            };
         }
+
+        var mergeResult = await _commandRunner.RunAsync(
+            "git",
+            $"merge FETCH_HEAD --no-ff --no-edit -m \"chore(fleece): apply agent changes from session {sessionId}\"",
+            mainPath);
+
+        if (!mergeResult.Success)
+        {
+            _logger.LogWarning("git merge of agent branch failed: {Error}", mergeResult.Error);
+            await _commandRunner.RunAsync("git", "merge --abort", mainPath);
+            return new ApplyAgentChangesResponse
+            {
+                Success = false,
+                Message = $"Failed to merge agent branch into main: {mergeResult.Error}"
+            };
+        }
+
+        await _fleeceService.ReloadFromDiskAsync(mainPath, cancellationToken);
+
+        _logger.LogInformation("Merged agent branch '{Branch}' into main and reloaded cache", branchName);
+        return new ApplyAgentChangesResponse
+        {
+            Success = true,
+            Message = $"Applied {changes.Count} changes via git merge",
+            Changes = changes,
+            Conflicts = conflicts
+        };
     }
 
     private async Task<Issue> ApplyResolutionAsync(
@@ -416,14 +343,12 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
         ConflictResolution resolution,
         CancellationToken cancellationToken)
     {
-        // Get the current issue state
         var currentIssue = await _fleeceService.GetIssueAsync(projectPath, conflict.IssueId, cancellationToken);
         if (currentIssue == null)
         {
             throw new InvalidOperationException($"Issue {conflict.IssueId} not found");
         }
 
-        // Build the resolved issue state based on field resolutions
         var updates = new Dictionary<string, object?>();
 
         foreach (var fieldResolution in resolution.FieldResolutions)
@@ -443,7 +368,6 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
             updates[fieldResolution.FieldName] = value;
         }
 
-        // Apply updates to the issue
         await _fleeceService.UpdateIssueAsync(
             projectPath,
             conflict.IssueId,
@@ -457,7 +381,6 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
             updates.GetValueOrDefault("AssignedTo")?.ToString(),
             cancellationToken);
 
-        // Return the updated issue
         return (await _fleeceService.GetIssueAsync(projectPath, conflict.IssueId, cancellationToken))!;
     }
 
@@ -465,10 +388,8 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
     {
         if (value == null)
             return null;
-
         if (Enum.TryParse<T>(value.ToString(), out var result))
             return result;
-
         return null;
     }
 
@@ -476,243 +397,8 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
     {
         if (value == null)
             return null;
-
         if (int.TryParse(value.ToString(), out var result))
             return result;
-
         return null;
-    }
-
-    /// <summary>
-    /// Applies changes using file-based merging with IssueMerger (field-level LWW).
-    /// This is the proven approach used by FleeceIssuesSyncService.
-    /// </summary>
-    private async Task<ApplyAgentChangesResponse> ApplyChangesViaFileMergeAsync(
-        string mainPath,
-        string agentClonePath,
-        CancellationToken cancellationToken)
-    {
-        _logger.LogInformation(
-            "Applying changes via file merge: main={MainPath}, agent={AgentPath}",
-            mainPath, agentClonePath);
-
-        try
-        {
-            // Load issues from main branch
-            var mainIssues = await LoadIssuesFromPathAsync(mainPath, cancellationToken);
-            var mainIssueMap = mainIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
-
-            _logger.LogDebug("Loaded {Count} issues from main branch", mainIssues.Count);
-
-            // Load issues from agent clone
-            var agentIssues = await LoadIssuesFromPathAsync(agentClonePath, cancellationToken);
-            var agentIssueMap = agentIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
-
-            _logger.LogDebug("Loaded {Count} issues from agent clone", agentIssues.Count);
-
-            // Collect all issue IDs from both sides
-            var allIssueIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var issue in mainIssues)
-                allIssueIds.Add(issue.Id);
-            foreach (var issue in agentIssues)
-                allIssueIds.Add(issue.Id);
-
-            // Merge issues using IssueMerger (field-level LWW)
-            var mergedIssues = new List<Issue>();
-            var appliedChanges = new List<IssueChangeDto>();
-
-            foreach (var issueId in allIssueIds)
-            {
-                var hasMain = mainIssueMap.TryGetValue(issueId, out var mainIssue);
-                var hasAgent = agentIssueMap.TryGetValue(issueId, out var agentIssue);
-
-                if (hasMain && hasAgent)
-                {
-                    // Both sides have the issue - merge using IssueMerger (LWW per field)
-                    var mergeResult = _issueMerger.Merge(mainIssue!, agentIssue!);
-                    mergedIssues.Add(mergeResult.MergedIssue);
-
-                    // Check if there are actual differences from main
-                    if (HasDifferences(mainIssue!, mergeResult.MergedIssue))
-                    {
-                        appliedChanges.Add(CreateChangeDto(
-                            mergeResult.MergedIssue,
-                            ChangeType.Updated,
-                            mainIssue!,
-                            mergeResult.MergedIssue));
-                    }
-                }
-                else if (hasAgent)
-                {
-                    // Only agent has it - new issue created by agent
-                    mergedIssues.Add(agentIssue!);
-                    appliedChanges.Add(CreateChangeDto(
-                        agentIssue!,
-                        ChangeType.Created,
-                        null,
-                        agentIssue!));
-                }
-                else
-                {
-                    // Only main has it - keep it (agent didn't touch it)
-                    mergedIssues.Add(mainIssue!);
-                }
-            }
-
-            // Save merged result to main branch
-            await FleeceFileHelper.SaveIssuesAsync(mainPath, mergedIssues, cancellationToken);
-
-            _logger.LogInformation("Saved {Count} merged issues to main branch", mergedIssues.Count);
-
-            // Clear the FleeceService cache so it picks up the new state
-            await _fleeceService.ReloadFromDiskAsync(mainPath, cancellationToken);
-
-            return new ApplyAgentChangesResponse
-            {
-                Success = true,
-                Message = $"Applied {appliedChanges.Count} changes successfully",
-                Changes = appliedChanges,
-                Conflicts = []
-            };
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error applying changes via file merge");
-            return new ApplyAgentChangesResponse
-            {
-                Success = false,
-                Message = $"Error applying changes: {ex.Message}"
-            };
-        }
-    }
-
-    /// <summary>
-    /// Loads issues directly from disk at the given path.
-    /// </summary>
-    private async Task<List<Issue>> LoadIssuesFromPathAsync(string path, CancellationToken cancellationToken)
-    {
-        var fleeceDir = Path.Combine(path, ".fleece");
-
-        if (!Directory.Exists(fleeceDir))
-        {
-            _logger.LogWarning(".fleece directory not found at {Path}", fleeceDir);
-            return [];
-        }
-
-        try
-        {
-            var issues = await FleeceFileHelper.LoadIssuesAsync(path, cancellationToken);
-            return issues.ToList();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error loading issues from {Path}", path);
-            return [];
-        }
-    }
-
-    /// <summary>
-    /// Checks if there are actual differences between two issues.
-    /// </summary>
-    private static bool HasDifferences(Issue original, Issue merged)
-    {
-        // Compare key fields that represent meaningful changes
-        return original.Title != merged.Title ||
-               original.Description != merged.Description ||
-               original.Status != merged.Status ||
-               original.Type != merged.Type ||
-               original.Priority != merged.Priority ||
-               original.ExecutionMode != merged.ExecutionMode ||
-               original.WorkingBranchId != merged.WorkingBranchId ||
-               original.AssignedTo != merged.AssignedTo ||
-               !AreParentIssuesEqual(original.ParentIssues, merged.ParentIssues) ||
-               !AreLinkedPRsEqual(original.LinkedPRs, merged.LinkedPRs);
-    }
-
-    private static bool AreParentIssuesEqual(IReadOnlyList<ParentIssueRef> list1, IReadOnlyList<ParentIssueRef> list2)
-    {
-        if (list1.Count != list2.Count)
-            return false;
-
-        var set1 = list1.Select(p => $"{p.ParentIssue}:{p.SortOrder}").OrderBy(s => s).ToList();
-        var set2 = list2.Select(p => $"{p.ParentIssue}:{p.SortOrder}").OrderBy(s => s).ToList();
-
-        return set1.SequenceEqual(set2);
-    }
-
-    private static bool AreLinkedPRsEqual(IReadOnlyList<int> list1, IReadOnlyList<int> list2)
-    {
-        if (list1.Count != list2.Count)
-            return false;
-
-        return list1.OrderBy(x => x).SequenceEqual(list2.OrderBy(x => x));
-    }
-
-    /// <summary>
-    /// Creates an IssueChangeDto from an issue and change type.
-    /// </summary>
-    private static IssueChangeDto CreateChangeDto(
-        Issue issue,
-        ChangeType changeType,
-        Issue? originalIssue,
-        Issue modifiedIssue)
-    {
-        return new IssueChangeDto
-        {
-            IssueId = issue.Id,
-            ChangeType = changeType,
-            Title = issue.Title,
-            OriginalIssue = originalIssue?.ToDto(),
-            ModifiedIssue = modifiedIssue.ToDto(),
-            FieldChanges = changeType == ChangeType.Created
-                ? GetAllFieldsAsChanges(modifiedIssue)
-                : GetFieldChanges(originalIssue!, modifiedIssue)
-        };
-    }
-
-    private static List<FieldChangeDto> GetAllFieldsAsChanges(Issue issue)
-    {
-        return
-        [
-            new() { FieldName = "Title", OldValue = null, NewValue = issue.Title },
-            new() { FieldName = "Description", OldValue = null, NewValue = issue.Description },
-            new() { FieldName = "Status", OldValue = null, NewValue = issue.Status.ToString() },
-            new() { FieldName = "Type", OldValue = null, NewValue = issue.Type.ToString() },
-            new() { FieldName = "Priority", OldValue = null, NewValue = issue.Priority?.ToString() },
-            new() { FieldName = "ExecutionMode", OldValue = null, NewValue = issue.ExecutionMode.ToString() },
-            new() { FieldName = "WorkingBranchId", OldValue = null, NewValue = issue.WorkingBranchId },
-            new() { FieldName = "AssignedTo", OldValue = null, NewValue = issue.AssignedTo }
-        ];
-    }
-
-    private static List<FieldChangeDto> GetFieldChanges(Issue original, Issue modified)
-    {
-        var changes = new List<FieldChangeDto>();
-
-        if (original.Title != modified.Title)
-            changes.Add(new FieldChangeDto { FieldName = "Title", OldValue = original.Title, NewValue = modified.Title });
-
-        if (original.Description != modified.Description)
-            changes.Add(new FieldChangeDto { FieldName = "Description", OldValue = original.Description, NewValue = modified.Description });
-
-        if (original.Status != modified.Status)
-            changes.Add(new FieldChangeDto { FieldName = "Status", OldValue = original.Status.ToString(), NewValue = modified.Status.ToString() });
-
-        if (original.Type != modified.Type)
-            changes.Add(new FieldChangeDto { FieldName = "Type", OldValue = original.Type.ToString(), NewValue = modified.Type.ToString() });
-
-        if (original.Priority != modified.Priority)
-            changes.Add(new FieldChangeDto { FieldName = "Priority", OldValue = original.Priority?.ToString(), NewValue = modified.Priority?.ToString() });
-
-        if (original.ExecutionMode != modified.ExecutionMode)
-            changes.Add(new FieldChangeDto { FieldName = "ExecutionMode", OldValue = original.ExecutionMode.ToString(), NewValue = modified.ExecutionMode.ToString() });
-
-        if (original.WorkingBranchId != modified.WorkingBranchId)
-            changes.Add(new FieldChangeDto { FieldName = "WorkingBranchId", OldValue = original.WorkingBranchId, NewValue = modified.WorkingBranchId });
-
-        if (original.AssignedTo != modified.AssignedTo)
-            changes.Add(new FieldChangeDto { FieldName = "AssignedTo", OldValue = original.AssignedTo, NewValue = modified.AssignedTo });
-
-        return changes;
     }
 }

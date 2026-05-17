@@ -479,6 +479,7 @@ public class CloneEnrichmentServiceTests
             Title = title,
             Status = status,
             Type = type,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
     }

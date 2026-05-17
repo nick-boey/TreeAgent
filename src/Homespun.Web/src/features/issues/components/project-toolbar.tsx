@@ -8,8 +8,6 @@ import {
   CornerLeftDown,
   Unlink,
   Unlink2,
-  Undo2,
-  Redo2,
   Pencil,
   Play,
   Minus,
@@ -27,14 +25,12 @@ import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
-import { useIssueHistory } from '../hooks/use-issue-history'
 import { FilterHelpPopover } from './filter-help-popover'
 import { cn } from '@/lib/utils'
 import { useMobile } from '@/hooks'
 import { ViewMode } from '../types'
 
 export interface ProjectToolbarProps {
-  projectId: string
   selectedIssueId: string | null
   onCreateAbove: () => void
   onCreateBelow: () => void
@@ -95,7 +91,6 @@ export interface ProjectToolbarProps {
 }
 
 export function ProjectToolbar({
-  projectId,
   selectedIssueId,
   onCreateAbove,
   onCreateBelow,
@@ -131,8 +126,6 @@ export function ProjectToolbar({
   viewMode = ViewMode.Tree,
   onViewModeChange,
 }: ProjectToolbarProps) {
-  const { canUndo, canRedo, undoDescription, redoDescription, undo, redo, isUndoing, isRedoing } =
-    useIssueHistory(projectId)
   const isMobile = useMobile()
   const internalFilterInputRef = useRef<HTMLInputElement>(null)
   const actualFilterInputRef = filterInputRef ?? internalFilterInputRef
@@ -263,32 +256,6 @@ export function ProjectToolbar({
           data-testid="toolbar-move-down"
         >
           <ChevronDown className="h-4 w-4" />
-        </Button>
-      </ButtonGroup>
-
-      <Separator orientation="vertical" className="mx-1 h-6" />
-
-      {/* Undo/Redo buttons group */}
-      <ButtonGroup>
-        <Button
-          variant="outline"
-          size={buttonSize}
-          onClick={() => undo()}
-          disabled={!canUndo || isUndoing}
-          aria-label="Undo (u)"
-          title={undoDescription ? `Undo: ${undoDescription}` : 'Undo (u)'}
-        >
-          <Undo2 className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="outline"
-          size={buttonSize}
-          onClick={() => redo()}
-          disabled={!canRedo || isRedoing}
-          aria-label="Redo"
-          title={redoDescription ? `Redo: ${redoDescription}` : 'Redo'}
-        >
-          <Redo2 className="h-4 w-4" />
         </Button>
       </ButtonGroup>
 

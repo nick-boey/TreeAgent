@@ -11,7 +11,6 @@ public class SetParentTests
     private string _tempDir = null!;
     private Mock<ILogger<ProjectFleeceService>> _mockLogger = null!;
     private Mock<IIssueSerializationQueue> _mockQueue = null!;
-    private Mock<IIssueHistoryService> _mockHistoryService = null!;
     private ProjectFleeceService _service = null!;
 
     [SetUp]
@@ -26,18 +25,7 @@ public class SetParentTests
             .Setup(q => q.EnqueueAsync(It.IsAny<IssueWriteOperation>(), It.IsAny<CancellationToken>()))
             .Returns(ValueTask.CompletedTask);
 
-        _mockHistoryService = new Mock<IIssueHistoryService>();
-        _mockHistoryService
-            .Setup(h => h.RecordSnapshotAsync(
-                It.IsAny<string>(),
-                It.IsAny<IReadOnlyList<Issue>>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-
-        _service = new ProjectFleeceService(_mockQueue.Object, _mockHistoryService.Object, new Mock<global::Fleece.Core.Services.Interfaces.IIssueLayoutService>().Object, _mockLogger.Object);
+        _service = new ProjectFleeceService(_mockQueue.Object, new Mock<global::Fleece.Core.Services.Interfaces.IIssueLayoutService>().Object, _mockLogger.Object);
     }
 
     [TearDown]
@@ -87,29 +75,6 @@ public class SetParentTests
         var parentIds = updated.ParentIssues.Select(p => p.ParentIssue).ToList();
         Assert.That(parentIds, Does.Contain(issueA.Id));
         Assert.That(parentIds, Does.Contain(issueC.Id));
-    }
-
-    [Test]
-    public async Task SetParentAsync_RecordsHistorySnapshot()
-    {
-        // Arrange
-        var issueA = await _service.CreateIssueAsync(_tempDir, "Issue A", IssueType.Task);
-        var issueB = await _service.CreateIssueAsync(_tempDir, "Issue B", IssueType.Task);
-        _mockHistoryService.Invocations.Clear();
-
-        // Act
-        await _service.SetParentAsync(_tempDir, issueB.Id, issueA.Id, addToExisting: false);
-
-        // Assert
-        _mockHistoryService.Verify(
-            h => h.RecordSnapshotAsync(
-                _tempDir,
-                It.IsAny<IReadOnlyList<Issue>>(),
-                "SetParent",
-                issueB.Id,
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()),
-            Times.Once);
     }
 
     [Test]

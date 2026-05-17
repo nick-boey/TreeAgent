@@ -68,6 +68,7 @@ public class IssueDtoMapperTests
             Title = "Minimal issue",
             Status = IssueStatus.Open,
             Type = IssueType.Task,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 
@@ -96,8 +97,8 @@ public class IssueDtoMapperTests
         // Arrange
         var issues = new[]
         {
-            new Issue { Id = "a", Title = "First", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow },
-            new Issue { Id = "b", Title = "Second", Status = IssueStatus.Progress, Type = IssueType.Bug, LastUpdate = DateTimeOffset.UtcNow }
+            new Issue { Id = "a", Title = "First", Status = IssueStatus.Open, Type = IssueType.Task, CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow },
+            new Issue { Id = "b", Title = "Second", Status = IssueStatus.Progress, Type = IssueType.Bug, CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow }
         };
 
         // Act

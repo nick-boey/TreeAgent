@@ -162,13 +162,10 @@ else
     builder.Services.AddScoped<IPrDataProvider, PrDataProvider>();
     builder.Services.AddScoped<ISearchablePrService, SearchablePrService>();
 
-    // Fleece services (file-based issue tracking)
-    builder.Services.Configure<FleeceHistoryOptions>(
-        builder.Configuration.GetSection(FleeceHistoryOptions.SectionName));
+    // Fleece services (event-sourced issue tracking)
     builder.Services.AddSingleton<IssueSerializationQueueService>();
     builder.Services.AddSingleton<IIssueSerializationQueue>(sp => sp.GetRequiredService<IssueSerializationQueueService>());
     builder.Services.AddHostedService(sp => sp.GetRequiredService<IssueSerializationQueueService>());
-    builder.Services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
     builder.Services.AddSingleton<global::Fleece.Core.Services.Interfaces.IGraphLayoutService, GraphLayoutService>();
     builder.Services.AddSingleton<global::Fleece.Core.Services.Interfaces.IIssueLayoutService, IssueLayoutService>();
     builder.Services.AddSingleton<IProjectFleeceService, ProjectFleeceService>();

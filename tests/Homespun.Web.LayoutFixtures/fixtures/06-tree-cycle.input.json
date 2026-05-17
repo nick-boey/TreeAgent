@@ -12,7 +12,7 @@
       "parentIssues": [
         {
           "parentIssue": "B",
-          "sortOrder": "aaa"
+          "lexOrder": "aaa"
         }
       ]
     },
@@ -27,7 +27,7 @@
       "parentIssues": [
         {
           "parentIssue": "A",
-          "sortOrder": "aaa"
+          "lexOrder": "aaa"
         }
       ]
     }

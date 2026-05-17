@@ -172,6 +172,7 @@ public class FleecePostMergeServiceTests
         Status = IssueStatus.Open,
         AssignedTo = assignedTo,
         WorkingBranchId = workingBranchId,
+        CreatedAt = DateTimeOffset.UtcNow,
         LastUpdate = DateTimeOffset.UtcNow
     };
 }

@@ -144,6 +144,7 @@ public class GraphTracingTests
                             Type = IssueType.Task,
                             Status = IssueStatus.Open,
                             WorkingBranchId = "abc",
+                            CreatedAt = DateTime.UtcNow,
                             LastUpdate = DateTime.UtcNow
                         },
                         Lane = 0,
@@ -162,6 +163,7 @@ public class GraphTracingTests
                 Type = IssueType.Task,
                 Status = IssueStatus.Open,
                 WorkingBranchId = "abc",
+                CreatedAt = DateTime.UtcNow,
                 LastUpdate = DateTime.UtcNow
             });
 

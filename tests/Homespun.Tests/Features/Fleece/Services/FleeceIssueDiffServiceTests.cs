@@ -61,6 +61,7 @@ public class FleeceIssueDiffServiceTests
             Status = IssueStatus.Open,
             Type = IssueType.Feature,
             Description = "Test description",
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
         var issueJson = JsonSerializer.Serialize(newIssue);
@@ -114,6 +115,7 @@ public class FleeceIssueDiffServiceTests
             Status = IssueStatus.Open,
             Type = IssueType.Feature,
             Description = "Original description",
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
         var modifiedIssue = new Issue
@@ -123,6 +125,7 @@ public class FleeceIssueDiffServiceTests
             Status = IssueStatus.Progress,
             Type = IssueType.Feature,
             Description = "Modified description",
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
         var originalJson = JsonSerializer.Serialize(originalIssue);
@@ -193,6 +196,7 @@ public class FleeceIssueDiffServiceTests
             Status = IssueStatus.Complete,
             Type = IssueType.Task,
             Description = "This will be deleted",
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
         var issueJson = JsonSerializer.Serialize(deletedIssue);
@@ -272,7 +276,7 @@ public class FleeceIssueDiffServiceTests
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
-                Output = JsonSerializer.Serialize(new Issue { Id = "test123", Title = "Valid Issue", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }),
+                Output = JsonSerializer.Serialize(new Issue { Id = "test123", Title = "Valid Issue", Status = IssueStatus.Open, Type = IssueType.Task, CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow }),
                 Error = ""
             });
 
@@ -288,9 +292,9 @@ public class FleeceIssueDiffServiceTests
     {
         // Arrange
         var workingDirectory = "/test/repo";
-        var issue1 = new Issue { Id = "test1", Title = "Issue 1", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow };
-        var issue2 = new Issue { Id = "test2", Title = "Issue 2", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow };
-        var issue3 = new Issue { Id = "test3", Title = "Issue 3", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow };
+        var issue1 = new Issue { Id = "test1", Title = "Issue 1", Status = IssueStatus.Open, Type = IssueType.Task, CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow };
+        var issue2 = new Issue { Id = "test2", Title = "Issue 2", Status = IssueStatus.Open, Type = IssueType.Task, CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow };
+        var issue3 = new Issue { Id = "test3", Title = "Issue 3", Status = IssueStatus.Open, Type = IssueType.Task, CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow };
 
         // Mock git diff showing multiple changes
         _commandRunnerMock.Setup(x => x.RunAsync(
@@ -336,7 +340,7 @@ public class FleeceIssueDiffServiceTests
             .ReturnsAsync(new CommandResult
             {
                 Success = true,
-                Output = JsonSerializer.Serialize(new Issue { Id = "test2", Title = "Original Issue 2", Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = DateTimeOffset.UtcNow }),
+                Output = JsonSerializer.Serialize(new Issue { Id = "test2", Title = "Original Issue 2", Status = IssueStatus.Open, Type = IssueType.Task, CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow }),
                 Error = ""
             });
 

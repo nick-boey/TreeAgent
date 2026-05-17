@@ -106,6 +106,7 @@ public class AgentStartBackgroundServiceTests
                 Title = "Test Issue",
                 Status = IssueStatus.Progress,
                 Type = IssueType.Task,
+                CreatedAt = ts,
                 LastUpdate = ts
             },
             SkillName = null,

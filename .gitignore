@@ -571,3 +571,5 @@ docs/architecture/images/
 
 # Temporary folder
 .tmp/
+.fleece/.active-change
+.fleece/.replay-cache

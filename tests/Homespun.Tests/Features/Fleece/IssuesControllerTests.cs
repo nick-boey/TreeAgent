@@ -34,7 +34,6 @@ public class IssuesControllerTests
     private Mock<IDataStore> _dataStoreMock = null!;
     private Mock<IHubContext<NotificationHub>> _notificationHubMock = null!;
     private Mock<IIssueBranchResolverService> _branchResolverServiceMock = null!;
-    private Mock<IIssueHistoryService> _historyServiceMock = null!;
     private Mock<IClaudeSessionService> _sessionServiceMock = null!;
 
     private Mock<IGitCloneService> _cloneServiceMock = null!;
@@ -65,6 +64,7 @@ public class IssuesControllerTests
         Title = title,
         Type = type,
         Status = IssueStatus.Open,
+        CreatedAt = DateTimeOffset.UtcNow,
         LastUpdate = DateTimeOffset.UtcNow
     };
 
@@ -76,7 +76,6 @@ public class IssuesControllerTests
         _dataStoreMock = new Mock<IDataStore>();
         _notificationHubMock = new Mock<IHubContext<NotificationHub>>();
         _branchResolverServiceMock = new Mock<IIssueBranchResolverService>();
-        _historyServiceMock = new Mock<IIssueHistoryService>();
         _sessionServiceMock = new Mock<IClaudeSessionService>();
 
         _cloneServiceMock = new Mock<IGitCloneService>();
@@ -109,7 +108,6 @@ public class IssuesControllerTests
             _dataStoreMock.Object,
             _notificationHubMock.Object,
             _branchResolverServiceMock.Object,
-            _historyServiceMock.Object,
             _sessionServiceMock.Object,
             _cloneServiceMock.Object,
             _branchIdBackgroundServiceMock.Object,
@@ -473,6 +471,7 @@ public class IssuesControllerTests
             Type = IssueType.Bug,
             Status = IssueStatus.Open,
             Description = "Users cannot log in with OAuth",
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 
@@ -936,6 +935,7 @@ public class IssuesControllerTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             AssignedTo = null, // No current assignee
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
         var updatedIssue = new Issue
@@ -945,6 +945,7 @@ public class IssuesControllerTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             AssignedTo = currentUserEmail,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 
@@ -1004,6 +1005,7 @@ public class IssuesControllerTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             AssignedTo = null, // No current assignee
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
         var updatedIssue = new Issue
@@ -1013,6 +1015,7 @@ public class IssuesControllerTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             AssignedTo = null,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 
@@ -1074,6 +1077,7 @@ public class IssuesControllerTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             AssignedTo = existingAssignee, // Already has assignee
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
         var updatedIssue = new Issue
@@ -1083,6 +1087,7 @@ public class IssuesControllerTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             AssignedTo = existingAssignee,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 
@@ -1146,6 +1151,7 @@ public class IssuesControllerTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             AssignedTo = null, // No current assignee
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
         var updatedIssue = new Issue
@@ -1155,6 +1161,7 @@ public class IssuesControllerTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             AssignedTo = requestAssignee,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 
@@ -1220,6 +1227,7 @@ public class IssuesControllerTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             AssignedTo = assignedEmail,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 
@@ -1273,10 +1281,10 @@ public class IssuesControllerTests
         // Arrange
         var issues = new List<Issue>
         {
-            new Issue { Id = "1", Title = "Issue 1", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = "alice@example.com", LastUpdate = DateTimeOffset.UtcNow },
-            new Issue { Id = "2", Title = "Issue 2", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = "bob@example.com", LastUpdate = DateTimeOffset.UtcNow },
-            new Issue { Id = "3", Title = "Issue 3", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = "alice@example.com", LastUpdate = DateTimeOffset.UtcNow }, // Duplicate
-            new Issue { Id = "4", Title = "Issue 4", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = null, LastUpdate = DateTimeOffset.UtcNow } // No assignee
+            new Issue { Id = "1", Title = "Issue 1", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = "alice@example.com", CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow },
+            new Issue { Id = "2", Title = "Issue 2", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = "bob@example.com", CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow },
+            new Issue { Id = "3", Title = "Issue 3", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = "alice@example.com", CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow }, // Duplicate
+            new Issue { Id = "4", Title = "Issue 4", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = null, CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow } // No assignee
         };
 
         _projectServiceMock
@@ -1309,7 +1317,7 @@ public class IssuesControllerTests
         // Arrange
         var issues = new List<Issue>
         {
-            new Issue { Id = "1", Title = "Issue 1", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = "alice@example.com", LastUpdate = DateTimeOffset.UtcNow }
+            new Issue { Id = "1", Title = "Issue 1", Type = IssueType.Task, Status = IssueStatus.Open, AssignedTo = "alice@example.com", CreatedAt = DateTimeOffset.UtcNow, LastUpdate = DateTimeOffset.UtcNow }
         };
         var currentUserEmail = "currentuser@example.com";
 
@@ -1365,6 +1373,7 @@ public class IssuesControllerTests
             Title = "Resolve model",
             Type = IssueType.Task,
             Status = IssueStatus.Open,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow,
         };
 

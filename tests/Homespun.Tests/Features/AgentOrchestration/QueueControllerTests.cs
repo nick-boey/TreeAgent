@@ -163,6 +163,7 @@ public class QueueControllerTests
                 Title = "Test",
                 Status = FleeceIssueStatus.Open,
                 Type = FleeceIssueType.Task,
+                CreatedAt = DateTimeOffset.UtcNow,
                 LastUpdate = DateTimeOffset.UtcNow
             },
             BranchName = "task/issue-a"
@@ -185,6 +186,7 @@ public class QueueControllerTests
                         Title = "Done",
                         Status = FleeceIssueStatus.Open,
                         Type = FleeceIssueType.Task,
+                        CreatedAt = DateTimeOffset.UtcNow,
                         LastUpdate = DateTimeOffset.UtcNow
                     },
                     BranchName = "task/issue-b"

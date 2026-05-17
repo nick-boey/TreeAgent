@@ -69,6 +69,15 @@ public interface IProjectFleeceService
     /// <returns>List of child issues sorted by sortOrder.</returns>
     Task<IReadOnlyList<Issue>> GetChildrenAsync(string projectPath, string issueId, CancellationToken ct = default);
 
+    /// <summary>
+    /// Loads every issue from an arbitrary path (e.g. an agent clone) directly through
+    /// a fresh <c>IFleeceService</c>, bypassing the in-memory cache used for the project's
+    /// owned path. Use this for ad-hoc reads against paths the caller does not manage.
+    /// </summary>
+    /// <param name="path">Path to a working directory containing a .fleece/ folder.</param>
+    /// <param name="ct">Cancellation token.</param>
+    Task<IReadOnlyList<Issue>> GetAllIssuesFromPathAsync(string path, CancellationToken ct = default);
+
     #endregion
 
     #region Cache Management
@@ -241,19 +250,6 @@ public interface IProjectFleeceService
     /// <exception cref="KeyNotFoundException">If the issue is not found.</exception>
     /// <exception cref="InvalidOperationException">If the issue has no parent, multiple parents, or is already first/last.</exception>
     Task<Issue> MoveSeriesSiblingAsync(string projectPath, string issueId, MoveDirection direction, CancellationToken ct = default);
-
-    #endregion
-
-    #region History Operations
-
-    /// <summary>
-    /// Applies issues from a history snapshot to the cache and persists to disk.
-    /// Used by undo/redo operations.
-    /// </summary>
-    /// <param name="projectPath">Path to the project.</param>
-    /// <param name="issues">The issues to apply from the snapshot.</param>
-    /// <param name="ct">Cancellation token</param>
-    Task ApplyHistorySnapshotAsync(string projectPath, IReadOnlyList<Issue> issues, CancellationToken ct = default);
 
     #endregion
 }

@@ -75,8 +75,8 @@ public class BranchIdBackgroundServiceTests
 
         var project = new Project { Id = projectId, Name = "Test", LocalPath = "/path", DefaultBranch = "main" };
         var ts = DateTimeOffset.UtcNow;
-        var issue = new Issue { Id = issueId, Title = title, Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = ts };
-        var updatedIssue = new Issue { Id = issueId, Title = title, Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = ts, WorkingBranchId = generatedBranchId };
+        var issue = new Issue { Id = issueId, Title = title, Status = IssueStatus.Open, Type = IssueType.Task, CreatedAt = ts, LastUpdate = ts };
+        var updatedIssue = new Issue { Id = issueId, Title = title, Status = IssueStatus.Open, Type = IssueType.Task, CreatedAt = ts, LastUpdate = ts, WorkingBranchId = generatedBranchId };
 
         _mockBranchIdGenerator.Setup(x => x.GenerateAsync(title, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new BranchIdResult(true, generatedBranchId, null, true));
@@ -152,7 +152,7 @@ public class BranchIdBackgroundServiceTests
 
         var project = new Project { Id = projectId, Name = "Test", LocalPath = "/path", DefaultBranch = "main" };
         var ts = DateTimeOffset.UtcNow;
-        var issue = new Issue { Id = issueId, Title = title, Status = IssueStatus.Open, Type = IssueType.Task, LastUpdate = ts, WorkingBranchId = existingBranchId };
+        var issue = new Issue { Id = issueId, Title = title, Status = IssueStatus.Open, Type = IssueType.Task, CreatedAt = ts, LastUpdate = ts, WorkingBranchId = existingBranchId };
 
         _mockBranchIdGenerator.Setup(x => x.GenerateAsync(title, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new BranchIdResult(true, "new-branch", null, true));

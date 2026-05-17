@@ -44,6 +44,7 @@ public class BaseBranchResolutionTests
                 Title = "Test Issue",
                 Status = IssueStatus.Progress,
                 Type = IssueType.Task,
+                CreatedAt = ts,
                 LastUpdate = ts
             },
             SkillName = null,
@@ -61,6 +62,7 @@ public class BaseBranchResolutionTests
             Title = title,
             Status = status,
             Type = IssueType.Task,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow,
             ParentIssues = parentIssues ?? []
         };

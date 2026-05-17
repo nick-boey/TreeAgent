@@ -4,8 +4,6 @@ import { isInputElement } from '@/lib/utils/is-input-element'
 export interface ToolbarShortcutCallbacks {
   onCreateAbove: () => void
   onCreateBelow: () => void
-  onUndo: () => void
-  onRedo: () => void
   onOpenAgentLauncher: () => void
   onDecreaseDepth: () => void
   onIncreaseDepth: () => void
@@ -22,16 +20,12 @@ export interface ToolbarShortcutCallbacks {
   isFilterActive?: boolean
   /** Focus the filter input with cursor at the end */
   onFocusFilterAtEnd?: () => void
-  canUndo?: boolean
-  canRedo?: boolean
 }
 
 export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
   const {
     onCreateAbove,
     onCreateBelow,
-    onUndo,
-    onRedo,
     onOpenAgentLauncher,
     onDecreaseDepth,
     onIncreaseDepth,
@@ -45,8 +39,6 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
     onToggleFilter,
     isFilterActive = false,
     onFocusFilterAtEnd,
-    canUndo = true,
-    canRedo = true,
   } = callbacks
 
   const handleKeyDown = useCallback(
@@ -81,24 +73,6 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
         return
       }
 
-      // Redo: Ctrl+Shift+Z or Cmd+Shift+Z
-      if ((ctrlKey || metaKey) && shiftKey && key.toLowerCase() === 'z') {
-        if (canRedo) {
-          event.preventDefault()
-          onRedo()
-        }
-        return
-      }
-
-      // Undo: Ctrl+Z or Cmd+Z
-      if ((ctrlKey || metaKey) && !shiftKey && key.toLowerCase() === 'z') {
-        if (canUndo) {
-          event.preventDefault()
-          onUndo()
-        }
-        return
-      }
-
       // Create above: Shift+O
       if (shiftKey && key === 'O') {
         event.preventDefault()
@@ -110,15 +84,6 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
       if (!shiftKey && !ctrlKey && !metaKey && key.toLowerCase() === 'o') {
         event.preventDefault()
         onCreateBelow()
-        return
-      }
-
-      // Undo: u
-      if (!shiftKey && !ctrlKey && !metaKey && key === 'u') {
-        if (canUndo) {
-          event.preventDefault()
-          onUndo()
-        }
         return
       }
 
@@ -179,8 +144,6 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
     [
       onCreateAbove,
       onCreateBelow,
-      onUndo,
-      onRedo,
       onMoveUp,
       onMoveDown,
       canMoveUp,
@@ -194,8 +157,6 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
       onToggleFilter,
       isFilterActive,
       onFocusFilterAtEnd,
-      canUndo,
-      canRedo,
     ]
   )
 

@@ -22,7 +22,7 @@
       "parentIssues": [
         {
           "parentIssue": "R",
-          "sortOrder": "a"
+          "lexOrder": "a"
         }
       ]
     },
@@ -37,7 +37,7 @@
       "parentIssues": [
         {
           "parentIssue": "S",
-          "sortOrder": "a"
+          "lexOrder": "a"
         }
       ]
     },
@@ -52,7 +52,7 @@
       "parentIssues": [
         {
           "parentIssue": "S",
-          "sortOrder": "b"
+          "lexOrder": "b"
         }
       ]
     },
@@ -67,7 +67,7 @@
       "parentIssues": [
         {
           "parentIssue": "R",
-          "sortOrder": "b"
+          "lexOrder": "b"
         }
       ]
     },
@@ -82,7 +82,7 @@
       "parentIssues": [
         {
           "parentIssue": "P",
-          "sortOrder": "a"
+          "lexOrder": "a"
         }
       ]
     },
@@ -97,7 +97,7 @@
       "parentIssues": [
         {
           "parentIssue": "P",
-          "sortOrder": "b"
+          "lexOrder": "b"
         }
       ]
     }
