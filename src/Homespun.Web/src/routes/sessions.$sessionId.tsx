@@ -16,6 +16,7 @@ import {
   ChatInput,
   useEntityInfo,
   useStopSession,
+  useInterruptSession,
   useSessionSettings,
   useChangeSessionSettings,
   SessionInfoPanel,
@@ -36,6 +37,7 @@ import {
   FileCheck,
   History,
   Plus,
+  Pause,
 } from 'lucide-react'
 import { useMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
@@ -109,6 +111,9 @@ function SessionChat({ sessionId }: { sessionId: string }) {
 
   // Stop session mutation
   const stopSession = useStopSession()
+
+  // Interrupt session mutation (sends SIGINT to the agent, returns to WaitingForInput)
+  const interruptSession = useInterruptSession()
 
   // Clear context and start new session
   const { clearContext, isPending: isClearingContext } = useClearContext()
@@ -200,6 +205,11 @@ function SessionChat({ sessionId }: { sessionId: string }) {
   const handleNewSession = useCallback(() => {
     clearContext(sessionId)
   }, [clearContext, sessionId])
+
+  // Handle interrupt session
+  const handleInterrupt = useCallback(() => {
+    interruptSession.mutate(sessionId)
+  }, [interruptSession, sessionId])
 
   // Auto-scroll to bottom when new messages arrive.
   useEffect(() => {
@@ -293,6 +303,8 @@ function SessionChat({ sessionId }: { sessionId: string }) {
         infoPanelOpen={infoPanelOpen}
         onNewSession={handleNewSession}
         isNewSessionPending={isClearingContext}
+        onInterrupt={handleInterrupt}
+        isInterruptPending={interruptSession.isPending}
       />
       {/* Historical session banner */}
       {isViewingHistorical && (
@@ -400,6 +412,8 @@ interface SessionHeaderProps {
   infoPanelOpen?: boolean
   onNewSession?: () => void
   isNewSessionPending?: boolean
+  onInterrupt?: () => void
+  isInterruptPending?: boolean
 }
 
 /**
@@ -420,10 +434,21 @@ function SessionHeader({
   infoPanelOpen,
   onNewSession,
   isNewSessionPending,
+  onInterrupt,
+  isInterruptPending,
 }: SessionHeaderProps) {
   // Determine if stop button should be shown
   const showStopButton =
     session && session.status !== 'stopped' && session.status !== 'error' && onStop
+
+  // Interrupt is available while the session is actively processing
+  const showInterruptButton =
+    onInterrupt &&
+    session &&
+    (session.status === 'running' ||
+      session.status === 'runningHooks' ||
+      session.status === 'waitingForPlanExecution' ||
+      session.status === 'waitingForQuestionAnswer')
 
   // Session navigation
   const { previousSessionId, nextSessionId, hasPrevious, hasNext } = useSessionNavigation(sessionId)
@@ -521,6 +546,19 @@ function SessionHeader({
           >
             <Plus className="mr-2 h-4 w-4" />
             New Session
+          </Button>
+        )}
+        {showInterruptButton && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onInterrupt}
+            disabled={isInterruptPending}
+            className="h-8"
+            data-testid="session-interrupt"
+          >
+            <Pause className="mr-2 h-4 w-4" />
+            Interrupt
           </Button>
         )}
         {showStopButton && (

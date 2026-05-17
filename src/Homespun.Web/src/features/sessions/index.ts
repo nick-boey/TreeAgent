@@ -15,6 +15,7 @@ export { useSessionEvents } from './hooks/use-session-events'
 export {
   useSessions,
   useStopSession,
+  useInterruptSession,
   sessionsQueryKey,
   allSessionsCountQueryKey,
   invalidateAllSessionsQueries,

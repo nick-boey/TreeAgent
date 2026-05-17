@@ -160,6 +160,68 @@ describe('useSession', () => {
     expect(registeredEvents).toContain('SessionState')
   })
 
+  it('registers event handlers for SessionStatusChanged', async () => {
+    mockGetSession.mockResolvedValueOnce(mockSession)
+    mockJoinSession.mockResolvedValueOnce(undefined)
+
+    renderHook(() => useSession('session-123'))
+
+    await waitFor(() => {
+      expect(mockConnection.on).toHaveBeenCalled()
+    })
+
+    const registeredEvents = mockConnection.on.mock.calls.map((call) => call[0])
+    expect(registeredEvents).toContain('SessionStatusChanged')
+  })
+
+  it('updates session status when SessionStatusChanged event is received', async () => {
+    mockGetSession.mockResolvedValueOnce({
+      ...mockSession,
+      status: 'waitingForPlanExecution' as const,
+    })
+    mockJoinSession.mockResolvedValueOnce(undefined)
+
+    const { result } = renderHook(() => useSession('session-123'))
+
+    await waitFor(() => {
+      expect(result.current.session?.status).toBe('waitingForPlanExecution')
+    })
+
+    const statusChangedCall = mockConnection.on.mock.calls.find(
+      (call) => call[0] === 'SessionStatusChanged'
+    )
+    expect(statusChangedCall).toBeDefined()
+
+    const handler = statusChangedCall![1]
+    act(() => {
+      handler('session-123', 'waitingForInput', false)
+    })
+
+    expect(result.current.session?.status).toBe('waitingForInput')
+    expect(result.current.session?.hasPendingPlanApproval).toBe(false)
+  })
+
+  it('ignores SessionStatusChanged for a different session', async () => {
+    mockGetSession.mockResolvedValueOnce(mockSession)
+    mockJoinSession.mockResolvedValueOnce(undefined)
+
+    const { result } = renderHook(() => useSession('session-123'))
+
+    await waitFor(() => {
+      expect(result.current.session).toEqual(mockSession)
+    })
+
+    const statusChangedCall = mockConnection.on.mock.calls.find(
+      (call) => call[0] === 'SessionStatusChanged'
+    )
+    const handler = statusChangedCall![1]
+    act(() => {
+      handler('other-session-id', 'stopped', false)
+    })
+
+    expect(result.current.session?.status).toBe('running')
+  })
+
   it('updates session when SessionState event is received', async () => {
     mockGetSession.mockResolvedValueOnce(mockSession)
     mockJoinSession.mockResolvedValueOnce(undefined)
