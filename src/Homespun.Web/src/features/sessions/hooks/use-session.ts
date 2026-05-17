@@ -153,6 +153,19 @@ export function useSession(sessionId: string): UseSessionResult {
       }
     }
 
+    const handleSessionStatusChanged = (
+      updatedSessionId: string,
+      status: ClaudeSession['status'],
+      hasPendingPlanApproval: boolean
+    ) => {
+      if (updatedSessionId === sessionId) {
+        setSession((prev) => {
+          if (!prev || prev.id !== sessionId) return prev
+          return { ...prev, status, hasPendingPlanApproval }
+        })
+      }
+    }
+
     const handleSessionModeModelChanged = (
       updatedSessionId: string,
       mode: ClaudeSession['mode'],
@@ -171,10 +184,12 @@ export function useSession(sessionId: string): UseSessionResult {
     }
 
     connection.on('SessionState', handleSessionState)
+    connection.on('SessionStatusChanged', handleSessionStatusChanged)
     connection.on('SessionModeModelChanged', handleSessionModeModelChanged)
 
     return () => {
       connection.off('SessionState', handleSessionState)
+      connection.off('SessionStatusChanged', handleSessionStatusChanged)
       connection.off('SessionModeModelChanged', handleSessionModeModelChanged)
     }
   }, [connection, sessionId])

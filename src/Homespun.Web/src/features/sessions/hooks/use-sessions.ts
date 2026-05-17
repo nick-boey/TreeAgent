@@ -56,3 +56,11 @@ export function useStopSession() {
     },
   })
 }
+
+export function useInterruptSession() {
+  return useMutation({
+    mutationFn: async (sessionId: string) => {
+      await Sessions.postApiSessionsByIdInterrupt({ path: { id: sessionId } })
+    },
+  })
+}

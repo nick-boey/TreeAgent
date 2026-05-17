@@ -104,6 +104,10 @@ vi.mock('@/features/sessions', () => ({
     mutate: vi.fn(),
     isPending: false,
   })),
+  useInterruptSession: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+  })),
   useSessionSettings: vi.fn(() => ({ mode: 'build', model: 'opus' })),
   useChangeSessionSettings: vi.fn(() => ({
     changeMode: vi.fn(),
@@ -812,6 +816,149 @@ describe('SessionChat - Stop Button Functionality', () => {
 
     const stopButton = await screen.findByRole('button', { name: /stop/i })
     expect(stopButton).toBeInTheDocument()
+  })
+})
+
+describe('SessionChat - Interrupt Button Functionality', () => {
+  const mockSession = {
+    id: 'test-session-id',
+    entityId: 'issue-123',
+    projectId: 'project-123',
+    workingDirectory: '/test/dir',
+    model: 'claude-3-5-sonnet',
+    mode: 'build' as const,
+    status: 'waitingForInput' as const,
+    createdAt: '2024-01-01T00:00:00Z',
+    lastActivityAt: '2024-01-01T00:00:00Z',
+    messages: [],
+    totalCostUsd: 0,
+    totalDurationMs: 0,
+    hasPendingPlanApproval: false,
+    contextClearMarkers: [],
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+
+    const { useSession, useEntityInfo } = vi.mocked(await import('@/features/sessions'))
+    useSession.mockReturnValue({
+      session: mockSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      isJoined: true,
+      refetch: vi.fn(),
+    })
+    ;(useEntityInfo as Mock).mockReturnValue({
+      data: { type: 'issue', title: 'Test Issue', id: 'issue-123' },
+      isLoading: false,
+      error: null,
+    })
+  })
+
+  it('should not display interrupt button when session is in waitingForInput', async () => {
+    render(<SessionChat />)
+
+    expect(screen.queryByRole('button', { name: /interrupt/i })).not.toBeInTheDocument()
+  })
+
+  it('should display interrupt button when session is running', async () => {
+    const runningSession = { ...mockSession, status: 'running' as const }
+    const { useSession } = vi.mocked(await import('@/features/sessions'))
+    useSession.mockReturnValue({
+      session: runningSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      isJoined: true,
+      refetch: vi.fn(),
+    })
+
+    render(<SessionChat />)
+
+    expect(await screen.findByRole('button', { name: /interrupt/i })).toBeInTheDocument()
+  })
+
+  it('should display interrupt button when session is waitingForPlanExecution', async () => {
+    const planSession = { ...mockSession, status: 'waitingForPlanExecution' as const }
+    const { useSession } = vi.mocked(await import('@/features/sessions'))
+    useSession.mockReturnValue({
+      session: planSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      isJoined: true,
+      refetch: vi.fn(),
+    })
+
+    render(<SessionChat />)
+
+    expect(await screen.findByRole('button', { name: /interrupt/i })).toBeInTheDocument()
+  })
+
+  it('should not display interrupt button when session is stopped', async () => {
+    const stoppedSession = { ...mockSession, status: 'stopped' as const }
+    const { useSession } = vi.mocked(await import('@/features/sessions'))
+    useSession.mockReturnValue({
+      session: stoppedSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      isJoined: true,
+      refetch: vi.fn(),
+    })
+
+    render(<SessionChat />)
+
+    expect(screen.queryByRole('button', { name: /interrupt/i })).not.toBeInTheDocument()
+  })
+
+  it('should call interrupt mutation when interrupt button clicked', async () => {
+    const mockInterruptMutate = vi.fn()
+    const { useSession, useInterruptSession } = vi.mocked(await import('@/features/sessions'))
+    const runningSession = { ...mockSession, status: 'running' as const }
+    useSession.mockReturnValue({
+      session: runningSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      isJoined: true,
+      refetch: vi.fn(),
+    })
+    ;(useInterruptSession as Mock).mockReturnValue({
+      mutate: mockInterruptMutate,
+      isPending: false,
+    })
+
+    const user = userEvent.setup()
+    render(<SessionChat />)
+
+    const interruptButton = await screen.findByRole('button', { name: /interrupt/i })
+    await user.click(interruptButton)
+
+    expect(mockInterruptMutate).toHaveBeenCalledWith('test-session-id')
+  })
+
+  it('should disable interrupt button while interrupt is pending', async () => {
+    const { useSession, useInterruptSession } = vi.mocked(await import('@/features/sessions'))
+    const runningSession = { ...mockSession, status: 'running' as const }
+    useSession.mockReturnValue({
+      session: runningSession,
+      isLoading: false,
+      isNotFound: false,
+      error: undefined,
+      isJoined: true,
+      refetch: vi.fn(),
+    })
+    ;(useInterruptSession as Mock).mockReturnValue({
+      mutate: vi.fn(),
+      isPending: true,
+    })
+
+    render(<SessionChat />)
+
+    const interruptButton = await screen.findByRole('button', { name: /interrupt/i })
+    expect(interruptButton).toBeDisabled()
   })
 })
 
