@@ -1,5 +1,6 @@
 using Homespun.Features.AgentOrchestration.Services;
 using Homespun.Features.ClaudeCode.Services;
+using Homespun.Features.OpenSpec.Services;
 using Homespun.Features.Containers.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Gitgraph.Services;
@@ -116,6 +117,7 @@ public static class MockServiceExtensions
         services.AddSingleton<IFleeceIssuesSyncService, MockFleeceIssuesSyncService>();
         services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();
         services.AddScoped<IFleeceIssueDiffService, FleeceIssueDiffService>();
+        services.AddScoped<IPhaseDispatchGuard, PhaseDispatchGuard>();
         services.AddScoped<IFleeceChangeDetectionService, FleeceChangeDetectionService>();
         services.AddScoped<IFleeceConflictDetectionService, FleeceConflictDetectionService>();
         services.AddScoped<IFleeceChangeApplicationService, FleeceChangeApplicationService>();
@@ -169,7 +171,7 @@ public static class MockServiceExtensions
         services.AddSingleton<IBranchIdBackgroundService, BranchIdBackgroundService>();
         services.AddScoped<IBaseBranchResolver, BaseBranchResolver>();
         services.AddSingleton<IAgentStartBackgroundService, MockAgentStartBackgroundService>();
-        services.AddSingleton<IQueueCoordinator, QueueCoordinator>();
+        services.AddSingleton<IActionQueueCoordinator, ActionQueueCoordinator>();
 
         // A2A event store + translator — shared between mock and production modes.
         services.AddSingleton<IA2AEventStore>(sp =>

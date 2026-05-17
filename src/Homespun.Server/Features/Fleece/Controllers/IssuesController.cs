@@ -3,6 +3,7 @@ using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
+using Homespun.Features.OpenSpec.Services;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.AgentOrchestration.Services;
@@ -37,6 +38,7 @@ public class IssuesController(
     IAgentStartupTracker agentStartupTracker,
     IIssueAncestorTraversalService ancestorTraversal,
     IModelCatalogService modelCatalog,
+    IPhaseDispatchGuard phaseDispatchGuard,
     ILogger<IssuesController> logger) : ControllerBase
 {
     private static readonly IssueStatus[] OpenStatuses =
@@ -535,6 +537,7 @@ public class IssuesController(
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType<AgentAlreadyRunningResponse>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<PhaseDispatchBlockedResponse>(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<RunAgentAcceptedResponse>> RunAgent(string issueId, [FromBody] RunAgentRequest request)
     {
         // Fetch project
@@ -582,6 +585,32 @@ public class IssuesController(
         var model = await modelCatalog.ResolveModelIdAsync(
             request.Model ?? project.DefaultModel,
             HttpContext.RequestAborted);
+
+        // Phase pre-flight check for openspec-apply-change with a specific phase arg:
+        // refuse if any prior phase in tasks.md is incomplete.
+        if (string.Equals(request.SkillName, "openspec-apply-change", StringComparison.OrdinalIgnoreCase)
+            && request.SkillArgs?.TryGetValue("phase", out var requestedPhase) == true
+            && request.SkillArgs.TryGetValue("change", out var requestedChange) == true
+            && !string.IsNullOrWhiteSpace(requestedPhase)
+            && !string.IsNullOrWhiteSpace(requestedChange))
+        {
+            var clonePath = await cloneService.GetClonePathForBranchAsync(project.LocalPath, branchName);
+            if (!string.IsNullOrEmpty(clonePath))
+            {
+                var blockingPhases = await phaseDispatchGuard.GetBlockingPhasesAsync(
+                    clonePath, requestedChange, requestedPhase, HttpContext.RequestAborted);
+
+                if (blockingPhases.Count > 0)
+                {
+                    agentStartupTracker.Clear(issueId);
+                    return Conflict(new PhaseDispatchBlockedResponse
+                    {
+                        BlockingPhases = blockingPhases.ToList(),
+                        Message = $"Phase '{requestedPhase}' cannot be dispatched: prior phases are incomplete."
+                    });
+                }
+            }
+        }
 
         // Queue background agent startup
         await agentStartBackgroundService.QueueAgentStartAsync(new AgentOrchestration.Services.AgentStartRequest

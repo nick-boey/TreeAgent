@@ -4,6 +4,7 @@ using Homespun.Features.Fleece.Controllers;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Notifications;
+using Homespun.Features.OpenSpec.Services;
 using Homespun.Features.Projects;
 using Homespun.Features.PullRequests.Data;
 using Homespun.Features.AgentOrchestration.Services;
@@ -44,6 +45,7 @@ public class IssuesControllerTests
     private Mock<IAgentStartupTracker> _agentStartupTrackerMock = null!;
     private Mock<IIssueAncestorTraversalService> _ancestorTraversalMock = null!;
     private Mock<IModelCatalogService> _modelCatalogMock = null!;
+    private Mock<IPhaseDispatchGuard> _phaseDispatchGuardMock = null!;
     private Mock<ILogger<IssuesController>> _loggerMock = null!;
     private Mock<IHubClients> _clientsMock = null!;
     private Mock<IClientProxy> _allClientsMock = null!;
@@ -89,6 +91,11 @@ public class IssuesControllerTests
         _modelCatalogMock
             .Setup(m => m.ResolveModelIdAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string? requested, CancellationToken _) => requested ?? "claude-default");
+        _phaseDispatchGuardMock = new Mock<IPhaseDispatchGuard>();
+        _phaseDispatchGuardMock
+            .Setup(g => g.GetBlockingPhasesAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<string>());
         _loggerMock = new Mock<ILogger<IssuesController>>();
         _clientsMock = new Mock<IHubClients>();
         _allClientsMock = new Mock<IClientProxy>();
@@ -117,6 +124,7 @@ public class IssuesControllerTests
             _agentStartupTrackerMock.Object,
             _ancestorTraversalMock.Object,
             _modelCatalogMock.Object,
+            _phaseDispatchGuardMock.Object,
             NullLogger<IssuesController>.Instance);
 
         // Set up HTTP context for controller. RequestServices is consulted by

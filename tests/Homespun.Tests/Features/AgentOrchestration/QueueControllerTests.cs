@@ -16,9 +16,9 @@ namespace Homespun.Tests.Features.AgentOrchestration;
 [TestFixture]
 public class QueueControllerTests
 {
-    private Mock<IQueueCoordinator> _queueCoordinatorMock = null!;
+    private Mock<IActionQueueCoordinator> _queueCoordinatorMock = null!;
     private Mock<IProjectService> _projectServiceMock = null!;
-    private QueueController _controller = null!;
+    private ActionQueueController _controller = null!;
 
     private static readonly Project TestProject = new()
     {
@@ -31,13 +31,13 @@ public class QueueControllerTests
     [SetUp]
     public void SetUp()
     {
-        _queueCoordinatorMock = new Mock<IQueueCoordinator>();
+        _queueCoordinatorMock = new Mock<IActionQueueCoordinator>();
         _projectServiceMock = new Mock<IProjectService>();
 
-        _controller = new QueueController(
+        _controller = new ActionQueueController(
             _queueCoordinatorMock.Object,
             _projectServiceMock.Object,
-            NullLogger<QueueController>.Instance);
+            NullLogger<ActionQueueController>.Instance);
 
         _controller.ControllerContext = new ControllerContext
         {
@@ -52,7 +52,7 @@ public class QueueControllerTests
     {
         _projectServiceMock.Setup(s => s.GetByIdAsync("nonexistent")).ReturnsAsync((Project?)null);
 
-        var result = await _controller.Start("nonexistent", new StartQueueRequest { IssueId = "issue1" }, CancellationToken.None);
+        var result = await _controller.Start("nonexistent", new StartActionQueueRequest { IssueId = "issue1" }, CancellationToken.None);
 
         Assert.That(result.Result, Is.InstanceOf<NotFoundObjectResult>());
         Assert.That(((NotFoundObjectResult)result.Result!).Value, Is.EqualTo("Project not found"));
@@ -63,7 +63,7 @@ public class QueueControllerTests
     {
         _projectServiceMock.Setup(s => s.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
 
-        var result = await _controller.Start(TestProject.Id, new StartQueueRequest { IssueId = "" }, CancellationToken.None);
+        var result = await _controller.Start(TestProject.Id, new StartActionQueueRequest { IssueId = "" }, CancellationToken.None);
 
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         Assert.That(((BadRequestObjectResult)result.Result!).Value, Is.EqualTo("IssueId is required"));
@@ -79,7 +79,7 @@ public class QueueControllerTests
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new KeyNotFoundException("Issue missing-issue not found."));
 
-        var request = new StartQueueRequest { IssueId = "missing-issue" };
+        var request = new StartActionQueueRequest { IssueId = "missing-issue" };
 
         var result = await _controller.Start(TestProject.Id, request, CancellationToken.None);
 
@@ -92,22 +92,22 @@ public class QueueControllerTests
         _projectServiceMock.Setup(s => s.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
         _queueCoordinatorMock
             .Setup(c => c.GetStatus(TestProject.Id))
-            .Returns(new QueueCoordinatorState
+            .Returns(new ActionQueueCoordinatorState
             {
                 ProjectId = TestProject.Id,
-                Status = QueueCoordinatorStatus.Running,
-                ActiveQueues = new List<ITaskQueue>(),
+                Status = ActionQueueCoordinatorStatus.Running,
+                ActiveQueues = new List<IActionQueue>(),
                 MaxConcurrency = 5,
                 RunningQueueCount = 0,
                 RootIssueId = "issue1"
             });
 
-        var request = new StartQueueRequest { IssueId = "issue1" };
+        var request = new StartActionQueueRequest { IssueId = "issue1" };
 
         var result = await _controller.Start(TestProject.Id, request, CancellationToken.None);
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
-        var response = ((OkObjectResult)result.Result!).Value as QueueStatusResponse;
+        var response = ((OkObjectResult)result.Result!).Value as ActionQueueStatusResponse;
         Assert.That(response, Is.Not.Null);
         Assert.Multiple(() =>
         {
@@ -135,7 +135,7 @@ public class QueueControllerTests
     public async Task GetStatus_ReturnsNotFound_WhenNoActiveExecution()
     {
         _projectServiceMock.Setup(s => s.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
-        _queueCoordinatorMock.Setup(c => c.GetStatus(TestProject.Id)).Returns((QueueCoordinatorState?)null);
+        _queueCoordinatorMock.Setup(c => c.GetStatus(TestProject.Id)).Returns((ActionQueueCoordinatorState?)null);
 
         var result = await _controller.GetStatus(TestProject.Id);
 
@@ -148,9 +148,9 @@ public class QueueControllerTests
     {
         _projectServiceMock.Setup(s => s.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
 
-        var mockQueue = new Mock<ITaskQueue>();
+        var mockQueue = new Mock<IActionQueue>();
         mockQueue.Setup(q => q.Id).Returns("queue-1");
-        mockQueue.Setup(q => q.State).Returns(TaskQueueState.Running);
+        mockQueue.Setup(q => q.State).Returns(ActionQueueState.Running);
         mockQueue.Setup(q => q.CurrentRequest).Returns(new AgentStartRequest
         {
             IssueId = "issue-a",
@@ -169,7 +169,7 @@ public class QueueControllerTests
             BranchName = "task/issue-a"
         });
         mockQueue.Setup(q => q.PendingRequests).Returns(new List<AgentStartRequest>());
-        mockQueue.Setup(q => q.History).Returns(new List<TaskQueueHistoryEntry>
+        mockQueue.Setup(q => q.History).Returns(new List<ActionQueueEntry>
         {
             new()
             {
@@ -198,11 +198,11 @@ public class QueueControllerTests
         });
 
         _queueCoordinatorMock.Setup(c => c.GetStatus(TestProject.Id))
-            .Returns(new QueueCoordinatorState
+            .Returns(new ActionQueueCoordinatorState
             {
                 ProjectId = TestProject.Id,
-                Status = QueueCoordinatorStatus.Running,
-                ActiveQueues = new List<ITaskQueue> { mockQueue.Object },
+                Status = ActionQueueCoordinatorStatus.Running,
+                ActiveQueues = new List<IActionQueue> { mockQueue.Object },
                 MaxConcurrency = 5,
                 RunningQueueCount = 1,
                 RootIssueId = "root-1"
@@ -211,7 +211,7 @@ public class QueueControllerTests
         var result = await _controller.GetStatus(TestProject.Id);
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
-        var response = ((OkObjectResult)result.Result!).Value as QueueStatusResponse;
+        var response = ((OkObjectResult)result.Result!).Value as ActionQueueStatusResponse;
         Assert.That(response, Is.Not.Null);
         Assert.Multiple(() =>
         {
@@ -235,13 +235,13 @@ public class QueueControllerTests
 
         var queues = Enumerable.Range(0, 10)
             .Select(i => CreateMinimalMockQueue($"queue-{i}").Object)
-            .ToList<ITaskQueue>();
+            .ToList<IActionQueue>();
 
         _queueCoordinatorMock.Setup(c => c.GetStatus(TestProject.Id))
-            .Returns(new QueueCoordinatorState
+            .Returns(new ActionQueueCoordinatorState
             {
                 ProjectId = TestProject.Id,
-                Status = QueueCoordinatorStatus.Running,
+                Status = ActionQueueCoordinatorStatus.Running,
                 ActiveQueues = queues,
                 MaxConcurrency = 5,
                 RunningQueueCount = 0,
@@ -250,7 +250,7 @@ public class QueueControllerTests
 
         var result = await _controller.GetStatus(TestProject.Id);
 
-        var response = ((OkObjectResult)result.Result!).Value as QueueStatusResponse;
+        var response = ((OkObjectResult)result.Result!).Value as ActionQueueStatusResponse;
         Assert.That(response, Is.Not.Null);
         Assert.Multiple(() =>
         {
@@ -268,13 +268,13 @@ public class QueueControllerTests
 
         var queues = Enumerable.Range(0, 10)
             .Select(i => CreateMinimalMockQueue($"queue-{i}").Object)
-            .ToList<ITaskQueue>();
+            .ToList<IActionQueue>();
 
         _queueCoordinatorMock.Setup(c => c.GetStatus(TestProject.Id))
-            .Returns(new QueueCoordinatorState
+            .Returns(new ActionQueueCoordinatorState
             {
                 ProjectId = TestProject.Id,
-                Status = QueueCoordinatorStatus.Running,
+                Status = ActionQueueCoordinatorStatus.Running,
                 ActiveQueues = queues,
                 MaxConcurrency = 5,
                 RunningQueueCount = 0,
@@ -283,7 +283,7 @@ public class QueueControllerTests
 
         var result = await _controller.GetStatus(TestProject.Id, limit: 3, offset: 5);
 
-        var response = ((OkObjectResult)result.Result!).Value as QueueStatusResponse;
+        var response = ((OkObjectResult)result.Result!).Value as ActionQueueStatusResponse;
         Assert.That(response, Is.Not.Null);
         Assert.Multiple(() =>
         {
@@ -303,13 +303,13 @@ public class QueueControllerTests
 
         var queues = Enumerable.Range(0, 3)
             .Select(i => CreateMinimalMockQueue($"queue-{i}").Object)
-            .ToList<ITaskQueue>();
+            .ToList<IActionQueue>();
 
         _queueCoordinatorMock.Setup(c => c.GetStatus(TestProject.Id))
-            .Returns(new QueueCoordinatorState
+            .Returns(new ActionQueueCoordinatorState
             {
                 ProjectId = TestProject.Id,
-                Status = QueueCoordinatorStatus.Running,
+                Status = ActionQueueCoordinatorStatus.Running,
                 ActiveQueues = queues,
                 MaxConcurrency = 5,
                 RunningQueueCount = 0,
@@ -318,7 +318,7 @@ public class QueueControllerTests
 
         var result = await _controller.GetStatus(TestProject.Id, offset: 100);
 
-        var response = ((OkObjectResult)result.Result!).Value as QueueStatusResponse;
+        var response = ((OkObjectResult)result.Result!).Value as ActionQueueStatusResponse;
         Assert.Multiple(() =>
         {
             Assert.That(response!.Queues, Is.Empty);
@@ -348,14 +348,14 @@ public class QueueControllerTests
         _projectServiceMock.Verify(s => s.GetByIdAsync(It.IsAny<string>()), Times.Never);
     }
 
-    private static Mock<ITaskQueue> CreateMinimalMockQueue(string id)
+    private static Mock<IActionQueue> CreateMinimalMockQueue(string id)
     {
-        var queue = new Mock<ITaskQueue>();
+        var queue = new Mock<IActionQueue>();
         queue.Setup(q => q.Id).Returns(id);
-        queue.Setup(q => q.State).Returns(TaskQueueState.Idle);
+        queue.Setup(q => q.State).Returns(ActionQueueState.Idle);
         queue.Setup(q => q.CurrentRequest).Returns((AgentStartRequest?)null);
         queue.Setup(q => q.PendingRequests).Returns(new List<AgentStartRequest>());
-        queue.Setup(q => q.History).Returns(new List<TaskQueueHistoryEntry>());
+        queue.Setup(q => q.History).Returns(new List<ActionQueueEntry>());
         return queue;
     }
 
@@ -377,7 +377,7 @@ public class QueueControllerTests
     public async Task Cancel_ReturnsNotFound_WhenNoActiveExecution()
     {
         _projectServiceMock.Setup(s => s.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
-        _queueCoordinatorMock.Setup(c => c.GetStatus(TestProject.Id)).Returns((QueueCoordinatorState?)null);
+        _queueCoordinatorMock.Setup(c => c.GetStatus(TestProject.Id)).Returns((ActionQueueCoordinatorState?)null);
 
         var result = await _controller.Cancel(TestProject.Id);
 
@@ -395,11 +395,11 @@ public class QueueControllerTests
             .Returns(() =>
             {
                 callCount++;
-                return new QueueCoordinatorState
+                return new ActionQueueCoordinatorState
                 {
                     ProjectId = TestProject.Id,
-                    Status = callCount <= 1 ? QueueCoordinatorStatus.Running : QueueCoordinatorStatus.Cancelled,
-                    ActiveQueues = new List<ITaskQueue>(),
+                    Status = callCount <= 1 ? ActionQueueCoordinatorStatus.Running : ActionQueueCoordinatorStatus.Cancelled,
+                    ActiveQueues = new List<IActionQueue>(),
                     MaxConcurrency = 5,
                     RunningQueueCount = 0,
                     RootIssueId = "issue1"
@@ -410,7 +410,7 @@ public class QueueControllerTests
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _queueCoordinatorMock.Verify(c => c.CancelAll(TestProject.Id), Times.Once);
-        var response = ((OkObjectResult)result.Result!).Value as QueueStatusResponse;
+        var response = ((OkObjectResult)result.Result!).Value as ActionQueueStatusResponse;
         Assert.That(response!.Status, Is.EqualTo("Cancelled"));
     }
 

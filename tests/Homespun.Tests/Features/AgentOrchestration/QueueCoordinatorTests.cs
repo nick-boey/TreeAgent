@@ -9,15 +9,15 @@ using Moq;
 namespace Homespun.Tests.Features.AgentOrchestration;
 
 [TestFixture]
-public class QueueCoordinatorTests
+public class ActionQueueCoordinatorTests
 {
     private Mock<IProjectFleeceService> _mockFleeceService = null!;
     private Mock<IAgentStartBackgroundService> _mockAgentStartService = null!;
     private Mock<IHubContext<NotificationHub>> _mockNotificationHub = null!;
-    private Mock<ILogger<QueueCoordinator>> _mockLogger = null!;
+    private Mock<ILogger<ActionQueueCoordinator>> _mockLogger = null!;
     private Mock<ILoggerFactory> _mockLoggerFactory = null!;
-    private QueueCoordinator _coordinator = null!;
-    private List<QueueCoordinatorEvent> _emittedEvents = null!;
+    private ActionQueueCoordinator _coordinator = null!;
+    private List<ActionQueueCoordinatorEvent> _emittedEvents = null!;
 
     private const string ProjectId = "proj1";
     private const string ProjectPath = "/path/to/project";
@@ -30,7 +30,7 @@ public class QueueCoordinatorTests
         _mockFleeceService = new Mock<IProjectFleeceService>();
         _mockAgentStartService = new Mock<IAgentStartBackgroundService>();
         _mockNotificationHub = new Mock<IHubContext<NotificationHub>>();
-        _mockLogger = new Mock<ILogger<QueueCoordinator>>();
+        _mockLogger = new Mock<ILogger<ActionQueueCoordinator>>();
         _mockLoggerFactory = new Mock<ILoggerFactory>();
         _mockLoggerFactory.Setup(f => f.CreateLogger(It.IsAny<string>()))
             .Returns(new Mock<ILogger>().Object);
@@ -42,7 +42,7 @@ public class QueueCoordinatorTests
         mockClients.Setup(c => c.Group(It.IsAny<string>())).Returns(mockClientProxy.Object);
         _mockNotificationHub.Setup(h => h.Clients).Returns(mockClients.Object);
 
-        _coordinator = new QueueCoordinator(
+        _coordinator = new ActionQueueCoordinator(
             _mockFleeceService.Object,
             _mockAgentStartService.Object,
             _mockNotificationHub.Object,
@@ -50,7 +50,7 @@ public class QueueCoordinatorTests
             _mockLoggerFactory.Object,
             DefaultMaxConcurrency);
 
-        _emittedEvents = new List<QueueCoordinatorEvent>();
+        _emittedEvents = new List<ActionQueueCoordinatorEvent>();
         _coordinator.OnEvent += e => _emittedEvents.Add(e);
         _issueRegistry.Clear();
         _configuredIssueIds.Clear();
@@ -157,8 +157,8 @@ public class QueueCoordinatorTests
         await _coordinator.StartExecution(ProjectId, "root",
             ProjectPath, DefaultBranch);
 
-        Assert.That(_emittedEvents, Has.Some.Matches<QueueCoordinatorEvent>(
-            e => e.EventType == QueueCoordinatorEventType.ExecutionStarted
+        Assert.That(_emittedEvents, Has.Some.Matches<ActionQueueCoordinatorEvent>(
+            e => e.EventType == ActionQueueCoordinatorEventType.ExecutionStarted
                  && e.ProjectId == ProjectId));
     }
 
@@ -172,7 +172,7 @@ public class QueueCoordinatorTests
 
         var status = _coordinator.GetStatus(ProjectId);
         Assert.That(status, Is.Not.Null);
-        Assert.That(status!.Status, Is.EqualTo(QueueCoordinatorStatus.Running));
+        Assert.That(status!.Status, Is.EqualTo(ActionQueueCoordinatorStatus.Running));
         Assert.That(status.RootIssueId, Is.EqualTo("root"));
     }
 
@@ -219,7 +219,7 @@ public class QueueCoordinatorTests
             ProjectPath, DefaultBranch);
 
         var queueCreatedEvents = _emittedEvents
-            .Where(e => e.EventType == QueueCoordinatorEventType.QueueCreated)
+            .Where(e => e.EventType == ActionQueueCoordinatorEventType.QueueCreated)
             .ToList();
 
         Assert.That(queueCreatedEvents, Has.Count.EqualTo(2));
@@ -232,7 +232,7 @@ public class QueueCoordinatorTests
     [Test]
     public async Task StartExecution_ParallelMode_RespectsMaxConcurrency()
     {
-        var coordinator = new QueueCoordinator(
+        var coordinator = new ActionQueueCoordinator(
             _mockFleeceService.Object,
             _mockAgentStartService.Object,
             _mockNotificationHub.Object,
@@ -255,7 +255,7 @@ public class QueueCoordinatorTests
     [Test]
     public async Task StartExecution_MaxConcurrency_AllQueuesCreated()
     {
-        var coordinator = new QueueCoordinator(
+        var coordinator = new ActionQueueCoordinator(
             _mockFleeceService.Object,
             _mockAgentStartService.Object,
             _mockNotificationHub.Object,
@@ -414,11 +414,11 @@ public class QueueCoordinatorTests
 
         // Simulate the queue completing by notifying through the queue
         var queues = _coordinator.GetActiveQueues(ProjectId);
-        var queue = (TaskQueue)queues[0];
+        var queue = (ActionQueue)queues[0];
         queue.NotifyCompleted("child1", success: true);
 
-        Assert.That(_emittedEvents, Has.Some.Matches<QueueCoordinatorEvent>(
-            e => e.EventType == QueueCoordinatorEventType.AllQueuesCompleted
+        Assert.That(_emittedEvents, Has.Some.Matches<ActionQueueCoordinatorEvent>(
+            e => e.EventType == ActionQueueCoordinatorEventType.AllQueuesCompleted
                  && e.ProjectId == ProjectId));
     }
 
@@ -430,11 +430,11 @@ public class QueueCoordinatorTests
         await _coordinator.StartExecution(ProjectId, "root",
             ProjectPath, DefaultBranch);
 
-        var queue = (TaskQueue)_coordinator.GetActiveQueues(ProjectId)[0];
+        var queue = (ActionQueue)_coordinator.GetActiveQueues(ProjectId)[0];
         queue.NotifyCompleted("child1", success: true);
 
         var status = _coordinator.GetStatus(ProjectId);
-        Assert.That(status!.Status, Is.EqualTo(QueueCoordinatorStatus.Completed));
+        Assert.That(status!.Status, Is.EqualTo(ActionQueueCoordinatorStatus.Completed));
     }
 
     [Test]
@@ -446,22 +446,22 @@ public class QueueCoordinatorTests
             ProjectPath, DefaultBranch);
 
         var queues = _coordinator.GetActiveQueues(ProjectId);
-        var queue1 = (TaskQueue)queues.First(q => q.CurrentRequest?.IssueId == "child1");
-        var queue2 = (TaskQueue)queues.First(q => q.CurrentRequest?.IssueId == "child2");
+        var queue1 = (ActionQueue)queues.First(q => q.CurrentRequest?.IssueId == "child1");
+        var queue2 = (ActionQueue)queues.First(q => q.CurrentRequest?.IssueId == "child2");
 
         _emittedEvents.Clear();
 
         // Complete first queue - should not signal all done yet
         queue1.NotifyCompleted("child1", success: true);
 
-        Assert.That(_emittedEvents, Has.None.Matches<QueueCoordinatorEvent>(
-            e => e.EventType == QueueCoordinatorEventType.AllQueuesCompleted));
+        Assert.That(_emittedEvents, Has.None.Matches<ActionQueueCoordinatorEvent>(
+            e => e.EventType == ActionQueueCoordinatorEventType.AllQueuesCompleted));
 
         // Complete second queue - now should signal all done
         queue2.NotifyCompleted("child2", success: true);
 
-        Assert.That(_emittedEvents, Has.Some.Matches<QueueCoordinatorEvent>(
-            e => e.EventType == QueueCoordinatorEventType.AllQueuesCompleted));
+        Assert.That(_emittedEvents, Has.Some.Matches<ActionQueueCoordinatorEvent>(
+            e => e.EventType == ActionQueueCoordinatorEventType.AllQueuesCompleted));
     }
 
     #endregion
@@ -479,7 +479,7 @@ public class QueueCoordinatorTests
         _coordinator.CancelAll(ProjectId);
 
         var queues = _coordinator.GetActiveQueues(ProjectId);
-        Assert.That(queues.All(q => q.State == TaskQueueState.Completed), Is.True);
+        Assert.That(queues.All(q => q.State == ActionQueueState.Completed), Is.True);
     }
 
     [Test]
@@ -494,8 +494,8 @@ public class QueueCoordinatorTests
 
         _coordinator.CancelAll(ProjectId);
 
-        Assert.That(_emittedEvents, Has.Some.Matches<QueueCoordinatorEvent>(
-            e => e.EventType == QueueCoordinatorEventType.ExecutionCancelled
+        Assert.That(_emittedEvents, Has.Some.Matches<ActionQueueCoordinatorEvent>(
+            e => e.EventType == ActionQueueCoordinatorEventType.ExecutionCancelled
                  && e.ProjectId == ProjectId));
     }
 
@@ -510,7 +510,7 @@ public class QueueCoordinatorTests
         _coordinator.CancelAll(ProjectId);
 
         var status = _coordinator.GetStatus(ProjectId);
-        Assert.That(status!.Status, Is.EqualTo(QueueCoordinatorStatus.Cancelled));
+        Assert.That(status!.Status, Is.EqualTo(ActionQueueCoordinatorStatus.Cancelled));
     }
 
     [Test]
@@ -653,7 +653,7 @@ public class QueueCoordinatorTests
         Assert.That(queues[0].PendingRequests.Select(r => r.IssueId), Is.EqualTo(new[] { "gc2" }));
 
         // Complete gc1 - gc2 should start (still same queue)
-        var queue1 = (TaskQueue)queues[0];
+        var queue1 = (ActionQueue)queues[0];
         queue1.NotifyCompleted("gc1", success: true);
 
         // gc2 is now current
@@ -679,17 +679,17 @@ public class QueueCoordinatorTests
 
         await _coordinator.StartExecution(ProjectId, "root", ProjectPath, DefaultBranch);
 
-        var queue1 = (TaskQueue)_coordinator.GetActiveQueues(ProjectId)[0];
+        var queue1 = (ActionQueue)_coordinator.GetActiveQueues(ProjectId)[0];
         queue1.NotifyCompleted("gc1", success: true);
 
         await Task.Delay(100);
 
         var allQueues = _coordinator.GetActiveQueues(ProjectId);
-        var child2Queue = (TaskQueue)allQueues.First(q => q.CurrentRequest?.IssueId == "child2");
+        var child2Queue = (ActionQueue)allQueues.First(q => q.CurrentRequest?.IssueId == "child2");
         child2Queue.NotifyCompleted("child2", success: true);
 
         var status = _coordinator.GetStatus(ProjectId);
-        Assert.That(status!.Status, Is.EqualTo(QueueCoordinatorStatus.Completed));
+        Assert.That(status!.Status, Is.EqualTo(ActionQueueCoordinatorStatus.Completed));
     }
 
     [Test]
@@ -711,7 +711,7 @@ public class QueueCoordinatorTests
             "Non-leaf child2 should NOT be enqueued as-is");
 
         // Complete child1 - should trigger expansion of child2
-        var queue1 = (TaskQueue)queues[0];
+        var queue1 = (ActionQueue)queues[0];
         queue1.NotifyCompleted("child1", success: true);
 
         await Task.Delay(100);
@@ -734,14 +734,14 @@ public class QueueCoordinatorTests
         await _coordinator.StartExecution(ProjectId, "root", ProjectPath, DefaultBranch);
 
         // Complete child1
-        var queue1 = (TaskQueue)_coordinator.GetActiveQueues(ProjectId)[0];
+        var queue1 = (ActionQueue)_coordinator.GetActiveQueues(ProjectId)[0];
         queue1.NotifyCompleted("child1", success: true);
         await Task.Delay(100);
 
         // Complete gc1 and gc2
         var allQueues = _coordinator.GetActiveQueues(ProjectId);
-        var gc1Queue = (TaskQueue)allQueues.First(q => q.CurrentRequest?.IssueId == "gc1");
-        var gc2Queue = (TaskQueue)allQueues.First(q => q.CurrentRequest?.IssueId == "gc2");
+        var gc1Queue = (ActionQueue)allQueues.First(q => q.CurrentRequest?.IssueId == "gc1");
+        var gc2Queue = (ActionQueue)allQueues.First(q => q.CurrentRequest?.IssueId == "gc2");
         gc1Queue.NotifyCompleted("gc1", success: true);
         gc2Queue.NotifyCompleted("gc2", success: true);
         await Task.Delay(100);
@@ -809,8 +809,8 @@ public class QueueCoordinatorTests
         await _coordinator.StartExecution(ProjectId, "root", ProjectPath, DefaultBranch);
 
         var queues = _coordinator.GetActiveQueues(ProjectId);
-        var seriesQueue = (TaskQueue)queues.First(q => q.CurrentRequest?.IssueId == "ggc1");
-        var gc2Queue = (TaskQueue)queues.First(q => q.CurrentRequest?.IssueId == "gc2");
+        var seriesQueue = (ActionQueue)queues.First(q => q.CurrentRequest?.IssueId == "ggc1");
+        var gc2Queue = (ActionQueue)queues.First(q => q.CurrentRequest?.IssueId == "gc2");
 
         // Complete ggc1 -> ggc2 starts
         seriesQueue.NotifyCompleted("ggc1", success: true);
@@ -829,10 +829,10 @@ public class QueueCoordinatorTests
         Assert.That(child2Queue, Is.Not.Null, "child2 should run after child1's parallel group completes");
 
         // Complete child2
-        ((TaskQueue)child2Queue!).NotifyCompleted("child2", success: true);
+        ((ActionQueue)child2Queue!).NotifyCompleted("child2", success: true);
 
         var status = _coordinator.GetStatus(ProjectId);
-        Assert.That(status!.Status, Is.EqualTo(QueueCoordinatorStatus.Completed));
+        Assert.That(status!.Status, Is.EqualTo(ActionQueueCoordinatorStatus.Completed));
     }
 
     [Test]
@@ -853,7 +853,7 @@ public class QueueCoordinatorTests
 
         // Complete c1 -> continuation fires, expands [c2, c3]
         // c2 is series with children, so ExpandSeries handles it
-        ((TaskQueue)queues[0]).NotifyCompleted("c1", success: true);
+        ((ActionQueue)queues[0]).NotifyCompleted("c1", success: true);
         await Task.Delay(100);
 
         // c2 should be expanded: queue with gc1, gc2
@@ -863,8 +863,8 @@ public class QueueCoordinatorTests
         Assert.That(gc1Queue!.PendingRequests.Select(r => r.IssueId), Is.EqualTo(new[] { "gc2" }));
 
         // Complete gc1 and gc2
-        ((TaskQueue)gc1Queue).NotifyCompleted("gc1", success: true);
-        ((TaskQueue)gc1Queue).NotifyCompleted("gc2", success: true);
+        ((ActionQueue)gc1Queue).NotifyCompleted("gc1", success: true);
+        ((ActionQueue)gc1Queue).NotifyCompleted("gc2", success: true);
         await Task.Delay(100);
 
         // c3 should now run

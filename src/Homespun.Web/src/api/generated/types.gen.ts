@@ -20,6 +20,11 @@ export type AgentAlreadyRunningResponse = {
     message: string | null;
 };
 
+export type PhaseDispatchBlockedResponse = {
+    blockingPhases: Array<string> | null;
+    message: string | null;
+};
+
 export type AgentStatusData = {
     isActive?: boolean;
     status: ClaudeSessionStatus;
@@ -832,15 +837,15 @@ export type QuestionOption = {
     description: string | null;
 };
 
-export type QueueDetail = {
+export type ActionQueueDetail = {
     id: string | null;
     state: string | null;
     currentIssueId?: string | null;
     pendingCount?: number;
-    history?: Array<QueueHistoryEntry> | null;
+    history?: Array<ActionQueueHistoryEntry> | null;
 };
 
-export type QueueHistoryEntry = {
+export type ActionQueueHistoryEntry = {
     issueId: string | null;
     success?: boolean;
     error?: string | null;
@@ -848,24 +853,24 @@ export type QueueHistoryEntry = {
     completedAt?: string;
 };
 
-export type QueueProgress = {
+export type ActionQueueProgress = {
     totalIssues?: number;
     completed?: number;
     failed?: number;
     remaining?: number;
 };
 
-export type QueueStatusResponse = {
+export type ActionQueueStatusResponse = {
     projectId: string | null;
     status: string | null;
     rootIssueId?: string | null;
     maxConcurrency?: number;
     runningQueueCount?: number;
-    queues?: Array<QueueDetail> | null;
+    queues?: Array<ActionQueueDetail> | null;
     totalQueueCount?: number;
     limit?: number;
     offset?: number;
-    progress?: QueueProgress;
+    progress?: ActionQueueProgress;
 };
 
 export type RemoveAllParentsRequest = {
@@ -1047,7 +1052,7 @@ export type SnapshotOrphan = {
     createdOnBranch?: boolean;
 };
 
-export type StartQueueRequest = {
+export type StartActionQueueRequest = {
     issueId: string | null;
 };
 
@@ -2232,7 +2237,7 @@ export type PostApiIssuesByIssueIdRunErrors = {
     /**
      * Conflict
      */
-    409: AgentAlreadyRunningResponse;
+    409: AgentAlreadyRunningResponse | PhaseDispatchBlockedResponse;
 };
 
 export type PostApiIssuesByIssueIdRunError = PostApiIssuesByIssueIdRunErrors[keyof PostApiIssuesByIssueIdRunErrors];
@@ -3486,16 +3491,16 @@ export type GetApiProjectsByProjectIdPullRequestsMergedByPrNumberResponses = {
 
 export type GetApiProjectsByProjectIdPullRequestsMergedByPrNumberResponse = GetApiProjectsByProjectIdPullRequestsMergedByPrNumberResponses[keyof GetApiProjectsByProjectIdPullRequestsMergedByPrNumberResponses];
 
-export type PostApiProjectsByProjectIdQueueStartData = {
-    body?: StartQueueRequest;
+export type PostApiProjectsByProjectIdActionQueueStartData = {
+    body?: StartActionQueueRequest;
     path: {
         projectId: string;
     };
     query?: never;
-    url: '/api/projects/{projectId}/queue/start';
+    url: '/api/projects/{projectId}/action-queue/start';
 };
 
-export type PostApiProjectsByProjectIdQueueStartErrors = {
+export type PostApiProjectsByProjectIdActionQueueStartErrors = {
     /**
      * Bad Request
      */
@@ -3506,18 +3511,18 @@ export type PostApiProjectsByProjectIdQueueStartErrors = {
     404: ProblemDetails;
 };
 
-export type PostApiProjectsByProjectIdQueueStartError = PostApiProjectsByProjectIdQueueStartErrors[keyof PostApiProjectsByProjectIdQueueStartErrors];
+export type PostApiProjectsByProjectIdActionQueueStartError = PostApiProjectsByProjectIdActionQueueStartErrors[keyof PostApiProjectsByProjectIdActionQueueStartErrors];
 
-export type PostApiProjectsByProjectIdQueueStartResponses = {
+export type PostApiProjectsByProjectIdActionQueueStartResponses = {
     /**
      * OK
      */
-    200: QueueStatusResponse;
+    200: ActionQueueStatusResponse;
 };
 
-export type PostApiProjectsByProjectIdQueueStartResponse = PostApiProjectsByProjectIdQueueStartResponses[keyof PostApiProjectsByProjectIdQueueStartResponses];
+export type PostApiProjectsByProjectIdActionQueueStartResponse = PostApiProjectsByProjectIdActionQueueStartResponses[keyof PostApiProjectsByProjectIdActionQueueStartResponses];
 
-export type GetApiProjectsByProjectIdQueueStatusData = {
+export type GetApiProjectsByProjectIdActionQueueStatusData = {
     body?: never;
     path: {
         projectId: string;
@@ -3526,10 +3531,10 @@ export type GetApiProjectsByProjectIdQueueStatusData = {
         limit?: number;
         offset?: number;
     };
-    url: '/api/projects/{projectId}/queue/status';
+    url: '/api/projects/{projectId}/action-queue/status';
 };
 
-export type GetApiProjectsByProjectIdQueueStatusErrors = {
+export type GetApiProjectsByProjectIdActionQueueStatusErrors = {
     /**
      * Bad Request
      */
@@ -3540,43 +3545,43 @@ export type GetApiProjectsByProjectIdQueueStatusErrors = {
     404: ProblemDetails;
 };
 
-export type GetApiProjectsByProjectIdQueueStatusError = GetApiProjectsByProjectIdQueueStatusErrors[keyof GetApiProjectsByProjectIdQueueStatusErrors];
+export type GetApiProjectsByProjectIdActionQueueStatusError = GetApiProjectsByProjectIdActionQueueStatusErrors[keyof GetApiProjectsByProjectIdActionQueueStatusErrors];
 
-export type GetApiProjectsByProjectIdQueueStatusResponses = {
+export type GetApiProjectsByProjectIdActionQueueStatusResponses = {
     /**
      * OK
      */
-    200: QueueStatusResponse;
+    200: ActionQueueStatusResponse;
 };
 
-export type GetApiProjectsByProjectIdQueueStatusResponse = GetApiProjectsByProjectIdQueueStatusResponses[keyof GetApiProjectsByProjectIdQueueStatusResponses];
+export type GetApiProjectsByProjectIdActionQueueStatusResponse = GetApiProjectsByProjectIdActionQueueStatusResponses[keyof GetApiProjectsByProjectIdActionQueueStatusResponses];
 
-export type PostApiProjectsByProjectIdQueueCancelData = {
+export type PostApiProjectsByProjectIdActionQueueCancelData = {
     body?: never;
     path: {
         projectId: string;
     };
     query?: never;
-    url: '/api/projects/{projectId}/queue/cancel';
+    url: '/api/projects/{projectId}/action-queue/cancel';
 };
 
-export type PostApiProjectsByProjectIdQueueCancelErrors = {
+export type PostApiProjectsByProjectIdActionQueueCancelErrors = {
     /**
      * Not Found
      */
     404: ProblemDetails;
 };
 
-export type PostApiProjectsByProjectIdQueueCancelError = PostApiProjectsByProjectIdQueueCancelErrors[keyof PostApiProjectsByProjectIdQueueCancelErrors];
+export type PostApiProjectsByProjectIdActionQueueCancelError = PostApiProjectsByProjectIdActionQueueCancelErrors[keyof PostApiProjectsByProjectIdActionQueueCancelErrors];
 
-export type PostApiProjectsByProjectIdQueueCancelResponses = {
+export type PostApiProjectsByProjectIdActionQueueCancelResponses = {
     /**
      * OK
      */
-    200: QueueStatusResponse;
+    200: ActionQueueStatusResponse;
 };
 
-export type PostApiProjectsByProjectIdQueueCancelResponse = PostApiProjectsByProjectIdQueueCancelResponses[keyof PostApiProjectsByProjectIdQueueCancelResponses];
+export type PostApiProjectsByProjectIdActionQueueCancelResponse = PostApiProjectsByProjectIdActionQueueCancelResponses[keyof PostApiProjectsByProjectIdActionQueueCancelResponses];
 
 export type GetApiProjectsByProjectIdSecretsData = {
     body?: never;

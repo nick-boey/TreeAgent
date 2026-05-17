@@ -39,19 +39,19 @@ public class QueueApiTests
     [Test]
     public void QueueCoordinator_IsRegisteredInDI()
     {
-        var service = _factory.Services.GetService<IQueueCoordinator>();
+        var service = _factory.Services.GetService<IActionQueueCoordinator>();
 
         Assert.That(service, Is.Not.Null);
-        Assert.That(service, Is.InstanceOf<QueueCoordinator>());
+        Assert.That(service, Is.InstanceOf<ActionQueueCoordinator>());
     }
 
     [Test]
     public async Task Start_ReturnsNotFound_WhenProjectDoesNotExist()
     {
-        var request = new StartQueueRequest { IssueId = "issue1" };
+        var request = new StartActionQueueRequest { IssueId = "issue1" };
 
         var response = await _client.PostAsJsonAsync(
-            "/api/projects/nonexistent-project/queue/start", request, JsonOptions);
+            "/api/projects/nonexistent-project/action-queue/start", request, JsonOptions);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
@@ -59,7 +59,7 @@ public class QueueApiTests
     [Test]
     public async Task GetStatus_ReturnsNotFound_WhenProjectDoesNotExist()
     {
-        var response = await _client.GetAsync("/api/projects/nonexistent-project/queue/status");
+        var response = await _client.GetAsync("/api/projects/nonexistent-project/action-queue/status");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
@@ -67,7 +67,7 @@ public class QueueApiTests
     [Test]
     public async Task Cancel_ReturnsNotFound_WhenProjectDoesNotExist()
     {
-        var response = await _client.PostAsync("/api/projects/nonexistent-project/queue/cancel", null);
+        var response = await _client.PostAsync("/api/projects/nonexistent-project/action-queue/cancel", null);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
@@ -83,7 +83,7 @@ public class QueueApiTests
             return;
         }
 
-        var response = await _client.GetAsync($"/api/projects/{projectId}/queue/status");
+        var response = await _client.GetAsync($"/api/projects/{projectId}/action-queue/status");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
@@ -98,7 +98,7 @@ public class QueueApiTests
             return;
         }
 
-        var response = await _client.PostAsync($"/api/projects/{projectId}/queue/cancel", null);
+        var response = await _client.PostAsync($"/api/projects/{projectId}/action-queue/cancel", null);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
@@ -113,9 +113,9 @@ public class QueueApiTests
             return;
         }
 
-        var request = new StartQueueRequest { IssueId = "" };
+        var request = new StartActionQueueRequest { IssueId = "" };
         var response = await _client.PostAsJsonAsync(
-            $"/api/projects/{projectId}/queue/start", request, JsonOptions);
+            $"/api/projects/{projectId}/action-queue/start", request, JsonOptions);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
@@ -123,7 +123,7 @@ public class QueueApiTests
     [Test]
     public async Task GetStatus_RejectsLimitBelowOne()
     {
-        var response = await _client.GetAsync("/api/projects/any-project/queue/status?limit=0");
+        var response = await _client.GetAsync("/api/projects/any-project/action-queue/status?limit=0");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
@@ -131,7 +131,7 @@ public class QueueApiTests
     [Test]
     public async Task GetStatus_RejectsLimitAbove200()
     {
-        var response = await _client.GetAsync("/api/projects/any-project/queue/status?limit=201");
+        var response = await _client.GetAsync("/api/projects/any-project/action-queue/status?limit=201");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
@@ -139,7 +139,7 @@ public class QueueApiTests
     [Test]
     public async Task GetStatus_RejectsNegativeOffset()
     {
-        var response = await _client.GetAsync("/api/projects/any-project/queue/status?offset=-1");
+        var response = await _client.GetAsync("/api/projects/any-project/action-queue/status?offset=-1");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
@@ -149,7 +149,7 @@ public class QueueApiTests
     {
         // No execution exists, so we expect 404 — but specifically NOT 400.
         // This proves the default limit/offset validation passes.
-        var response = await _client.GetAsync("/api/projects/any-project/queue/status");
+        var response = await _client.GetAsync("/api/projects/any-project/action-queue/status");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
@@ -157,12 +157,12 @@ public class QueueApiTests
     [Test]
     public async Task Start_Endpoints_DoNotReturn500()
     {
-        var request = new StartQueueRequest { IssueId = "issue1" };
+        var request = new StartActionQueueRequest { IssueId = "issue1" };
 
         var startResponse = await _client.PostAsJsonAsync(
-            "/api/projects/any-project/queue/start", request, JsonOptions);
-        var statusResponse = await _client.GetAsync("/api/projects/any-project/queue/status");
-        var cancelResponse = await _client.PostAsync("/api/projects/any-project/queue/cancel", null);
+            "/api/projects/any-project/action-queue/start", request, JsonOptions);
+        var statusResponse = await _client.GetAsync("/api/projects/any-project/action-queue/status");
+        var cancelResponse = await _client.PostAsync("/api/projects/any-project/action-queue/cancel", null);
 
         Assert.Multiple(() =>
         {
