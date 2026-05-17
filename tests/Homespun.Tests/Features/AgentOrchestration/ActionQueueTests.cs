@@ -6,20 +6,20 @@ using Moq;
 namespace Homespun.Tests.Features.AgentOrchestration;
 
 [TestFixture]
-public class TaskQueueTests
+public class ActionQueueTests
 {
     private Mock<IAgentStartBackgroundService> _mockAgentStartService = null!;
-    private Mock<ILogger<TaskQueue>> _mockLogger = null!;
-    private TaskQueue _queue = null!;
-    private List<TaskQueueEvent> _emittedEvents = null!;
+    private Mock<ILogger<ActionQueue>> _mockLogger = null!;
+    private ActionQueue _queue = null!;
+    private List<ActionQueueEvent> _emittedEvents = null!;
 
     [SetUp]
     public void SetUp()
     {
         _mockAgentStartService = new Mock<IAgentStartBackgroundService>();
-        _mockLogger = new Mock<ILogger<TaskQueue>>();
-        _queue = new TaskQueue(_mockAgentStartService.Object, _mockLogger.Object);
-        _emittedEvents = new List<TaskQueueEvent>();
+        _mockLogger = new Mock<ILogger<ActionQueue>>();
+        _queue = new ActionQueue(_mockAgentStartService.Object, _mockLogger.Object);
+        _emittedEvents = new List<ActionQueueEvent>();
         _queue.OnEvent += e => _emittedEvents.Add(e);
     }
 
@@ -49,13 +49,13 @@ public class TaskQueueTests
     [Test]
     public void NewQueue_HasIdleState()
     {
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Idle));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Idle));
     }
 
     [Test]
     public void NewQueue_HasUniqueId()
     {
-        var queue2 = new TaskQueue(_mockAgentStartService.Object, _mockLogger.Object);
+        var queue2 = new ActionQueue(_mockAgentStartService.Object, _mockLogger.Object);
         Assert.That(_queue.Id, Is.Not.EqualTo(queue2.Id));
         Assert.That(_queue.Id, Is.Not.Empty);
     }
@@ -89,7 +89,7 @@ public class TaskQueueTests
 
         await _queue.EnqueueAsync(request);
 
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Running));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Running));
     }
 
     [Test]
@@ -123,12 +123,12 @@ public class TaskQueueTests
         Assert.That(_emittedEvents, Has.Count.EqualTo(2));
 
         var stateEvent = _emittedEvents[0];
-        Assert.That(stateEvent.EventType, Is.EqualTo(TaskQueueEventType.StateChanged));
-        Assert.That(stateEvent.PreviousState, Is.EqualTo(TaskQueueState.Idle));
-        Assert.That(stateEvent.NewState, Is.EqualTo(TaskQueueState.Running));
+        Assert.That(stateEvent.EventType, Is.EqualTo(ActionQueueEventType.StateChanged));
+        Assert.That(stateEvent.PreviousState, Is.EqualTo(ActionQueueState.Idle));
+        Assert.That(stateEvent.NewState, Is.EqualTo(ActionQueueState.Running));
 
         var startEvent = _emittedEvents[1];
-        Assert.That(startEvent.EventType, Is.EqualTo(TaskQueueEventType.IssueStarted));
+        Assert.That(startEvent.EventType, Is.EqualTo(ActionQueueEventType.IssueStarted));
         Assert.That(startEvent.IssueId, Is.EqualTo(request.IssueId));
     }
 
@@ -155,7 +155,6 @@ public class TaskQueueTests
         await _queue.EnqueueAsync(request1);
         await _queue.EnqueueAsync(request2);
 
-        // Only the first request should be delegated
         _mockAgentStartService.Verify(
             x => x.QueueAgentStartAsync(request1), Times.Once);
         _mockAgentStartService.Verify(
@@ -249,7 +248,7 @@ public class TaskQueueTests
 
         _queue.NotifyCompleted(request.IssueId, success: true);
 
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Idle));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Idle));
         Assert.That(_queue.CurrentRequest, Is.Null);
     }
 
@@ -265,7 +264,7 @@ public class TaskQueueTests
 
         _queue.NotifyCompleted("issue1", success: true);
 
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Running));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Running));
         Assert.That(_queue.CurrentRequest, Is.EqualTo(request2));
         Assert.That(_queue.PendingRequests, Is.Empty);
 
@@ -312,12 +311,12 @@ public class TaskQueueTests
         Assert.That(_emittedEvents, Has.Count.EqualTo(2));
 
         var completedEvent = _emittedEvents[0];
-        Assert.That(completedEvent.EventType, Is.EqualTo(TaskQueueEventType.IssueCompleted));
+        Assert.That(completedEvent.EventType, Is.EqualTo(ActionQueueEventType.IssueCompleted));
         Assert.That(completedEvent.IssueId, Is.EqualTo(request.IssueId));
 
         var stateEvent = _emittedEvents[1];
-        Assert.That(stateEvent.EventType, Is.EqualTo(TaskQueueEventType.StateChanged));
-        Assert.That(stateEvent.NewState, Is.EqualTo(TaskQueueState.Idle));
+        Assert.That(stateEvent.EventType, Is.EqualTo(ActionQueueEventType.StateChanged));
+        Assert.That(stateEvent.NewState, Is.EqualTo(ActionQueueState.Idle));
     }
 
     [Test]
@@ -330,7 +329,7 @@ public class TaskQueueTests
         _queue.NotifyCompleted(request.IssueId, success: false, error: "Timeout");
 
         var failedEvent = _emittedEvents[0];
-        Assert.That(failedEvent.EventType, Is.EqualTo(TaskQueueEventType.IssueFailed));
+        Assert.That(failedEvent.EventType, Is.EqualTo(ActionQueueEventType.IssueFailed));
         Assert.That(failedEvent.IssueId, Is.EqualTo(request.IssueId));
         Assert.That(failedEvent.Error, Is.EqualTo("Timeout"));
     }
@@ -344,7 +343,7 @@ public class TaskQueueTests
 
         _queue.NotifyCompleted("unknown-issue", success: true);
 
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Running));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Running));
         Assert.That(_emittedEvents, Is.Empty);
     }
 
@@ -363,14 +362,12 @@ public class TaskQueueTests
 
         _queue.Pause();
 
-        // Complete current issue - queue should go Idle, not start issue2
         _queue.NotifyCompleted("issue1", success: true);
 
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Idle));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Idle));
         Assert.That(_queue.CurrentRequest, Is.Null);
         Assert.That(_queue.PendingRequests, Has.Count.EqualTo(1));
 
-        // issue2 should not have been started
         _mockAgentStartService.Verify(
             x => x.QueueAgentStartAsync(request2), Times.Never);
     }
@@ -389,7 +386,7 @@ public class TaskQueueTests
 
         await _queue.ResumeAsync();
 
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Running));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Running));
         Assert.That(_queue.CurrentRequest, Is.EqualTo(request2));
 
         _mockAgentStartService.Verify(
@@ -406,7 +403,7 @@ public class TaskQueueTests
 
         await _queue.ResumeAsync();
 
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Idle));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Idle));
         Assert.That(_queue.CurrentRequest, Is.Null);
     }
 
@@ -426,7 +423,7 @@ public class TaskQueueTests
 
         _queue.Cancel();
 
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Completed));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Completed));
     }
 
     [Test]
@@ -451,7 +448,6 @@ public class TaskQueueTests
 
         _queue.Cancel();
 
-        // Current request remains - it was already dispatched
         Assert.That(_queue.CurrentRequest, Is.EqualTo(request));
     }
 
@@ -460,7 +456,7 @@ public class TaskQueueTests
     {
         _queue.Cancel();
 
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Completed));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Completed));
     }
 
     [Test]
@@ -471,9 +467,9 @@ public class TaskQueueTests
 
         _queue.Cancel();
 
-        var stateEvent = _emittedEvents.Single(e => e.EventType == TaskQueueEventType.StateChanged);
-        Assert.That(stateEvent.PreviousState, Is.EqualTo(TaskQueueState.Running));
-        Assert.That(stateEvent.NewState, Is.EqualTo(TaskQueueState.Completed));
+        var stateEvent = _emittedEvents.Single(e => e.EventType == ActionQueueEventType.StateChanged);
+        Assert.That(stateEvent.PreviousState, Is.EqualTo(ActionQueueState.Running));
+        Assert.That(stateEvent.NewState, Is.EqualTo(ActionQueueState.Completed));
     }
 
     #endregion
@@ -489,7 +485,7 @@ public class TaskQueueTests
 
         _queue.NotifyBlocked(request.IssueId, "Waiting on dependency issue123");
 
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Blocked));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Blocked));
     }
 
     [Test]
@@ -501,9 +497,9 @@ public class TaskQueueTests
 
         _queue.NotifyBlocked(request.IssueId, "Blocked by dependency");
 
-        var stateEvent = _emittedEvents.Single(e => e.EventType == TaskQueueEventType.StateChanged);
-        Assert.That(stateEvent.PreviousState, Is.EqualTo(TaskQueueState.Running));
-        Assert.That(stateEvent.NewState, Is.EqualTo(TaskQueueState.Blocked));
+        var stateEvent = _emittedEvents.Single(e => e.EventType == ActionQueueEventType.StateChanged);
+        Assert.That(stateEvent.PreviousState, Is.EqualTo(ActionQueueState.Running));
+        Assert.That(stateEvent.NewState, Is.EqualTo(ActionQueueState.Blocked));
     }
 
     [Test]
@@ -516,7 +512,7 @@ public class TaskQueueTests
 
         await _queue.UnblockAsync();
 
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Running));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Running));
     }
 
     [Test]
@@ -528,7 +524,6 @@ public class TaskQueueTests
 
         await _queue.UnblockAsync();
 
-        // Should re-delegate the current request to the agent start service
         _mockAgentStartService.Verify(
             x => x.QueueAgentStartAsync(request), Times.Exactly(2));
     }
@@ -546,12 +541,12 @@ public class TaskQueueTests
         Assert.That(_emittedEvents, Has.Count.EqualTo(2));
 
         var stateEvent = _emittedEvents[0];
-        Assert.That(stateEvent.EventType, Is.EqualTo(TaskQueueEventType.StateChanged));
-        Assert.That(stateEvent.PreviousState, Is.EqualTo(TaskQueueState.Blocked));
-        Assert.That(stateEvent.NewState, Is.EqualTo(TaskQueueState.Running));
+        Assert.That(stateEvent.EventType, Is.EqualTo(ActionQueueEventType.StateChanged));
+        Assert.That(stateEvent.PreviousState, Is.EqualTo(ActionQueueState.Blocked));
+        Assert.That(stateEvent.NewState, Is.EqualTo(ActionQueueState.Running));
 
         var startEvent = _emittedEvents[1];
-        Assert.That(startEvent.EventType, Is.EqualTo(TaskQueueEventType.IssueStarted));
+        Assert.That(startEvent.EventType, Is.EqualTo(ActionQueueEventType.IssueStarted));
         Assert.That(startEvent.IssueId, Is.EqualTo(request.IssueId));
     }
 
@@ -564,7 +559,7 @@ public class TaskQueueTests
 
         _queue.NotifyBlocked("unknown", "Blocked");
 
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Running));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Running));
         Assert.That(_emittedEvents, Is.Empty);
     }
 
@@ -582,19 +577,16 @@ public class TaskQueueTests
         foreach (var req in requests)
             await _queue.EnqueueAsync(req);
 
-        // First should be current
         Assert.That(_queue.CurrentRequest!.IssueId, Is.EqualTo("issue1"));
 
-        // Complete each and verify next starts
         for (var i = 0; i < requests.Count - 1; i++)
         {
             _queue.NotifyCompleted(requests[i].IssueId, success: true);
             Assert.That(_queue.CurrentRequest!.IssueId, Is.EqualTo(requests[i + 1].IssueId));
         }
 
-        // Complete last
         _queue.NotifyCompleted(requests[^1].IssueId, success: true);
-        Assert.That(_queue.State, Is.EqualTo(TaskQueueState.Idle));
+        Assert.That(_queue.State, Is.EqualTo(ActionQueueState.Idle));
         Assert.That(_queue.History, Has.Count.EqualTo(5));
     }
 

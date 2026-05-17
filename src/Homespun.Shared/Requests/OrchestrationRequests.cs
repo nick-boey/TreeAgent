@@ -20,9 +20,9 @@ public record GenerateBranchIdResponse(
     bool WasAiGenerated);
 
 /// <summary>
-/// Request to start queue execution on a root issue.
+/// Request to start action queue execution on a root issue.
 /// </summary>
-public class StartQueueRequest
+public class StartActionQueueRequest
 {
     /// <summary>
     /// The root issue ID to start execution from.
@@ -31,147 +31,62 @@ public class StartQueueRequest
 }
 
 /// <summary>
-/// Response for queue status with per-queue breakdown and overall progress.
+/// Response for action queue status with per-queue breakdown and overall progress.
 /// </summary>
-public class QueueStatusResponse
+public class ActionQueueStatusResponse
 {
-    /// <summary>
-    /// The project ID.
-    /// </summary>
     public required string ProjectId { get; set; }
-
-    /// <summary>
-    /// Overall coordinator status.
-    /// </summary>
     public required string Status { get; set; }
-
-    /// <summary>
-    /// The root issue being executed.
-    /// </summary>
     public string? RootIssueId { get; set; }
-
-    /// <summary>
-    /// Maximum concurrent queues allowed.
-    /// </summary>
     public int MaxConcurrency { get; set; }
-
-    /// <summary>
-    /// Number of currently running queues.
-    /// </summary>
     public int RunningQueueCount { get; set; }
+    public List<ActionQueueDetail> Queues { get; set; } = [];
 
     /// <summary>
-    /// Per-queue breakdown for the current page.
-    /// </summary>
-    public List<QueueDetail> Queues { get; set; } = [];
-
-    /// <summary>
-    /// Total number of queues for this project across all pages. Equal to
-    /// <see cref="Queues"/>.Count when the response fits in a single page.
+    /// Total number of queues for this project across all pages.
     /// </summary>
     public int TotalQueueCount { get; set; }
 
-    /// <summary>
-    /// The <c>limit</c> applied to the <see cref="Queues"/> page.
-    /// </summary>
     public int Limit { get; set; }
-
-    /// <summary>
-    /// The <c>offset</c> applied to the <see cref="Queues"/> page.
-    /// </summary>
     public int Offset { get; set; }
 
     /// <summary>
-    /// Overall progress across all queues — always computed across the full
-    /// queue set, never just the current page.
+    /// Overall progress across all queues — always computed across the full queue set.
     /// </summary>
-    public QueueProgress Progress { get; set; } = new();
+    public ActionQueueProgress Progress { get; set; } = new();
 }
 
 /// <summary>
-/// Detail for a single task queue.
+/// Detail for a single action queue.
 /// </summary>
-public class QueueDetail
+public class ActionQueueDetail
 {
-    /// <summary>
-    /// Queue identifier.
-    /// </summary>
     public required string Id { get; set; }
-
-    /// <summary>
-    /// Current queue state.
-    /// </summary>
     public required string State { get; set; }
-
-    /// <summary>
-    /// Issue ID currently being processed, if any.
-    /// </summary>
     public string? CurrentIssueId { get; set; }
-
-    /// <summary>
-    /// Number of pending issues in this queue.
-    /// </summary>
     public int PendingCount { get; set; }
-
-    /// <summary>
-    /// History of completed issue executions.
-    /// </summary>
-    public List<QueueHistoryEntry> History { get; set; } = [];
+    public List<ActionQueueHistoryEntry> History { get; set; } = [];
 }
 
 /// <summary>
 /// A completed issue execution record.
 /// </summary>
-public class QueueHistoryEntry
+public class ActionQueueHistoryEntry
 {
-    /// <summary>
-    /// The issue ID.
-    /// </summary>
     public required string IssueId { get; set; }
-
-    /// <summary>
-    /// Whether the execution succeeded.
-    /// </summary>
     public bool Success { get; set; }
-
-    /// <summary>
-    /// Error message if failed.
-    /// </summary>
     public string? Error { get; set; }
-
-    /// <summary>
-    /// When the execution started.
-    /// </summary>
     public DateTimeOffset StartedAt { get; set; }
-
-    /// <summary>
-    /// When the execution completed.
-    /// </summary>
     public DateTimeOffset CompletedAt { get; set; }
 }
 
 /// <summary>
-/// Overall progress across all queues.
+/// Overall progress across all action queues.
 /// </summary>
-public class QueueProgress
+public class ActionQueueProgress
 {
-    /// <summary>
-    /// Total number of issues across all queues.
-    /// </summary>
     public int TotalIssues { get; set; }
-
-    /// <summary>
-    /// Number of completed issues.
-    /// </summary>
     public int Completed { get; set; }
-
-    /// <summary>
-    /// Number of failed issues.
-    /// </summary>
     public int Failed { get; set; }
-
-    /// <summary>
-    /// Number of remaining issues (pending + currently running).
-    /// </summary>
     public int Remaining { get; set; }
 }

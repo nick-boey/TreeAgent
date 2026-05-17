@@ -263,6 +263,22 @@ public class RunAgentRequest
 }
 
 /// <summary>
+/// Response model when a phase-specific dispatch is rejected because prior phases are incomplete.
+/// </summary>
+public class PhaseDispatchBlockedResponse
+{
+    /// <summary>
+    /// Names of the incomplete phases that must be completed first.
+    /// </summary>
+    public required List<string> BlockingPhases { get; set; }
+
+    /// <summary>
+    /// A human-readable message explaining why the dispatch was rejected.
+    /// </summary>
+    public required string Message { get; set; }
+}
+
+/// <summary>
 /// Response model when an agent is already running on the issue.
 /// </summary>
 public class AgentAlreadyRunningResponse

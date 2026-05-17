@@ -379,7 +379,7 @@ else
     builder.Services.AddSingleton<IBranchIdBackgroundService, BranchIdBackgroundService>();
     builder.Services.AddScoped<IBaseBranchResolver, BaseBranchResolver>();
     builder.Services.AddSingleton<IAgentStartBackgroundService, AgentStartBackgroundService>();
-    builder.Services.AddSingleton<IQueueCoordinator, QueueCoordinator>();
+    builder.Services.AddSingleton<IActionQueueCoordinator, ActionQueueCoordinator>();
 
     // GitHub sync polling service (PR sync, review polling, issue linking)
     builder.Services.Configure<GitHubSyncPollingOptions>(
@@ -405,6 +405,7 @@ builder.Services.AddScoped<IChangeReconciliationService, ChangeReconciliationSer
 builder.Services.AddSingleton<IBranchStateCacheService, BranchStateCacheService>();
 builder.Services.AddScoped<IBranchStateResolverService, BranchStateResolverService>();
 builder.Services.AddScoped<IIssueGraphOpenSpecEnricher, IssueGraphOpenSpecEnricher>();
+builder.Services.AddScoped<IPhaseDispatchGuard, PhaseDispatchGuard>();
 
 builder.Services.AddSignalR(o =>
     {

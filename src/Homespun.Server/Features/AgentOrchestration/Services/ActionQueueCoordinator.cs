@@ -5,33 +5,18 @@ using Microsoft.AspNetCore.SignalR;
 
 namespace Homespun.Features.AgentOrchestration.Services;
 
-/// <summary>
-/// Tracks the execution state for a single project.
-/// </summary>
 internal class ProjectExecution
 {
     public required string ProjectId { get; init; }
     public required string RootIssueId { get; init; }
     public required string ProjectPath { get; init; }
     public required string DefaultBranch { get; init; }
-    public QueueCoordinatorStatus Status { get; set; } = QueueCoordinatorStatus.Running;
-    public List<ITaskQueue> Queues { get; } = new();
-
-    /// <summary>
-    /// Tracks parallel groups: when all queues in a group complete,
-    /// the deferred continuation (if any) is executed.
-    /// </summary>
+    public ActionQueueCoordinatorStatus Status { get; set; } = ActionQueueCoordinatorStatus.Running;
+    public List<IActionQueue> Queues { get; } = new();
     public List<ParallelGroup> ParallelGroups { get; } = new();
-
-    /// <summary>
-    /// Series continuations: queued issues waiting for a parallel group to complete.
-    /// </summary>
     public List<SeriesContinuation> SeriesContinuations { get; } = new();
 }
 
-/// <summary>
-/// A group of queues running in parallel that must all complete before continuing.
-/// </summary>
 internal class ParallelGroup
 {
     public required string ParentIssueId { get; init; }
@@ -41,54 +26,43 @@ internal class ParallelGroup
     public string? ContinuationGroupId { get; init; }
 }
 
-/// <summary>
-/// Deferred work to execute after a parallel group completes within a series parent.
-/// </summary>
 internal class SeriesContinuation
 {
     public required string GroupId { get; init; }
     public required List<Issue> RemainingChildren { get; init; }
-
-    /// <summary>
-    /// When set, newly created queues from this continuation should be
-    /// added to the parent parallel group for proper completion tracking.
-    /// </summary>
     public ParallelGroup? ParentParallelGroup { get; init; }
 }
 
 /// <summary>
-/// Coordinates multiple TaskQueues for a project, spawning queues based on
+/// Coordinates multiple ActionQueues for a project, spawning queues based on
 /// the issue hierarchy's execution modes (Series vs Parallel).
 /// </summary>
-public class QueueCoordinator : IQueueCoordinator
+public class ActionQueueCoordinator : IActionQueueCoordinator
 {
     private readonly IProjectFleeceService _fleeceService;
     private readonly IAgentStartBackgroundService _agentStartService;
     private readonly IHubContext<NotificationHub> _notificationHub;
-    private readonly ILogger<QueueCoordinator> _logger;
+    private readonly ILogger<ActionQueueCoordinator> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly int _maxConcurrency;
     private readonly object _lock = new();
     private readonly Dictionary<string, ProjectExecution> _executions = new();
 
-    /// <summary>
-    /// DI-friendly constructor. Max concurrency defaults to 5.
-    /// </summary>
-    public QueueCoordinator(
+    public ActionQueueCoordinator(
         IProjectFleeceService fleeceService,
         IAgentStartBackgroundService agentStartService,
         IHubContext<NotificationHub> notificationHub,
-        ILogger<QueueCoordinator> logger,
+        ILogger<ActionQueueCoordinator> logger,
         ILoggerFactory loggerFactory)
         : this(fleeceService, agentStartService, notificationHub, logger, loggerFactory, maxConcurrency: 5)
     {
     }
 
-    public QueueCoordinator(
+    public ActionQueueCoordinator(
         IProjectFleeceService fleeceService,
         IAgentStartBackgroundService agentStartService,
         IHubContext<NotificationHub> notificationHub,
-        ILogger<QueueCoordinator> logger,
+        ILogger<ActionQueueCoordinator> logger,
         ILoggerFactory loggerFactory,
         int maxConcurrency)
     {
@@ -100,7 +74,7 @@ public class QueueCoordinator : IQueueCoordinator
         _maxConcurrency = maxConcurrency;
     }
 
-    public event Action<QueueCoordinatorEvent>? OnEvent;
+    public event Action<ActionQueueCoordinatorEvent>? OnEvent;
 
     public async Task StartExecution(string projectId, string issueId, string projectPath, string defaultBranch, CancellationToken ct = default)
     {
@@ -121,20 +95,20 @@ public class QueueCoordinator : IQueueCoordinator
             _executions[projectId] = execution;
         }
 
-        EmitEvent(projectId, QueueCoordinatorEventType.ExecutionStarted, issueId: issueId);
+        EmitEvent(projectId, ActionQueueCoordinatorEventType.ExecutionStarted, issueId: issueId);
 
         await ExpandIssueIntoQueues(execution, issue, ct);
 
         _ = BroadcastStatusAsync(projectId);
     }
 
-    public IReadOnlyList<ITaskQueue> GetActiveQueues(string projectId)
+    public IReadOnlyList<IActionQueue> GetActiveQueues(string projectId)
     {
         lock (_lock)
         {
             return _executions.TryGetValue(projectId, out var execution)
                 ? execution.Queues.ToList().AsReadOnly()
-                : Array.Empty<ITaskQueue>();
+                : Array.Empty<IActionQueue>();
         }
     }
 
@@ -145,31 +119,31 @@ public class QueueCoordinator : IQueueCoordinator
         {
             if (!_executions.TryGetValue(projectId, out execution))
                 return;
-            execution.Status = QueueCoordinatorStatus.Cancelled;
+            execution.Status = ActionQueueCoordinatorStatus.Cancelled;
         }
 
         foreach (var queue in execution.Queues)
             queue.Cancel();
 
-        EmitEvent(projectId, QueueCoordinatorEventType.ExecutionCancelled);
+        EmitEvent(projectId, ActionQueueCoordinatorEventType.ExecutionCancelled);
         _ = BroadcastStatusAsync(projectId);
     }
 
-    public QueueCoordinatorState? GetStatus(string projectId)
+    public ActionQueueCoordinatorState? GetStatus(string projectId)
     {
         lock (_lock)
         {
             if (!_executions.TryGetValue(projectId, out var execution))
                 return null;
 
-            return new QueueCoordinatorState
+            return new ActionQueueCoordinatorState
             {
                 ProjectId = projectId,
                 Status = execution.Status,
                 ActiveQueues = execution.Queues.ToList().AsReadOnly(),
                 MaxConcurrency = _maxConcurrency,
                 RunningQueueCount = execution.Queues.Count(q =>
-                    q.State == TaskQueueState.Running || q.State == TaskQueueState.Blocked),
+                    q.State == ActionQueueState.Running || q.State == ActionQueueState.Blocked),
                 RootIssueId = execution.RootIssueId
             };
         }
@@ -181,7 +155,6 @@ public class QueueCoordinator : IQueueCoordinator
 
         if (children.Count == 0)
         {
-            // Leaf issue - create a single queue with just this issue
             var queue = CreateQueue(execution);
             await queue.EnqueueAsync(CreateRequest(execution, issue), ct);
             return;
@@ -221,21 +194,17 @@ public class QueueCoordinator : IQueueCoordinator
 
             if (childChildren.Count == 0)
             {
-                // Leaf child - create a queue with just this child
                 var queue = CreateQueue(execution);
                 group.QueueIds.Add(queue.Id);
                 await queue.EnqueueAsync(CreateRequest(execution, child), ct);
             }
             else if (child.ExecutionMode == ExecutionMode.Series)
             {
-                // Series child within parallel - create one queue with all grandchildren
                 await ExpandSeriesIntoSingleQueue(execution, child, childChildren, group, ct);
             }
             else
             {
-                // Nested parallel - recursively expand
                 await ExpandParallel(execution, child, childChildren, null, ct);
-                // Add inner group's queues to this group
                 var innerGroup = execution.ParallelGroups.Last();
                 group.QueueIds.AddRange(innerGroup.QueueIds);
             }
@@ -249,16 +218,11 @@ public class QueueCoordinator : IQueueCoordinator
         ParallelGroup? parentGroup,
         CancellationToken ct)
     {
-        // For a series parent, we need to process children one at a time.
-        // If the first child has children, we need to expand recursively.
-        // Otherwise, create a queue and enqueue all leaf children.
-
         var firstChild = children[0];
         var firstChildChildren = await _fleeceService.GetChildrenAsync(execution.ProjectPath, firstChild.Id, ct);
 
         if (firstChildChildren.Count > 0)
         {
-            // First child has children - expand it, and set remaining as continuation
             if (children.Count > 1)
             {
                 var groupId = Guid.NewGuid().ToString("N")[..12];
@@ -292,14 +256,11 @@ public class QueueCoordinator : IQueueCoordinator
         }
         else
         {
-            // All children are potentially leaves - create one queue
             var queue = CreateQueue(execution);
             parentGroup?.QueueIds.Add(queue.Id);
 
-            // Enqueue first child
             await queue.EnqueueAsync(CreateRequest(execution, firstChild), ct);
 
-            // Check remaining children - enqueue leaves, handle parents with children later
             for (var i = 1; i < children.Count; i++)
             {
                 var child = children[i];
@@ -310,7 +271,6 @@ public class QueueCoordinator : IQueueCoordinator
                 }
                 else
                 {
-                    // Non-leaf child - stop enqueueing, set up continuation
                     var contGroupId = Guid.NewGuid().ToString("N")[..12];
                     lock (_lock)
                     {
@@ -328,8 +288,6 @@ public class QueueCoordinator : IQueueCoordinator
                         bridgeGroup.QueueIds.Add(queue.Id);
                         execution.ParallelGroups.Add(bridgeGroup);
                     }
-                    // Remove queue from parent group - it will be re-tracked
-                    // via continuation when expansion completes
                     parentGroup?.QueueIds.Remove(queue.Id);
                     return;
                 }
@@ -372,7 +330,6 @@ public class QueueCoordinator : IQueueCoordinator
             parentGroup?.QueueIds.Add(queue.Id);
             await queue.EnqueueAsync(CreateRequest(execution, firstChild), ct);
 
-            // Enqueue remaining leaf children
             for (var i = 1; i < children.Count; i++)
             {
                 await queue.EnqueueAsync(CreateRequest(execution, children[i]), ct);
@@ -415,7 +372,6 @@ public class QueueCoordinator : IQueueCoordinator
 
         if (firstChildChildren.Count > 0)
         {
-            // First child has children - expand it and defer remaining
             if (children.Count > 1)
             {
                 var groupId = Guid.NewGuid().ToString("N")[..12];
@@ -434,10 +390,8 @@ public class QueueCoordinator : IQueueCoordinator
                 }
                 else
                 {
-                    // Nested series - recurse, then wire up continuation
                     var queueCountBefore = execution.Queues.Count;
                     await ExpandSeries(execution, firstChildChildren, ct);
-                    // Wrap newly created queues in a parallel group linked to continuation
                     lock (_lock)
                     {
                         var innerGroup = new ParallelGroup
@@ -458,7 +412,6 @@ public class QueueCoordinator : IQueueCoordinator
         }
         else
         {
-            // First child is a leaf - create queue with all consecutive leaf children
             var queue = CreateQueue(execution);
             await queue.EnqueueAsync(CreateRequest(execution, firstChild), ct);
 
@@ -472,7 +425,6 @@ public class QueueCoordinator : IQueueCoordinator
                 }
                 else
                 {
-                    // Non-leaf child - stop enqueueing, set up continuation
                     var contGroupId = Guid.NewGuid().ToString("N")[..12];
                     lock (_lock)
                     {
@@ -495,17 +447,17 @@ public class QueueCoordinator : IQueueCoordinator
         }
     }
 
-    private TaskQueue CreateQueue(ProjectExecution execution)
+    private ActionQueue CreateQueue(ProjectExecution execution)
     {
-        var queueLogger = _loggerFactory.CreateLogger<TaskQueue>();
-        var queue = new TaskQueue(_agentStartService, queueLogger);
+        var queueLogger = _loggerFactory.CreateLogger<ActionQueue>();
+        var queue = new ActionQueue(_agentStartService, queueLogger);
 
         bool shouldPause;
         lock (_lock)
         {
             execution.Queues.Add(queue);
             var runningCount = execution.Queues.Count(q =>
-                q.State == TaskQueueState.Running || q.State == TaskQueueState.Blocked);
+                q.State == ActionQueueState.Running || q.State == ActionQueueState.Blocked);
             shouldPause = runningCount >= _maxConcurrency;
         }
 
@@ -514,31 +466,28 @@ public class QueueCoordinator : IQueueCoordinator
 
         queue.OnEvent += e => HandleQueueEvent(execution, queue, e);
 
-        EmitEvent(execution.ProjectId, QueueCoordinatorEventType.QueueCreated, queueId: queue.Id);
+        EmitEvent(execution.ProjectId, ActionQueueCoordinatorEventType.QueueCreated, queueId: queue.Id);
 
         return queue;
     }
 
-    private void HandleQueueEvent(ProjectExecution execution, TaskQueue queue, TaskQueueEvent e)
+    private void HandleQueueEvent(ProjectExecution execution, ActionQueue queue, ActionQueueEvent e)
     {
-        if (e.EventType == TaskQueueEventType.StateChanged &&
-            e.NewState == TaskQueueState.Idle &&
-            e.PreviousState == TaskQueueState.Running)
+        if (e.EventType == ActionQueueEventType.StateChanged &&
+            e.NewState == ActionQueueState.Idle &&
+            e.PreviousState == ActionQueueState.Running)
         {
-            // Queue finished processing its last item
             OnQueueIdle(execution, queue);
         }
     }
 
-    private void OnQueueIdle(ProjectExecution execution, TaskQueue queue)
+    private void OnQueueIdle(ProjectExecution execution, ActionQueue queue)
     {
-        // Check if queue is truly done (no pending, no current)
         if (queue.CurrentRequest != null || queue.PendingRequests.Count > 0)
             return;
 
-        EmitEvent(execution.ProjectId, QueueCoordinatorEventType.QueueCompleted, queueId: queue.Id);
+        EmitEvent(execution.ProjectId, ActionQueueCoordinatorEventType.QueueCompleted, queueId: queue.Id);
 
-        // Check parallel groups - process ALL groups this queue belongs to
         List<SeriesContinuation>? continuationsToFire = null;
         lock (_lock)
         {
@@ -570,10 +519,7 @@ public class QueueCoordinator : IQueueCoordinator
             }
         }
 
-        // Try to resume paused queues if we're under max concurrency
         ResumeWaitingQueues(execution);
-
-        // Check if all queues are idle/completed
         CheckAllComplete(execution);
     }
 
@@ -587,8 +533,6 @@ public class QueueCoordinator : IQueueCoordinator
 
         await ExpandSeries(execution, continuation.RemainingChildren, CancellationToken.None);
 
-        // If this continuation was spawned from within a parallel group,
-        // add newly created queues to the parent group for proper tracking
         if (continuation.ParentParallelGroup != null)
         {
             lock (_lock)
@@ -606,10 +550,10 @@ public class QueueCoordinator : IQueueCoordinator
         lock (_lock)
         {
             var runningCount = execution.Queues.Count(q =>
-                q.State == TaskQueueState.Running || q.State == TaskQueueState.Blocked);
+                q.State == ActionQueueState.Running || q.State == ActionQueueState.Blocked);
 
             var pausedQueues = execution.Queues
-                .Where(q => q.State == TaskQueueState.Idle && q.PendingRequests.Count > 0)
+                .Where(q => q.State == ActionQueueState.Idle && q.PendingRequests.Count > 0)
                 .ToList();
 
             foreach (var queue in pausedQueues)
@@ -628,15 +572,15 @@ public class QueueCoordinator : IQueueCoordinator
         lock (_lock)
         {
             var allDone = execution.Queues.All(q =>
-                q.State == TaskQueueState.Idle || q.State == TaskQueueState.Completed);
+                q.State == ActionQueueState.Idle || q.State == ActionQueueState.Completed);
 
             var allEmpty = execution.Queues.All(q =>
                 q.CurrentRequest == null && q.PendingRequests.Count == 0);
 
             if (allDone && allEmpty && execution.SeriesContinuations.Count == 0)
             {
-                execution.Status = QueueCoordinatorStatus.Completed;
-                EmitEvent(execution.ProjectId, QueueCoordinatorEventType.AllQueuesCompleted);
+                execution.Status = ActionQueueCoordinatorStatus.Completed;
+                EmitEvent(execution.ProjectId, ActionQueueCoordinatorEventType.AllQueuesCompleted);
                 _ = BroadcastStatusAsync(execution.ProjectId);
             }
         }
@@ -657,12 +601,12 @@ public class QueueCoordinator : IQueueCoordinator
 
     private void EmitEvent(
         string projectId,
-        QueueCoordinatorEventType eventType,
+        ActionQueueCoordinatorEventType eventType,
         string? queueId = null,
         string? issueId = null,
         string? error = null)
     {
-        OnEvent?.Invoke(new QueueCoordinatorEvent
+        OnEvent?.Invoke(new ActionQueueCoordinatorEvent
         {
             ProjectId = projectId,
             EventType = eventType,
@@ -679,14 +623,14 @@ public class QueueCoordinator : IQueueCoordinator
             var status = GetStatus(projectId);
             if (status != null)
             {
-                await _notificationHub.Clients.All.SendAsync("QueueCoordinatorStatusChanged", status);
+                await _notificationHub.Clients.All.SendAsync("ActionQueueCoordinatorStatusChanged", status);
                 await _notificationHub.Clients.Group($"project-{projectId}")
-                    .SendAsync("QueueCoordinatorStatusChanged", status);
+                    .SendAsync("ActionQueueCoordinatorStatusChanged", status);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to broadcast queue coordinator status for project {ProjectId}", projectId);
+            _logger.LogError(ex, "Failed to broadcast action queue coordinator status for project {ProjectId}", projectId);
         }
     }
 }
