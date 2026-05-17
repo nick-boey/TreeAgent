@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using A2A;
 using Homespun.Features.ClaudeCode.Data;
@@ -597,6 +599,18 @@ public sealed class A2AToAGUITranslator : IA2AToAGUITranslator
         }
 
         return string.Empty;
+    }
+
+    /// <summary>
+    /// Derives a deterministic GUID-format string from a stable event seed and a per-use discriminator.
+    /// Used as a fallback when the upstream A2A event omits an id field, so live and replay
+    /// translations produce identical AG-UI payloads.
+    /// </summary>
+    private static string DeterministicId(string eventId, string discriminator)
+    {
+        var input = Encoding.UTF8.GetBytes($"{eventId}:{discriminator}");
+        var hash = MD5.HashData(input);
+        return new Guid(hash).ToString();
     }
 
     private static readonly JsonSerializerOptions JsonOpts = new()

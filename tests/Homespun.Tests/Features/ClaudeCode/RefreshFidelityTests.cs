@@ -308,6 +308,64 @@ public class RefreshFidelityTests
         AssertEnvelopesEquivalent(_liveEnvelopes, full);
     }
 
+    [Test]
+    public async Task Missing_MessageId_Produces_Identical_Live_And_Replay_Payloads()
+    {
+        // An agent message with no messageId triggers the Guid.NewGuid() fallback path.
+        // The deterministic fallback must produce the same id on live and replay.
+        JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement.Clone();
+
+        var agentMessageNoId = Parse("""
+        {
+            "kind": "message",
+            "role": "agent",
+            "parts": [ { "kind": "text", "text": "Hello with no id." } ],
+            "contextId": "ctx-1",
+            "taskId": "task-1"
+        }
+        """);
+
+        await _ingestor.IngestAsync(ProjectId, SessionId, "message", agentMessageNoId);
+
+        var replay = await ReplayFromStoreAsync(since: 0);
+
+        AssertEnvelopesEquivalent(_liveEnvelopes, replay);
+    }
+
+    [Test]
+    public async Task Missing_ToolUseId_Produces_Identical_Live_And_Replay_Payloads()
+    {
+        // An agent message with a tool_use block but no toolUseId triggers the fallback.
+        // The deterministic fallback must produce the same toolCallId on live and replay.
+        JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement.Clone();
+
+        var toolUseNoId = Parse("""
+        {
+            "kind": "message",
+            "messageId": "msg-tool-no-id",
+            "role": "agent",
+            "parts": [
+                {
+                    "kind": "data",
+                    "metadata": { "homespunBlockType": "tool_use" },
+                    "data": {
+                        "toolName": "Read",
+                        "input": { "path": "README.md" }
+                    }
+                }
+            ],
+            "contextId": "ctx-1",
+            "taskId": "task-1"
+        }
+        """);
+
+        await _ingestor.IngestAsync(ProjectId, SessionId, "message", toolUseNoId);
+
+        var replay = await ReplayFromStoreAsync(since: 0);
+
+        AssertEnvelopesEquivalent(_liveEnvelopes, replay);
+    }
+
     // ------------------ Helpers ------------------
 
     private async Task<List<SessionEventEnvelope>> ReplayFromStoreAsync(long? since)

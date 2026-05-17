@@ -67,6 +67,7 @@ public sealed class SessionEventsController(
 
         foreach (var record in records)
         {
+            var ctx = new TranslationContext(sessionId, RunId: sessionId, EventId: record.EventId);
             var parsed = A2AMessageParser.ParseSseEvent(record.EventKind, record.Payload.GetRawText());
             if (parsed is null)
             {
