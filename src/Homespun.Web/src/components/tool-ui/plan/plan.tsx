@@ -267,10 +267,19 @@ function PlanRoot({
   className,
   compact = false,
 }: PlanProps & { compact?: boolean }) {
-  const seenTodoIds = useRef(new Set<string>())
-  const [newTodoIds, setNewTodoIds] = useState<Set<string>>(new Set())
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set())
   const [isCelebrating, setIsCelebrating] = useState(false)
   const prevProgressRef = useRef(0)
+
+  const newTodoIds = useMemo(() => {
+    const newIds = new Set<string>()
+    todos.forEach((todo) => {
+      if (!seenIds.has(todo.id)) {
+        newIds.add(todo.id)
+      }
+    })
+    return newIds
+  }, [todos, seenIds])
 
   const { visibleTodos, hiddenTodos, completedCount, allComplete, progress } = useMemo(() => {
     const completed = todos.filter((t) => t.status === 'completed').length
@@ -287,26 +296,17 @@ function PlanRoot({
   }, [todos, maxVisibleTodos])
 
   useEffect(() => {
-    const newIds = new Set<string>()
-
-    todos.forEach((todo) => {
-      if (!seenTodoIds.current.has(todo.id)) {
-        newIds.add(todo.id)
-        seenTodoIds.current.add(todo.id)
-      }
-    })
-
-    if (newIds.size > 0) {
-      setNewTodoIds(newIds)
-
-      // Clear animation class after entrance completes
-      const timer = setTimeout(() => {
-        setNewTodoIds(new Set())
-      }, 500)
-
-      return () => clearTimeout(timer)
-    }
-  }, [todos])
+    if (newTodoIds.size === 0) return
+    // Clear animation classes after entrance completes (setState in timeout avoids set-state-in-effect)
+    const timer = setTimeout(() => {
+      setSeenIds((prev) => {
+        const next = new Set(prev)
+        todos.forEach((t) => next.add(t.id))
+        return next
+      })
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [todos, newTodoIds])
 
   useEffect(() => {
     const shouldCelebrate = shouldCelebrateProgress({
@@ -316,9 +316,13 @@ function PlanRoot({
     prevProgressRef.current = progress
 
     if (shouldCelebrate) {
-      setIsCelebrating(true)
-      const timer = setTimeout(() => setIsCelebrating(false), 1000)
-      return () => clearTimeout(timer)
+      // Use setTimeout to avoid synchronous setState directly in effect body
+      const startTimer = setTimeout(() => setIsCelebrating(true), 0)
+      const endTimer = setTimeout(() => setIsCelebrating(false), 1000)
+      return () => {
+        clearTimeout(startTimer)
+        clearTimeout(endTimer)
+      }
     }
   }, [progress])
 

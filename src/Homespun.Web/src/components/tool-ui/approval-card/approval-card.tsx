@@ -20,6 +20,12 @@ function getLucideIcon(name: string): LucideIcon | null {
   return Icon ?? null
 }
 
+function ApprovalCardDynamicIcon({ name, className }: { name: string; className?: string }) {
+  const Icon = getLucideIcon(name)
+  if (!Icon) return null
+  return React.createElement(Icon as LucideIcon, { className })
+}
+
 interface ApprovalCardReceiptProps {
   id: string
   title: string
@@ -91,7 +97,6 @@ export function ApprovalCard({
   const resolvedVariant = variant ?? 'default'
   const resolvedConfirmLabel = confirmLabel ?? 'Approve'
   const resolvedCancelLabel = cancelLabel ?? 'Deny'
-  const Icon = icon ? getLucideIcon(icon) : null
 
   const handleAction = React.useCallback(
     async (actionId: string) => {
@@ -151,7 +156,7 @@ export function ApprovalCard({
         >
           <div className="bg-card flex w-full flex-col gap-4 rounded-2xl border p-5 shadow-xs">
             <div className="flex items-start gap-3">
-              {Icon && (
+              {icon && (
                 <span
                   className={cn(
                     'flex size-10 shrink-0 items-center justify-center rounded-xl',
@@ -160,7 +165,7 @@ export function ApprovalCard({
                       : 'bg-primary/10 text-primary'
                   )}
                 >
-                  <Icon className="size-5" />
+                  <ApprovalCardDynamicIcon name={icon} className="size-5" />
                 </span>
               )}
               <div className="flex flex-1 flex-col gap-1">
