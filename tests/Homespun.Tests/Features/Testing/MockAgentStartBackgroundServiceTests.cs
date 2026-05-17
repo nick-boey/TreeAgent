@@ -67,6 +67,7 @@ public class MockAgentStartBackgroundServiceTests
                 Title = "Demo",
                 Status = IssueStatus.Progress,
                 Type = IssueType.Task,
+                CreatedAt = DateTimeOffset.UtcNow,
                 LastUpdate = DateTimeOffset.UtcNow
             },
             BranchName = "task/demo+ISSUE-009",

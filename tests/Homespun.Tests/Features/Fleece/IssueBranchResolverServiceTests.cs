@@ -338,6 +338,7 @@ public class IssueBranchResolverServiceTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             WorkingBranchId = "add-user-auth",
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
         _mockFleeceService.Setup(f => f.GetIssueAsync(RepoPath, IssueId, It.IsAny<CancellationToken>()))
@@ -375,6 +376,7 @@ public class IssueBranchResolverServiceTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             WorkingBranchId = "add-user-auth",
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
         _mockFleeceService.Setup(f => f.GetIssueAsync(RepoPath, IssueId, It.IsAny<CancellationToken>()))
@@ -401,6 +403,7 @@ public class IssueBranchResolverServiceTests
             Type = IssueType.Task,
             Status = IssueStatus.Open,
             WorkingBranchId = null,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
         _mockFleeceService.Setup(f => f.GetIssueAsync(RepoPath, IssueId, It.IsAny<CancellationToken>()))

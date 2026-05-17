@@ -10,7 +10,8 @@ public record FleeceIssueSyncResult(
     bool PushSucceeded,
     bool RequiresPullFirst = false,
     bool HasNonFleeceChanges = false,
-    IReadOnlyList<string>? NonFleeceChangedFiles = null);
+    IReadOnlyList<string>? NonFleeceChangedFiles = null,
+    string? CompactionWarning = null);
 
 /// <summary>
 /// Result of a fleece-only pull operation (no commit/push).
@@ -23,7 +24,8 @@ public record FleecePullResult(
     int CommitsPulled,
     bool HasNonFleeceChanges = false,
     IReadOnlyList<string>? NonFleeceChangedFiles = null,
-    bool HasMergeConflict = false);
+    bool HasMergeConflict = false,
+    string? CompactionWarning = null);
 
 /// <summary>
 /// Result of a pull operation.

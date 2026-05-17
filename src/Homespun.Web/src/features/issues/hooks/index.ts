@@ -1,5 +1,4 @@
 export { useDefaultFilter, type UseDefaultFilterResult } from './use-default-filter'
-export { useIssueHistory } from './use-issue-history'
 export { useToolbarShortcuts, type ToolbarShortcutCallbacks } from './use-toolbar-shortcuts'
 export {
   useIssueSelection,

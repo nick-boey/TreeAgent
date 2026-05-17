@@ -261,6 +261,7 @@ public class IssueTreeFormatterTests
             Title = title,
             Type = type,
             Status = status,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow,
             ParentIssues = parentIssues
         };
@@ -280,6 +281,7 @@ public class IssueTreeFormatterTests
             Title = title,
             Type = type,
             Status = status,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow,
             ParentIssues = parents.Select(p => new ParentIssueRef
             {

@@ -40,7 +40,7 @@ public class FleeceIssueSeederTests
         var now = DateTimeOffset.UtcNow;
         var issues = new List<Issue>
         {
-            new() { Id = "TEST-001", Title = "Test Issue", Type = IssueType.Task, Status = IssueStatus.Open, LastUpdate = now }
+            new() { Id = "TEST-001", Title = "Test Issue", Type = IssueType.Task, Status = IssueStatus.Open, CreatedAt = now, LastUpdate = now }
         };
 
         // Act
@@ -58,16 +58,16 @@ public class FleeceIssueSeederTests
         var now = DateTimeOffset.UtcNow;
         var issues = new List<Issue>
         {
-            new() { Id = "TEST-001", Title = "Test Issue", Type = IssueType.Task, Status = IssueStatus.Open, LastUpdate = now }
+            new() { Id = "TEST-001", Title = "Test Issue", Type = IssueType.Task, Status = IssueStatus.Open, CreatedAt = now, LastUpdate = now }
         };
 
         // Act
         await _seeder.SeedIssuesAsync(_tempDir, issues);
 
-        // Assert
+        // Assert — seeder writes the v3.1 lean snapshot at the stable path.
         var fleeceDir = Path.Combine(_tempDir, ".fleece");
-        var jsonlFiles = Directory.GetFiles(fleeceDir, "issues_*.jsonl");
-        Assert.That(jsonlFiles.Length, Is.EqualTo(1));
+        var snapshotPath = Path.Combine(fleeceDir, "issues.jsonl");
+        Assert.That(File.Exists(snapshotPath), Is.True);
     }
 
     [Test]
@@ -77,16 +77,16 @@ public class FleeceIssueSeederTests
         var now = DateTimeOffset.UtcNow;
         var issues = new List<Issue>
         {
-            new() { Id = "TEST-001", Title = "First Issue", Type = IssueType.Task, Status = IssueStatus.Open, LastUpdate = now },
-            new() { Id = "TEST-002", Title = "Second Issue", Type = IssueType.Bug, Status = IssueStatus.Progress, LastUpdate = now }
+            new() { Id = "TEST-001", Title = "First Issue", Type = IssueType.Task, Status = IssueStatus.Open, CreatedAt = now, LastUpdate = now },
+            new() { Id = "TEST-002", Title = "Second Issue", Type = IssueType.Bug, Status = IssueStatus.Progress, CreatedAt = now, LastUpdate = now }
         };
 
         // Act
         await _seeder.SeedIssuesAsync(_tempDir, issues);
 
-        // Assert
+        // Assert — seeder writes the v3.1 lean snapshot at the stable path.
         var fleeceDir = Path.Combine(_tempDir, ".fleece");
-        var jsonlFile = Directory.GetFiles(fleeceDir, "issues_*.jsonl").First();
+        var jsonlFile = Path.Combine(fleeceDir, "issues.jsonl");
         var lines = await File.ReadAllLinesAsync(jsonlFile);
 
         Assert.That(lines.Length, Is.EqualTo(2));

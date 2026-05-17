@@ -11,7 +11,6 @@ public class FleeceServiceRelationshipTests
     private string _tempDir = null!;
     private Mock<ILogger<ProjectFleeceService>> _mockLogger = null!;
     private Mock<IIssueSerializationQueue> _mockQueue = null!;
-    private Mock<IIssueHistoryService> _mockHistoryService = null!;
     private ProjectFleeceService _service = null!;
 
     [SetUp]
@@ -26,18 +25,7 @@ public class FleeceServiceRelationshipTests
             .Setup(q => q.EnqueueAsync(It.IsAny<IssueWriteOperation>(), It.IsAny<CancellationToken>()))
             .Returns(ValueTask.CompletedTask);
 
-        _mockHistoryService = new Mock<IIssueHistoryService>();
-        _mockHistoryService
-            .Setup(h => h.RecordSnapshotAsync(
-                It.IsAny<string>(),
-                It.IsAny<IReadOnlyList<Issue>>(),
-                It.IsAny<string>(),
-                It.IsAny<string?>(),
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-
-        _service = new ProjectFleeceService(_mockQueue.Object, _mockHistoryService.Object, new Mock<global::Fleece.Core.Services.Interfaces.IIssueLayoutService>().Object, _mockLogger.Object);
+        _service = new ProjectFleeceService(_mockQueue.Object, new Mock<global::Fleece.Core.Services.Interfaces.IIssueLayoutService>().Object, _mockLogger.Object);
     }
 
     [TearDown]
@@ -257,30 +245,6 @@ public class FleeceServiceRelationshipTests
         var retrieved = await _service.GetIssueAsync(_tempDir, child.Id);
         Assert.That(retrieved, Is.Not.Null);
         Assert.That(retrieved!.ParentIssues, Is.Empty);
-    }
-
-    [Test]
-    public async Task RemoveAllParentsAsync_RecordsHistorySnapshot()
-    {
-        // Arrange
-        var parent = await _service.CreateIssueAsync(_tempDir, "Parent", IssueType.Feature);
-        var child = await _service.CreateIssueAsync(_tempDir, "Child", IssueType.Task);
-        await _service.AddParentAsync(_tempDir, child.Id, parent.Id);
-        _mockHistoryService.Invocations.Clear();
-
-        // Act
-        await _service.RemoveAllParentsAsync(_tempDir, child.Id);
-
-        // Assert
-        _mockHistoryService.Verify(
-            h => h.RecordSnapshotAsync(
-                _tempDir,
-                It.IsAny<IReadOnlyList<Issue>>(),
-                "RemoveAllParents",
-                child.Id,
-                It.IsAny<string?>(),
-                It.IsAny<CancellationToken>()),
-            Times.Once);
     }
 
     #endregion

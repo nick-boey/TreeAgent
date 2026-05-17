@@ -124,6 +124,7 @@ public class BreadcrumbServiceTests
             Title = "Fix the breadcrumbs",
             Type = IssueType.Bug,
             Status = IssueStatus.Progress,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 
@@ -168,6 +169,7 @@ public class BreadcrumbServiceTests
             Title = "Fix breadcrumbs",
             Type = IssueType.Bug,
             Status = IssueStatus.Progress,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
 

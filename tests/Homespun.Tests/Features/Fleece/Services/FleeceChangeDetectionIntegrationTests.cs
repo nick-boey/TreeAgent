@@ -41,10 +41,8 @@ public class FleeceChangeDetectionIntegrationTests
 
         // Create a real ProjectFleeceService with actual disk operations
         var serializationQueueMock = new Mock<Homespun.Features.Fleece.Services.IIssueSerializationQueue>();
-        var historyServiceMock = new Mock<Homespun.Features.Fleece.Services.IIssueHistoryService>();
         _fleeceService = new ProjectFleeceService(
             serializationQueueMock.Object,
-            historyServiceMock.Object,
             new Mock<global::Fleece.Core.Services.Interfaces.IIssueLayoutService>().Object,
             NullLogger<ProjectFleeceService>.Instance);
 
@@ -65,7 +63,9 @@ public class FleeceChangeDetectionIntegrationTests
     }
 
     /// <summary>
-    /// Creates an issue with all LWW timestamps properly set for consistent merging behavior.
+    /// Creates a lean v3.1 Issue snapshot record. The per-field `*LastUpdate` /
+    /// `*ModifiedBy` metadata is gone — field-level LWW is replayed from change
+    /// events, not stored on the snapshot.
     /// </summary>
     private static Issue CreateIssueWithTimestamps(string id, string title, IssueStatus status, IssueType type, DateTimeOffset timestamp)
     {
@@ -73,29 +73,33 @@ public class FleeceChangeDetectionIntegrationTests
         {
             Id = id,
             Title = title,
-            TitleLastUpdate = timestamp,
-            TitleModifiedBy = "test",
             Status = status,
-            StatusLastUpdate = timestamp,
-            StatusModifiedBy = "test",
             Type = type,
-            TypeLastUpdate = timestamp,
-            TypeModifiedBy = "test",
             Priority = 3,
-            PriorityLastUpdate = timestamp,
-            PriorityModifiedBy = "test",
             LastUpdate = timestamp,
             CreatedAt = timestamp,
             CreatedBy = "test"
         };
     }
 
+    private static readonly System.Text.Json.JsonSerializerOptions IssueSnapshotOptions = new()
+    {
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
+
     /// <summary>
-    /// Saves issues to disk using FleeceFileHelper.
+    /// Writes the lean v3.1 snapshot directly to `.fleece/issues.jsonl`. An empty
+    /// event log (`.fleece/changes/`) is a valid starting state — replay over no
+    /// events is a no-op.
     /// </summary>
     private static async Task SaveIssuesAsync(string repoPath, List<Issue> issues)
     {
-        await FleeceFileHelper.SaveIssuesAsync(repoPath, issues);
+        var fleeceDir = Path.Combine(repoPath, ".fleece");
+        Directory.CreateDirectory(fleeceDir);
+        var snapshotPath = Path.Combine(fleeceDir, "issues.jsonl");
+        var lines = issues.Select(i => System.Text.Json.JsonSerializer.Serialize(i, IssueSnapshotOptions));
+        await File.WriteAllLinesAsync(snapshotPath, lines);
     }
 
     /// <summary>

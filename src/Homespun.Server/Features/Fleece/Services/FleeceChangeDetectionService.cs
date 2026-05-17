@@ -1,5 +1,4 @@
 using Fleece.Core.Models;
-using Fleece.Core.Services;
 using Homespun.Features.ClaudeCode.Services;
 using Homespun.Features.Git;
 using Homespun.Features.Projects;
@@ -22,8 +21,11 @@ public interface IFleeceChangeDetectionService
 }
 
 /// <summary>
-/// Implementation of change detection service.
-/// Uses in-memory comparison via Fleece.Core v2's IFleeceService instead of IDiffService.
+/// Implementation of change detection service. Reads main- and clone-side issues
+/// through <see cref="IProjectFleeceService.GetAllIssuesFromPathAsync"/> (which under
+/// the Fleece 3.1 event-sourced storage replays the snapshot + all change files),
+/// then diffs field-by-field. Field-level conflict resolution happens at apply time
+/// via `git merge` of the agent branch — no manual <c>IssueMerger</c> step is needed.
 /// </summary>
 public class FleeceChangeDetectionService : IFleeceChangeDetectionService
 {
@@ -32,7 +34,6 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
     private readonly IClaudeSessionService _sessionService;
     private readonly IProjectFleeceService _fleeceService;
     private readonly ILogger<FleeceChangeDetectionService> _logger;
-    private readonly IssueMerger _issueMerger = new();
 
     public FleeceChangeDetectionService(
         IProjectService projectService,
@@ -53,21 +54,18 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
         string sessionId,
         CancellationToken cancellationToken = default)
     {
-        // Get project
         var project = await _projectService.GetByIdAsync(projectId);
         if (project == null)
         {
             throw new ArgumentException($"Project {projectId} not found");
         }
 
-        // Get session to find the clone path
         var session = _sessionService.GetSession(sessionId);
         if (session == null)
         {
             throw new ArgumentException($"Session {sessionId} not found");
         }
 
-        // Validate session is linked to an issue
         if (string.IsNullOrEmpty(session.EntityId))
         {
             throw new InvalidOperationException("Session is not linked to an issue");
@@ -83,9 +81,8 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
             "Detecting changes for session {SessionId}: main branch path={MainPath}, clone path={ClonePath}",
             sessionId, project.LocalPath, clonePath);
 
-        // Load issues from both paths using Fleece.Core v2
-        var mainIssues = await FleeceFileHelper.LoadIssuesAsync(project.LocalPath, cancellationToken);
-        var cloneIssues = await FleeceFileHelper.LoadIssuesAsync(clonePath, cancellationToken);
+        var mainIssues = await _fleeceService.GetAllIssuesFromPathAsync(project.LocalPath, cancellationToken);
+        var cloneIssues = await _fleeceService.GetAllIssuesFromPathAsync(clonePath, cancellationToken);
 
         var mainIssueMap = mainIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
         var cloneIssueMap = cloneIssues.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
@@ -95,7 +92,7 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
 
         var changes = new List<IssueChangeDto>();
 
-        // Created: Issues only in clone
+        // Created: in clone only.
         foreach (var cloneIssue in cloneIssues)
         {
             if (!mainIssueMap.ContainsKey(cloneIssue.Id))
@@ -111,31 +108,27 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
             }
         }
 
-        // Modified: Issues in both - apply IssueMerger for LWW field-level merging
+        // Updated: in both; field-level diff against main.
         foreach (var cloneIssue in cloneIssues)
         {
             if (!mainIssueMap.TryGetValue(cloneIssue.Id, out var mainIssue))
                 continue;
 
-            var mergeResult = _issueMerger.Merge(mainIssue, cloneIssue);
-            var mergedIssue = mergeResult.MergedIssue;
-
-            var fieldChanges = GetFieldChanges(mainIssue, mergedIssue);
+            var fieldChanges = GetFieldChanges(mainIssue, cloneIssue);
             if (fieldChanges.Any())
             {
                 changes.Add(new IssueChangeDto
                 {
-                    IssueId = mergedIssue.Id,
+                    IssueId = cloneIssue.Id,
                     ChangeType = ChangeType.Updated,
-                    Title = mergedIssue.Title,
+                    Title = cloneIssue.Title,
                     OriginalIssue = mainIssue.ToDto(),
-                    ModifiedIssue = mergedIssue.ToDto(),
+                    ModifiedIssue = cloneIssue.ToDto(),
                     FieldChanges = fieldChanges
                 });
             }
 
-            // Check for deletion (status changed to Deleted)
-            if (mergedIssue.Status == IssueStatus.Deleted && mainIssue.Status != IssueStatus.Deleted)
+            if (cloneIssue.Status == IssueStatus.Deleted && mainIssue.Status != IssueStatus.Deleted)
             {
                 changes.Add(new IssueChangeDto
                 {
@@ -148,7 +141,6 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
             }
         }
 
-        // Issues only in main but not in clone
         foreach (var mainIssue in mainIssues)
         {
             if (!cloneIssueMap.ContainsKey(mainIssue.Id))
@@ -166,129 +158,41 @@ public class FleeceChangeDetectionService : IFleeceChangeDetectionService
     {
         var changes = new List<FieldChangeDto>();
 
-        // Check each field for changes
         if (original.Title != modified.Title)
-        {
-            changes.Add(new FieldChangeDto
-            {
-                FieldName = "Title",
-                OldValue = original.Title,
-                NewValue = modified.Title
-            });
-        }
+            changes.Add(new FieldChangeDto { FieldName = "Title", OldValue = original.Title, NewValue = modified.Title });
 
         if (original.Description != modified.Description)
-        {
-            changes.Add(new FieldChangeDto
-            {
-                FieldName = "Description",
-                OldValue = original.Description,
-                NewValue = modified.Description
-            });
-        }
+            changes.Add(new FieldChangeDto { FieldName = "Description", OldValue = original.Description, NewValue = modified.Description });
 
         if (original.Status != modified.Status)
-        {
-            changes.Add(new FieldChangeDto
-            {
-                FieldName = "Status",
-                OldValue = original.Status.ToString(),
-                NewValue = modified.Status.ToString()
-            });
-        }
+            changes.Add(new FieldChangeDto { FieldName = "Status", OldValue = original.Status.ToString(), NewValue = modified.Status.ToString() });
 
         if (original.Type != modified.Type)
-        {
-            changes.Add(new FieldChangeDto
-            {
-                FieldName = "Type",
-                OldValue = original.Type.ToString(),
-                NewValue = modified.Type.ToString()
-            });
-        }
+            changes.Add(new FieldChangeDto { FieldName = "Type", OldValue = original.Type.ToString(), NewValue = modified.Type.ToString() });
 
         if (original.Priority != modified.Priority)
-        {
-            changes.Add(new FieldChangeDto
-            {
-                FieldName = "Priority",
-                OldValue = original.Priority?.ToString(),
-                NewValue = modified.Priority?.ToString()
-            });
-        }
+            changes.Add(new FieldChangeDto { FieldName = "Priority", OldValue = original.Priority?.ToString(), NewValue = modified.Priority?.ToString() });
 
         if (!AreIntListsEqual(original.LinkedPRs, modified.LinkedPRs))
-        {
-            changes.Add(new FieldChangeDto
-            {
-                FieldName = "LinkedPRs",
-                OldValue = string.Join(", ", original.LinkedPRs),
-                NewValue = string.Join(", ", modified.LinkedPRs)
-            });
-        }
+            changes.Add(new FieldChangeDto { FieldName = "LinkedPRs", OldValue = string.Join(", ", original.LinkedPRs), NewValue = string.Join(", ", modified.LinkedPRs) });
 
         if (original.WorkingBranchId != modified.WorkingBranchId)
-        {
-            changes.Add(new FieldChangeDto
-            {
-                FieldName = "WorkingBranchId",
-                OldValue = original.WorkingBranchId,
-                NewValue = modified.WorkingBranchId
-            });
-        }
+            changes.Add(new FieldChangeDto { FieldName = "WorkingBranchId", OldValue = original.WorkingBranchId, NewValue = modified.WorkingBranchId });
 
         if (original.ExecutionMode != modified.ExecutionMode)
-        {
-            changes.Add(new FieldChangeDto
-            {
-                FieldName = "ExecutionMode",
-                OldValue = original.ExecutionMode.ToString(),
-                NewValue = modified.ExecutionMode.ToString()
-            });
-        }
+            changes.Add(new FieldChangeDto { FieldName = "ExecutionMode", OldValue = original.ExecutionMode.ToString(), NewValue = modified.ExecutionMode.ToString() });
 
         if (original.AssignedTo != modified.AssignedTo)
-        {
-            changes.Add(new FieldChangeDto
-            {
-                FieldName = "AssignedTo",
-                OldValue = original.AssignedTo,
-                NewValue = modified.AssignedTo
-            });
-        }
+            changes.Add(new FieldChangeDto { FieldName = "AssignedTo", OldValue = original.AssignedTo, NewValue = modified.AssignedTo });
 
-        // Check parent issues changes
         if (!AreParentIssuesEqual(original.ParentIssues, modified.ParentIssues))
-        {
-            changes.Add(new FieldChangeDto
-            {
-                FieldName = "ParentIssues",
-                OldValue = SerializeParentIssues(original.ParentIssues),
-                NewValue = SerializeParentIssues(modified.ParentIssues)
-            });
-        }
+            changes.Add(new FieldChangeDto { FieldName = "ParentIssues", OldValue = SerializeParentIssues(original.ParentIssues), NewValue = SerializeParentIssues(modified.ParentIssues) });
 
-        // Check linked issues changes
         if (!AreStringListsEqual(original.LinkedIssues, modified.LinkedIssues))
-        {
-            changes.Add(new FieldChangeDto
-            {
-                FieldName = "LinkedIssues",
-                OldValue = string.Join(", ", original.LinkedIssues),
-                NewValue = string.Join(", ", modified.LinkedIssues)
-            });
-        }
+            changes.Add(new FieldChangeDto { FieldName = "LinkedIssues", OldValue = string.Join(", ", original.LinkedIssues), NewValue = string.Join(", ", modified.LinkedIssues) });
 
-        // Check tags changes
         if (!AreStringListsEqual(original.Tags, modified.Tags))
-        {
-            changes.Add(new FieldChangeDto
-            {
-                FieldName = "Tags",
-                OldValue = string.Join(", ", original.Tags),
-                NewValue = string.Join(", ", modified.Tags)
-            });
-        }
+            changes.Add(new FieldChangeDto { FieldName = "Tags", OldValue = string.Join(", ", original.Tags), NewValue = string.Join(", ", modified.Tags) });
 
         return changes;
     }

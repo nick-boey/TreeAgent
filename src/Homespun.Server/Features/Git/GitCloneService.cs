@@ -129,6 +129,15 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             // Don't fail the clone creation
         }
 
+        // Wire the fleece pre-commit hook + gitignore entries inside the clone so the
+        // agent's commits stage .fleece/changes/ correctly and the per-clone
+        // .fleece/.active-change / .replay-cache files don't leak into git.
+        var installResult = await commandRunner.RunAsync("fleece", "install", workdirPath);
+        if (installResult is null || !installResult.Success)
+        {
+            logger.LogWarning("`fleece install` failed in clone {ClonePath}: {Error}", workdirPath, installResult?.Error);
+        }
+
         logger.LogInformation("Created clone at {ClonePath} for branch {BranchName}", clonePath, branchName);
 
         // Return the workdir path (the actual git repository) for Docker mounting

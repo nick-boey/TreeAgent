@@ -22,7 +22,7 @@
       "parentIssues": [
         {
           "parentIssue": "R",
-          "sortOrder": "a"
+          "lexOrder": "a"
         }
       ]
     },
@@ -37,7 +37,7 @@
       "parentIssues": [
         {
           "parentIssue": "S0",
-          "sortOrder": "a"
+          "lexOrder": "a"
         }
       ]
     },
@@ -52,7 +52,7 @@
       "parentIssues": [
         {
           "parentIssue": "S0",
-          "sortOrder": "b"
+          "lexOrder": "b"
         }
       ]
     },
@@ -67,7 +67,7 @@
       "parentIssues": [
         {
           "parentIssue": "S0",
-          "sortOrder": "c"
+          "lexOrder": "c"
         }
       ]
     },
@@ -82,7 +82,7 @@
       "parentIssues": [
         {
           "parentIssue": "S0",
-          "sortOrder": "d"
+          "lexOrder": "d"
         }
       ]
     },
@@ -97,7 +97,7 @@
       "parentIssues": [
         {
           "parentIssue": "R",
-          "sortOrder": "b"
+          "lexOrder": "b"
         }
       ]
     },
@@ -112,7 +112,7 @@
       "parentIssues": [
         {
           "parentIssue": "S1",
-          "sortOrder": "a"
+          "lexOrder": "a"
         }
       ]
     },
@@ -127,7 +127,7 @@
       "parentIssues": [
         {
           "parentIssue": "S1",
-          "sortOrder": "b"
+          "lexOrder": "b"
         }
       ]
     },
@@ -142,7 +142,7 @@
       "parentIssues": [
         {
           "parentIssue": "S1",
-          "sortOrder": "c"
+          "lexOrder": "c"
         }
       ]
     },
@@ -157,7 +157,7 @@
       "parentIssues": [
         {
           "parentIssue": "S1",
-          "sortOrder": "d"
+          "lexOrder": "d"
         }
       ]
     },
@@ -172,7 +172,7 @@
       "parentIssues": [
         {
           "parentIssue": "R",
-          "sortOrder": "c"
+          "lexOrder": "c"
         }
       ]
     },
@@ -187,7 +187,7 @@
       "parentIssues": [
         {
           "parentIssue": "S2",
-          "sortOrder": "a"
+          "lexOrder": "a"
         }
       ]
     },
@@ -202,7 +202,7 @@
       "parentIssues": [
         {
           "parentIssue": "S2",
-          "sortOrder": "b"
+          "lexOrder": "b"
         }
       ]
     },
@@ -217,7 +217,7 @@
       "parentIssues": [
         {
           "parentIssue": "S2",
-          "sortOrder": "c"
+          "lexOrder": "c"
         }
       ]
     },
@@ -232,7 +232,7 @@
       "parentIssues": [
         {
           "parentIssue": "S2",
-          "sortOrder": "d"
+          "lexOrder": "d"
         }
       ]
     }

@@ -401,6 +401,7 @@ public class ContainerQueryServiceTests
             Title = title,
             Status = IssueStatus.Open,
             Type = IssueType.Task,
+            CreatedAt = DateTimeOffset.UtcNow,
             LastUpdate = DateTimeOffset.UtcNow
         };
     }

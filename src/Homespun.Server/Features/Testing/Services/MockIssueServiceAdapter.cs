@@ -119,12 +119,6 @@ internal class MockIssueServiceAdapter : IFleeceService
     public Task<DependencyValidationResult> ValidateDependenciesAsync(CancellationToken cancellationToken = default)
         => _innerService.ValidateDependenciesAsync(cancellationToken);
 
-    public Task<MigrationResult> MigrateAsync(CancellationToken cancellationToken = default)
-        => _innerService.MigrateAsync(cancellationToken);
-
-    public Task<bool> IsMigrationNeededAsync(CancellationToken cancellationToken = default)
-        => _innerService.IsMigrationNeededAsync(cancellationToken);
-
     public Task<int> MergeAsync(bool dryRun = false, CancellationToken cancellationToken = default)
         => _innerService.MergeAsync(dryRun, cancellationToken);
 

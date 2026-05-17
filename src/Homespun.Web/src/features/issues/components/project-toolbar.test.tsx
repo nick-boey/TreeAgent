@@ -5,23 +5,6 @@ import React from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ProjectToolbar } from './project-toolbar'
 
-// Mock the useIssueHistory hook
-vi.mock('../hooks/use-issue-history', () => ({
-  useIssueHistory: vi.fn(() => ({
-    canUndo: false,
-    canRedo: false,
-    undoDescription: null,
-    redoDescription: null,
-    undo: vi.fn(),
-    redo: vi.fn(),
-    isUndoing: false,
-    isRedoing: false,
-    isLoading: false,
-  })),
-}))
-
-import { useIssueHistory } from '../hooks/use-issue-history'
-
 function createWrapper() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -32,7 +15,6 @@ function createWrapper() {
 }
 
 const defaultProps = {
-  projectId: 'test-project',
   selectedIssueId: null as string | null,
   onCreateAbove: vi.fn(),
   onCreateBelow: vi.fn(),
@@ -68,21 +50,6 @@ function renderToolbar(props = {}) {
 describe('ProjectToolbar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(useIssueHistory).mockReturnValue({
-      canUndo: false,
-      canRedo: false,
-      undoDescription: null,
-      redoDescription: null,
-      undo: vi.fn(),
-      redo: vi.fn(),
-      isUndoing: false,
-      isRedoing: false,
-      isLoading: false,
-      historyState: undefined,
-      isError: false,
-      error: null,
-      refetch: vi.fn(),
-    })
   })
 
   describe('Creation buttons', () => {
@@ -247,150 +214,6 @@ describe('ProjectToolbar', () => {
 
       await user.click(screen.getByTestId('toolbar-move-down'))
       expect(onMoveDown).toHaveBeenCalled()
-    })
-  })
-
-  describe('Undo/Redo buttons', () => {
-    it('renders undo button', () => {
-      renderToolbar()
-      expect(screen.getByRole('button', { name: /undo/i })).toBeInTheDocument()
-    })
-
-    it('renders redo button', () => {
-      renderToolbar()
-      expect(screen.getByRole('button', { name: /redo/i })).toBeInTheDocument()
-    })
-
-    it('disables undo button when canUndo is false', () => {
-      vi.mocked(useIssueHistory).mockReturnValue({
-        canUndo: false,
-        canRedo: false,
-        undoDescription: null,
-        redoDescription: null,
-        undo: vi.fn(),
-        redo: vi.fn(),
-        isUndoing: false,
-        isRedoing: false,
-        isLoading: false,
-        historyState: undefined,
-        isError: false,
-        error: null,
-        refetch: vi.fn(),
-      })
-      renderToolbar()
-
-      expect(screen.getByRole('button', { name: /undo/i })).toBeDisabled()
-    })
-
-    it('enables undo button when canUndo is true', () => {
-      vi.mocked(useIssueHistory).mockReturnValue({
-        canUndo: true,
-        canRedo: false,
-        undoDescription: 'Create issue',
-        redoDescription: null,
-        undo: vi.fn(),
-        redo: vi.fn(),
-        isUndoing: false,
-        isRedoing: false,
-        isLoading: false,
-        historyState: undefined,
-        isError: false,
-        error: null,
-        refetch: vi.fn(),
-      })
-      renderToolbar()
-
-      expect(screen.getByRole('button', { name: /undo/i })).not.toBeDisabled()
-    })
-
-    it('disables redo button when canRedo is false', () => {
-      vi.mocked(useIssueHistory).mockReturnValue({
-        canUndo: false,
-        canRedo: false,
-        undoDescription: null,
-        redoDescription: null,
-        undo: vi.fn(),
-        redo: vi.fn(),
-        isUndoing: false,
-        isRedoing: false,
-        isLoading: false,
-        historyState: undefined,
-        isError: false,
-        error: null,
-        refetch: vi.fn(),
-      })
-      renderToolbar()
-
-      expect(screen.getByRole('button', { name: /redo/i })).toBeDisabled()
-    })
-
-    it('enables redo button when canRedo is true', () => {
-      vi.mocked(useIssueHistory).mockReturnValue({
-        canUndo: false,
-        canRedo: true,
-        undoDescription: null,
-        redoDescription: 'Create issue',
-        undo: vi.fn(),
-        redo: vi.fn(),
-        isUndoing: false,
-        isRedoing: false,
-        isLoading: false,
-        historyState: undefined,
-        isError: false,
-        error: null,
-        refetch: vi.fn(),
-      })
-      renderToolbar()
-
-      expect(screen.getByRole('button', { name: /redo/i })).not.toBeDisabled()
-    })
-
-    it('calls undo when undo button is clicked', async () => {
-      const user = userEvent.setup()
-      const undo = vi.fn()
-      vi.mocked(useIssueHistory).mockReturnValue({
-        canUndo: true,
-        canRedo: false,
-        undoDescription: 'Create issue',
-        redoDescription: null,
-        undo,
-        redo: vi.fn(),
-        isUndoing: false,
-        isRedoing: false,
-        isLoading: false,
-        historyState: undefined,
-        isError: false,
-        error: null,
-        refetch: vi.fn(),
-      })
-      renderToolbar()
-
-      await user.click(screen.getByRole('button', { name: /undo/i }))
-      expect(undo).toHaveBeenCalled()
-    })
-
-    it('calls redo when redo button is clicked', async () => {
-      const user = userEvent.setup()
-      const redo = vi.fn()
-      vi.mocked(useIssueHistory).mockReturnValue({
-        canUndo: false,
-        canRedo: true,
-        undoDescription: null,
-        redoDescription: 'Create issue',
-        undo: vi.fn(),
-        redo,
-        isUndoing: false,
-        isRedoing: false,
-        isLoading: false,
-        historyState: undefined,
-        isError: false,
-        error: null,
-        refetch: vi.fn(),
-      })
-      renderToolbar()
-
-      await user.click(screen.getByRole('button', { name: /redo/i }))
-      expect(redo).toHaveBeenCalled()
     })
   })
 

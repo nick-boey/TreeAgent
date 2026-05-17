@@ -27,8 +27,9 @@ public sealed class FleeceIssueSeeder
     }
 
     /// <summary>
-    /// Seeds issues to a project's .fleece directory by writing them as JSONL.
-    /// Creates the .fleece directory if it doesn't exist.
+    /// Seeds issues as the lean v3.1 snapshot at `{projectPath}/.fleece/issues.jsonl`.
+    /// A fresh repo with no active change file is a valid v3.1 starting state — replay
+    /// over an empty event log is a no-op, so no `.fleece/changes/` files are needed.
     /// </summary>
     /// <param name="projectPath">Path to the project root directory.</param>
     /// <param name="issues">The issues to seed.</param>
@@ -41,15 +42,11 @@ public sealed class FleeceIssueSeeder
             return;
         }
 
-        // Create .fleece directory
         var fleeceDir = Path.Combine(projectPath, ".fleece");
         Directory.CreateDirectory(fleeceDir);
 
-        // Generate a short hash for the filename (matching Fleece.Core convention)
-        var hash = Guid.NewGuid().ToString("N")[..6];
-        var issuesFilePath = Path.Combine(fleeceDir, $"issues_{hash}.jsonl");
+        var issuesFilePath = Path.Combine(fleeceDir, "issues.jsonl");
 
-        // Write issues as JSONL (one JSON object per line)
         await using var writer = new StreamWriter(issuesFilePath, false);
         foreach (var issue in issues)
         {

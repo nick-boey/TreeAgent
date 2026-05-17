@@ -22,7 +22,7 @@
       "parentIssues": [
         {
           "parentIssue": "P",
-          "sortOrder": "a"
+          "lexOrder": "a"
         }
       ]
     },
@@ -37,7 +37,7 @@
       "parentIssues": [
         {
           "parentIssue": "P",
-          "sortOrder": "b"
+          "lexOrder": "b"
         }
       ]
     },
@@ -52,7 +52,7 @@
       "parentIssues": [
         {
           "parentIssue": "P",
-          "sortOrder": "c"
+          "lexOrder": "c"
         }
       ]
     },
@@ -67,7 +67,7 @@
       "parentIssues": [
         {
           "parentIssue": "P",
-          "sortOrder": "d"
+          "lexOrder": "d"
         }
       ]
     }

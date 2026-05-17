@@ -64,10 +64,6 @@ public static class MockServiceExtensions
         services.AddSingleton<IIssueSerializationQueue>(sp => sp.GetRequiredService<IssueSerializationQueueService>());
         services.AddHostedService(sp => sp.GetRequiredService<IssueSerializationQueueService>());
 
-        // Issue history service (for undo/redo - uses real file-based implementation)
-        services.AddOptions<FleeceHistoryOptions>();
-        services.AddSingleton<IIssueHistoryService, IssueHistoryService>();
-
         // Register Fleece.Core layout services (required by ProjectFleeceService)
         services.AddSingleton<global::Fleece.Core.Services.Interfaces.IGraphLayoutService,
             global::Fleece.Core.Services.GraphLayout.GraphLayoutService>();
@@ -119,7 +115,6 @@ public static class MockServiceExtensions
         services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
         services.AddSingleton<IFleeceIssuesSyncService, MockFleeceIssuesSyncService>();
         services.AddScoped<IIssueBranchResolverService, IssueBranchResolverService>();
-        // IIssueHistoryService already registered above with FleeceService
         services.AddScoped<IFleeceIssueDiffService, FleeceIssueDiffService>();
         services.AddScoped<IFleeceChangeDetectionService, FleeceChangeDetectionService>();
         services.AddScoped<IFleeceConflictDetectionService, FleeceConflictDetectionService>();
