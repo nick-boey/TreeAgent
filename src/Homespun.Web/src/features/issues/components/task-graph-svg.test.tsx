@@ -3,7 +3,6 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import type React from 'react'
 import { render } from '@testing-library/react'
 import {
   TaskGraphNodeSvg,
@@ -335,19 +334,6 @@ describe('TaskGraphNodeSvg', () => {
   })
 })
 
-function makeRowRefs(
-  entries: Array<{ id: string; offsetTop: number; offsetHeight?: number }>
-): React.RefObject<Map<string, HTMLDivElement>> {
-  const map = new Map<string, HTMLDivElement>()
-  for (const { id, offsetTop, offsetHeight = ROW_HEIGHT } of entries) {
-    const el = document.createElement('div')
-    Object.defineProperty(el, 'offsetTop', { get: () => offsetTop, configurable: true })
-    Object.defineProperty(el, 'offsetHeight', { get: () => offsetHeight, configurable: true })
-    map.set(id, el)
-  }
-  return { current: map } as React.RefObject<Map<string, HTMLDivElement>>
-}
-
 describe('TaskGraphEdges', () => {
   const R = NODE_RADIUS + 2
 
@@ -378,6 +364,7 @@ describe('TaskGraphEdges', () => {
         edges={[]}
         renderLines={[baseLine('a', 0)]}
         expandedIds={new Set()}
+        expandedPanelHeights={new Map()}
         maxLanes={1}
       />
     )
@@ -398,7 +385,13 @@ describe('TaskGraphEdges', () => {
       targetAttach: 'Top',
     }
     const { container } = render(
-      <TaskGraphEdges edges={[edge]} renderLines={lines} expandedIds={new Set()} maxLanes={1} />
+      <TaskGraphEdges
+        edges={[edge]}
+        renderLines={lines}
+        expandedIds={new Set()}
+        expandedPanelHeights={new Map()}
+        maxLanes={1}
+      />
     )
 
     const paths = container.querySelectorAll('path')
@@ -428,7 +421,13 @@ describe('TaskGraphEdges', () => {
       targetAttach: 'Left',
     }
     const { container } = render(
-      <TaskGraphEdges edges={[edge]} renderLines={lines} expandedIds={new Set()} maxLanes={2} />
+      <TaskGraphEdges
+        edges={[edge]}
+        renderLines={lines}
+        expandedIds={new Set()}
+        expandedPanelHeights={new Map()}
+        maxLanes={2}
+      />
     )
 
     const paths = container.querySelectorAll('path')
@@ -462,7 +461,13 @@ describe('TaskGraphEdges', () => {
       targetAttach: 'Top',
     }
     const { container } = render(
-      <TaskGraphEdges edges={[edge]} renderLines={lines} expandedIds={new Set()} maxLanes={2} />
+      <TaskGraphEdges
+        edges={[edge]}
+        renderLines={lines}
+        expandedIds={new Set()}
+        expandedPanelHeights={new Map()}
+        maxLanes={2}
+      />
     )
 
     const paths = container.querySelectorAll('path')
@@ -494,7 +499,13 @@ describe('TaskGraphEdges', () => {
       targetAttach: 'Top',
     }
     const { container } = render(
-      <TaskGraphEdges edges={[edge]} renderLines={lines} expandedIds={new Set()} maxLanes={1} />
+      <TaskGraphEdges
+        edges={[edge]}
+        renderLines={lines}
+        expandedIds={new Set()}
+        expandedPanelHeights={new Map()}
+        maxLanes={1}
+      />
     )
 
     const path = container.querySelector('path')
@@ -502,44 +513,138 @@ describe('TaskGraphEdges', () => {
     expect(path).toHaveAttribute('stroke-width', String(LINE_STROKE_WIDTH))
   })
 
-  it('accounts for expanded rows when computing Y positions via rowRefs', () => {
-    const EXPANDED_HEIGHT = 500
-    const lines = [baseLine('a', 0), baseLine('b', 0)]
-    const rowRefs = makeRowRefs([
-      { id: 'a', offsetTop: 0, offsetHeight: ROW_HEIGHT + EXPANDED_HEIGHT },
-      { id: 'b', offsetTop: ROW_HEIGHT + EXPANDED_HEIGHT },
-    ])
-    const edge: TaskGraphEdge = {
-      from: 'a',
-      to: 'b',
-      kind: 'SeriesSibling',
-      startRow: 0,
-      startLane: 0,
-      endRow: 1,
-      endLane: 0,
-      sourceAttach: 'Bottom',
-      targetAttach: 'Top',
-    }
+  it('derives endpoint Y purely from row * ROW_HEIGHT + ROW_HEIGHT/2 when no panels expanded', () => {
+    const lines = [baseLine('a', 0), baseLine('b', 1), baseLine('c', 0), baseLine('d', 0)]
+    const edges: TaskGraphEdge[] = [
+      {
+        from: 'a',
+        to: 'b',
+        kind: 'SeriesSibling',
+        startRow: 0,
+        startLane: 0,
+        endRow: 1,
+        endLane: 1,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      },
+      {
+        from: 'c',
+        to: 'd',
+        kind: 'SeriesSibling',
+        startRow: 2,
+        startLane: 0,
+        endRow: 3,
+        endLane: 0,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      },
+    ]
     const { container } = render(
       <TaskGraphEdges
-        edges={[edge]}
+        edges={edges}
         renderLines={lines}
-        expandedIds={new Set(['a'])}
-        maxLanes={1}
-        rowRefs={rowRefs}
+        expandedIds={new Set()}
+        expandedPanelHeights={new Map()}
+        maxLanes={2}
       />
     )
 
-    const paths = container.querySelectorAll('path')
-    expect(paths).toHaveLength(1)
+    const paths = Array.from(container.querySelectorAll('path'))
+    expect(paths).toHaveLength(2)
+
+    // First edge: row 0 → row 1, different lanes (arc form)
+    const sx0 = getLaneCenterX(0)
+    const ex0 = getLaneCenterX(1)
+    const sy0 = ROW_HEIGHT / 2 + R
+    const ey0 = ROW_HEIGHT + ROW_HEIGHT / 2 - R
+    expect(paths[0].getAttribute('d')).toBe(
+      `M ${sx0} ${sy0} L ${sx0} ${ey0 - EDGE_CORNER_RADIUS} Q ${sx0} ${ey0} ${ex0} ${ey0}`
+    )
+
+    // Second edge: row 2 → row 3, same lane (plain line)
+    const cx = getLaneCenterX(0)
+    const sy1 = 2 * ROW_HEIGHT + ROW_HEIGHT / 2 + R
+    const ey1 = 3 * ROW_HEIGHT + ROW_HEIGHT / 2 - R
+    expect(paths[1].getAttribute('d')).toBe(`M ${cx} ${sy1} L ${cx} ${ey1}`)
+  })
+
+  it('offsets endpoint Y by cumulative expanded-panel height for rows below the expansion', () => {
+    const PANEL_HEIGHT = 120
+    // Five rows: a, b, c, d, e — c (index 2) is expanded with a 120px panel.
+    const lines = [
+      baseLine('a', 0),
+      baseLine('b', 0),
+      baseLine('c', 0),
+      baseLine('d', 0),
+      baseLine('e', 0),
+    ]
+    const edges: TaskGraphEdge[] = [
+      // Above the expansion: rows 0→1, should NOT be offset.
+      {
+        from: 'a',
+        to: 'b',
+        kind: 'SeriesSibling',
+        startRow: 0,
+        startLane: 0,
+        endRow: 1,
+        endLane: 0,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      },
+      // Crossing the expansion: row 2 (start) → row 3 (end), end is offset.
+      {
+        from: 'c',
+        to: 'd',
+        kind: 'SeriesSibling',
+        startRow: 2,
+        startLane: 0,
+        endRow: 3,
+        endLane: 0,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      },
+      // Below the expansion: rows 3→4, both offset by PANEL_HEIGHT.
+      {
+        from: 'd',
+        to: 'e',
+        kind: 'SeriesSibling',
+        startRow: 3,
+        startLane: 0,
+        endRow: 4,
+        endLane: 0,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      },
+    ]
+    const { container } = render(
+      <TaskGraphEdges
+        edges={edges}
+        renderLines={lines}
+        expandedIds={new Set(['c'])}
+        expandedPanelHeights={new Map([['c', PANEL_HEIGHT]])}
+        maxLanes={1}
+      />
+    )
+
+    const paths = Array.from(container.querySelectorAll('path'))
+    expect(paths).toHaveLength(3)
 
     const cx = getLaneCenterX(0)
-    // row a: offsetTop=0, Y = 0 + ROW_HEIGHT/2
-    const row0CY = ROW_HEIGHT / 2
-    // row b: offsetTop=ROW_HEIGHT+EXPANDED_HEIGHT, Y = that + ROW_HEIGHT/2
-    const row1CY = ROW_HEIGHT + EXPANDED_HEIGHT + ROW_HEIGHT / 2
-    const d = paths[0].getAttribute('d')
-    expect(d).toBe(`M ${cx} ${row0CY + R} L ${cx} ${row1CY - R}`)
+    // Above the expansion: unchanged.
+    const sy0 = 0 * ROW_HEIGHT + ROW_HEIGHT / 2 + R
+    const ey0 = 1 * ROW_HEIGHT + ROW_HEIGHT / 2 - R
+    expect(paths[0].getAttribute('d')).toBe(`M ${cx} ${sy0} L ${cx} ${ey0}`)
+
+    // Crossing the expansion: start NOT offset (panel is below row 2's anchor),
+    // end IS offset.
+    const sy1 = 2 * ROW_HEIGHT + ROW_HEIGHT / 2 + R
+    const ey1 = 3 * ROW_HEIGHT + ROW_HEIGHT / 2 + PANEL_HEIGHT - R
+    expect(paths[1].getAttribute('d')).toBe(`M ${cx} ${sy1} L ${cx} ${ey1}`)
+
+    // Both endpoints below the expansion: both offset.
+    const sy2 = 3 * ROW_HEIGHT + ROW_HEIGHT / 2 + PANEL_HEIGHT + R
+    const ey2 = 4 * ROW_HEIGHT + ROW_HEIGHT / 2 + PANEL_HEIGHT - R
+    expect(paths[2].getAttribute('d')).toBe(`M ${cx} ${sy2} L ${cx} ${ey2}`)
   })
 })
 

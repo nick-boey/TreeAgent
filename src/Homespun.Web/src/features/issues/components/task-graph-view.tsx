@@ -138,6 +138,31 @@ export const TaskGraphView = memo(
     // Expanded rows state
     const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
+    // Measured heights of currently-mounted expanded panels. Keyed by issueId;
+    // height is the panel's `offsetHeight`. Seeded synchronously by each panel's
+    // `useLayoutEffect` and updated by its `ResizeObserver`. Drives edge
+    // cumulative-offset math in `TaskGraphEdges` — see
+    // `openspec/changes/redraw-graph-edges-reactively/design.md` decision 2.
+    const [expandedPanelHeights, setExpandedPanelHeights] = useState<Map<string, number>>(
+      () => new Map()
+    )
+
+    const handlePanelHeightChange = useCallback((issueId: string, height: number) => {
+      setExpandedPanelHeights((prev) => {
+        const current = prev.get(issueId)
+        if (height === 0) {
+          if (current === undefined) return prev
+          const next = new Map(prev)
+          next.delete(issueId)
+          return next
+        }
+        if (current === height) return prev
+        const next = new Map(prev)
+        next.set(issueId, height)
+        return next
+      })
+    }, [])
+
     // Edit mode state
     const [editMode, setEditMode] = useState<KeyboardEditMode>(KeyboardEditMode.Viewing)
     const [pendingNewIssue, setPendingNewIssue] = useState<PendingNewIssue | null>(null)
@@ -145,7 +170,7 @@ export const TaskGraphView = memo(
 
     // Refs for keyboard navigation
     const containerRef = useRef<HTMLDivElement>(null)
-    const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+    const scrollAnchorRefs = useRef<Map<string, HTMLDivElement>>(new Map())
 
     // Create issue mutation. The editor is closed synchronously in
     // handleSave / handleSaveAndEdit before the mutation is awaited, so no
@@ -292,7 +317,7 @@ export const TaskGraphView = memo(
         const firstLine = issueRenderLines.find((l) => l.issueId === issueId)
         if (firstLine) {
           const key = getRenderKey(firstLine)
-          rowRefs.current.get(key)?.scrollIntoView({ block: 'nearest' })
+          scrollAnchorRefs.current.get(key)?.scrollIntoView({ block: 'nearest' })
         }
       },
       [onSelectIssue, issueRenderLines]
@@ -586,7 +611,9 @@ export const TaskGraphView = memo(
             const nextIndex = Math.min(currentIndex + 1, navigableLines.length - 1)
             const nextLine = navigableLines[nextIndex]
             onSelectIssue?.(nextLine.issueId)
-            rowRefs.current.get(getRenderKey(nextLine))?.scrollIntoView({ block: 'nearest' })
+            scrollAnchorRefs.current
+              .get(getRenderKey(nextLine))
+              ?.scrollIntoView({ block: 'nearest' })
             break
           }
 
@@ -596,7 +623,9 @@ export const TaskGraphView = memo(
             const prevIndex = Math.max(currentIndex - 1, 0)
             const prevLine = navigableLines[prevIndex]
             onSelectIssue?.(prevLine.issueId)
-            rowRefs.current.get(getRenderKey(prevLine))?.scrollIntoView({ block: 'nearest' })
+            scrollAnchorRefs.current
+              .get(getRenderKey(prevLine))
+              ?.scrollIntoView({ block: 'nearest' })
             break
           }
 
@@ -608,7 +637,9 @@ export const TaskGraphView = memo(
               const parentLine = issueRenderLines.find((line) => line.issueId === parentId)
               if (parentLine) {
                 onSelectIssue?.(parentLine.issueId)
-                rowRefs.current.get(getRenderKey(parentLine))?.scrollIntoView({ block: 'nearest' })
+                scrollAnchorRefs.current
+                  .get(getRenderKey(parentLine))
+                  ?.scrollIntoView({ block: 'nearest' })
               }
             }
             break
@@ -622,7 +653,9 @@ export const TaskGraphView = memo(
             )
             if (childLine) {
               onSelectIssue?.(childLine.issueId)
-              rowRefs.current.get(getRenderKey(childLine))?.scrollIntoView({ block: 'nearest' })
+              scrollAnchorRefs.current
+                .get(getRenderKey(childLine))
+                ?.scrollIntoView({ block: 'nearest' })
             }
             break
           }
@@ -633,7 +666,9 @@ export const TaskGraphView = memo(
               const firstLine = navigableLines[0]
               if (firstLine) {
                 onSelectIssue?.(firstLine.issueId)
-                rowRefs.current.get(getRenderKey(firstLine))?.scrollIntoView({ block: 'nearest' })
+                scrollAnchorRefs.current
+                  .get(getRenderKey(firstLine))
+                  ?.scrollIntoView({ block: 'nearest' })
               }
             }
             break
@@ -644,7 +679,9 @@ export const TaskGraphView = memo(
             const lastLine = navigableLines[navigableLines.length - 1]
             if (lastLine) {
               onSelectIssue?.(lastLine.issueId)
-              rowRefs.current.get(getRenderKey(lastLine))?.scrollIntoView({ block: 'nearest' })
+              scrollAnchorRefs.current
+                .get(getRenderKey(lastLine))
+                ?.scrollIntoView({ block: 'nearest' })
             }
             break
           }
@@ -881,8 +918,8 @@ export const TaskGraphView = memo(
             edges={edges}
             renderLines={renderLines}
             expandedIds={expandedIds}
+            expandedPanelHeights={expandedPanelHeights}
             maxLanes={maxLanes}
-            rowRefs={rowRefs}
           />
           {renderLines.map((line, index) => {
             // Pending-issue synthetic node: render the inline editor at the
@@ -989,9 +1026,9 @@ export const TaskGraphView = memo(
                     <TaskGraphIssueRow
                       ref={(el) => {
                         if (el) {
-                          rowRefs.current.set(renderKey, el)
+                          scrollAnchorRefs.current.set(renderKey, el)
                         } else {
-                          rowRefs.current.delete(renderKey)
+                          scrollAnchorRefs.current.delete(renderKey)
                         }
                       }}
                       line={line}
@@ -1027,6 +1064,7 @@ export const TaskGraphView = memo(
                       onRunAgent={onRunAgent}
                       onOpenSession={onOpenSession}
                       onClose={() => toggleExpanded(line.issueId)}
+                      onHeightChange={handlePanelHeightChange}
                     />
                   )}
                 </div>

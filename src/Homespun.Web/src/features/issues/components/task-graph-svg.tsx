@@ -2,7 +2,7 @@
  * SVG rendering for task graph nodes and connectors.
  */
 
-import { memo, useMemo, useState, useLayoutEffect } from 'react'
+import { memo, useMemo } from 'react'
 import type React from 'react'
 import { ClaudeSessionStatus, IssueType } from '@/api'
 import type { IssueType as IssueTypeEnum } from '@/api'
@@ -250,74 +250,58 @@ function MultiParentIndicator({
 interface TaskGraphEdgesProps {
   edges: TaskGraphEdge[]
   renderLines: TaskGraphRenderLine[]
+  /** Set of issue ids whose `TaskGraphExpandedDetails` panel is currently mounted below them. */
   expandedIds: Set<string>
+  /** Measured `offsetHeight` of each currently-mounted expanded panel, keyed by issueId. */
+  expandedPanelHeights: Map<string, number>
   maxLanes: number
-  rowRefs?: React.RefObject<Map<string, HTMLDivElement>>
-}
-
-function getRenderLineId(line: TaskGraphRenderLine): string | null {
-  if (line.type === 'issue') return line.issueId
-  return null
 }
 
 /**
  * Renders all graph edges as a single absolutely-positioned SVG overlay spanning
  * the full height of the issue list. Each edge maps to one <path> element; geometry
- * is derived from the Fleece v3 edge kind and attach-point metadata.
+ * is derived purely from `(renderLines, edges, expandedPanelHeights)` — see
+ * `openspec/changes/redraw-graph-edges-reactively/specs/fleece-issue-tracking/spec.md`.
+ * No DOM `offsetTop` reads during render.
  */
 export const TaskGraphEdges = memo(function TaskGraphEdges({
   edges,
   renderLines,
   expandedIds,
+  expandedPanelHeights,
   maxLanes,
-  rowRefs,
 }: TaskGraphEdgesProps) {
-  // After each expand/collapse, re-render once the DOM has settled so offsetTop
-  // values reflect the new layout. The tick is updated in a layout effect so it
-  // runs synchronously after paint — no visual glitch during the expand animation.
-  const [tick, setTick] = useState(0)
-  useLayoutEffect(() => {
-    setTick((t) => t + 1)
-  }, [expandedIds])
-
-  const nodeMap = useMemo(() => {
-    const map = new Map<string, { x: number; y: number; color: string }>()
-    let fallbackY = 0
-    for (const line of renderLines) {
-      const id = getRenderLineId(line)
-      if (line.type === 'issue') {
-        const el = id ? rowRefs?.current?.get(id) : null
-        const y = el ? el.offsetTop + ROW_HEIGHT / 2 : fallbackY + ROW_HEIGHT / 2
-        map.set(line.issueId, {
-          x: getLaneCenterX(line.lane),
-          y,
-          color: getTypeColor(line.issueType),
-        })
-        fallbackY += ROW_HEIGHT
-      } else {
-        fallbackY += ROW_HEIGHT
+  // Cumulative pixel offset to add to every row Y at index >= k from expanded
+  // panels mounted above it. Computed as a prefix-sum so per-edge lookup is O(1).
+  const cumulativeOffsetByRow = useMemo(() => {
+    const offsets = new Array<number>(renderLines.length + 1)
+    offsets[0] = 0
+    let running = 0
+    for (let i = 0; i < renderLines.length; i++) {
+      offsets[i] = running
+      const line = renderLines[i]
+      if (line.type === 'issue' && expandedIds.has(line.issueId)) {
+        running += expandedPanelHeights.get(line.issueId) ?? 0
       }
     }
-    return map
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [renderLines, expandedIds, rowRefs, tick])
+    offsets[renderLines.length] = running
+    return offsets
+  }, [renderLines, expandedPanelHeights, expandedIds])
 
   const totalHeight = useMemo(() => {
-    if (rowRefs?.current && rowRefs.current.size > 0) {
-      let max = 0
-      for (const el of rowRefs.current.values()) {
-        const bottom = el.offsetTop + el.offsetHeight
-        if (bottom > max) max = bottom
-      }
-      return max > 0 ? max : renderLines.length * ROW_HEIGHT
+    let panelTotal = 0
+    for (const issueId of expandedIds) {
+      panelTotal += expandedPanelHeights.get(issueId) ?? 0
     }
-    return renderLines.length * ROW_HEIGHT
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [renderLines, expandedIds, rowRefs, tick])
+    return renderLines.length * ROW_HEIGHT + panelTotal
+  }, [renderLines, expandedPanelHeights, expandedIds])
 
   const width = calculateSvgWidth(maxLanes)
 
   if (edges.length === 0) return null
+
+  const rowY = (row: number): number =>
+    row * ROW_HEIGHT + ROW_HEIGHT / 2 + (cumulativeOffsetByRow[row] ?? 0)
 
   return (
     <svg
@@ -327,16 +311,25 @@ export const TaskGraphEdges = memo(function TaskGraphEdges({
       aria-hidden="true"
     >
       {edges.map((edge, i) => {
-        const from = nodeMap.get(edge.from)
-        const to = nodeMap.get(edge.to)
-        if (!from || !to) return null
+        const startLine = renderLines[edge.startRow]
+        const strokeColor =
+          startLine && startLine.type === 'issue' ? getTypeColor(startLine.issueType) : '#3b82f6'
+
+        const from = {
+          x: getLaneCenterX(edge.startLane),
+          y: rowY(edge.startRow),
+        }
+        const to = {
+          x: getLaneCenterX(edge.endLane),
+          y: rowY(edge.endRow),
+        }
 
         const d = buildEdgePath(edge, from, to)
         return (
           <path
             key={`edge-${i}`}
             d={d}
-            stroke={from.color}
+            stroke={strokeColor}
             strokeWidth={LINE_STROKE_WIDTH}
             fill="none"
           />
