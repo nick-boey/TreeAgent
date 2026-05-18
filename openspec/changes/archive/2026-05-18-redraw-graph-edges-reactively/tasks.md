@@ -62,4 +62,4 @@
 
 - [x] 9.1 Tag Fleece issue `pwJaLv` with the `openspec=redraw-graph-edges-reactively` tag: `fleece edit pwJaLv --tags "openspec=redraw-graph-edges-reactively"`.
 - [x] 9.2 Move issue `pwJaLv` to `progress` when implementation starts: `fleece edit pwJaLv -s progress`.
-- [ ] 9.3 Before opening the PR, set `pwJaLv` to `review` and link the PR number: `fleece edit pwJaLv -s review --linked-pr <pr-number>`. Commit `.fleece/` changes with the code or use `fleece commit --ci`.
+- [x] 9.3 Before opening the PR, set `pwJaLv` to `review` and link the PR number: `fleece edit pwJaLv -s review --linked-pr <pr-number>`. Commit `.fleece/` changes with the code or use `fleece commit --ci`.
