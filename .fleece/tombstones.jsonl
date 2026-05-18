@@ -1,0 +1,55 @@
+{"issueId":"1HVpUZ","originalTitle":"Fix starting agents on PRs and InProgress issues","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"1W3noZ","originalTitle":"Concurrent agent startup causes crash","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"2FE51k","originalTitle":"Object reference issue when editing status","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"2dRgx2","originalTitle":"Link issues to PRs","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"2qUIka","originalTitle":"Add Komodo install script","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"2rkMw7","originalTitle":"Add manual workflow execution on an issue","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"3QNR6Q","originalTitle":"Show command","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"4gByhM","originalTitle":"Workflow Foundation (MVP)","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"5E4eea","originalTitle":"Add activity log","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"5jyicM","originalTitle":"Some branch names are not being when AI generated","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"6qT36X","originalTitle":"Add controls for editing execution mode","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"8zKf9g","originalTitle":"Commit and push changes","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"9LWrbe","originalTitle":"Example issue 2","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"By06dl","originalTitle":"Example issue","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"CQQ0sc","originalTitle":"Documentation \u0026 Polish","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"Ct2Rbd","originalTitle":"Task graph loading waits for GitHub PRs to load","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"FVQEfE","originalTitle":"Fix log level parsing for server logs","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"Gsexze","originalTitle":"Add GitHub and Fleece CLI tools to all containers","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"HYqZp4","originalTitle":"Add single container mode for mini prompts and execution mode","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"Igk1ak","originalTitle":"Don\u0027t show time on hover","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"JC47Gj","originalTitle":"Add workflows","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"LKvH5E","originalTitle":"Fix issues with global and local prompts","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"MojOr7","originalTitle":"Documentation: workflow terminology and architecture","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"N77QQR","originalTitle":"Node Executors","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"Nf3ppO","originalTitle":"Finalise ACA deployment","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"OOQfpX","originalTitle":"Don\u0027t show message time on hover","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"OUsCGU","originalTitle":"Hide template tools behind feature flag","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"PEdDw0","originalTitle":"Migrate standard details tools from PyRevit to Taipan","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"PqeHsJ","originalTitle":"Show timelines from different branches","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"ULs6xq","originalTitle":"Review fleece prime hook","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"WC9myt","originalTitle":"Migrate template tools from PyRevit to Taipan","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"ZpS1j8","originalTitle":"Worktree display and refresh","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"adx3a0","originalTitle":"Create UI in subframe","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"bAmyIG","originalTitle":"Change default git email to homespun-bot@homespun.com","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"bWENZs","originalTitle":"Check log access works","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"cHYXZV","originalTitle":"Agents page currently broken","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"fFgKeO","originalTitle":"Test mock container","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"jdiG3U","originalTitle":"Run bd sync on cloned repositories","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"k0DZ7S","originalTitle":"PR caching not used on project load","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"kCGtGv","originalTitle":"Check that stopping sessions kills container","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"lXkqRf","originalTitle":"Update to v2.0.0 of Fleece.Core","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"m2VlJM","originalTitle":"Live tests for worker tool system","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"mjxgHx","originalTitle":"Task graph loading waits for GitHub PRs to load","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"nNPfDD","originalTitle":"Test issue","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"p2hsEN","originalTitle":"Add UI for modifying workflows","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"pczleh","originalTitle":"Fix broken issues agent diff panel","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"q4jrGK","originalTitle":"E2E and integration tests for workflow and task queue systems","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"qvUugH","originalTitle":"Migrate design to Subframe","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"rf9aTf","originalTitle":"Search doesn\u0027t work","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"s52r2R","originalTitle":"Fix modal size bug","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"sMhFm4","originalTitle":"Fix Beads setup for new repositories","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"t56TXM","originalTitle":"Don\u0027t show message time on hover","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"u1dQ8S","originalTitle":"Test issue 2","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"x1jVvd","originalTitle":"Allow dev and release containers on the same machine","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"zwE7WW","originalTitle":"Fix display of edges with new issue creation","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
