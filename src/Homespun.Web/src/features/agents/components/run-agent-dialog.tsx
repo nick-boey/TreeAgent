@@ -24,15 +24,18 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useAvailableModels, useRunAgent } from '../hooks'
 import { isAgentConflictError } from '../hooks/use-run-agent'
 import { normalizeStoredModel } from '../lib/normalize-stored-model'
+import { formatIssueContextBlock } from '../lib/format-issue-context-block'
 import { useProject } from '@/features/projects'
 import { BaseBranchSelector } from './base-branch-selector'
 import { OpenSpecTabContent } from './openspec-tab'
+import { IssueIdStrip } from './issue-id-strip'
 import { useCreateIssuesAgentSession } from '@/features/issues-agent/hooks/use-create-issues-agent-session'
 import { SkillPicker } from '@/features/skills'
 import { useProjectSkills } from '@/features/skills/hooks/use-project-skills'
+import { useIssue } from '@/features/issues/hooks/use-issue'
 import type { RunAgentResult } from '../hooks/use-run-agent'
 import type { CreateIssuesAgentSessionResult } from '@/features/issues-agent/hooks/use-create-issues-agent-session'
-import type { ClaudeModelInfo } from '@/api/generated/types.gen'
+import type { ClaudeModelInfo, IssueResponse } from '@/api/generated/types.gen'
 import { SessionMode, SkillCategory } from '@/api'
 
 // localStorage keys
@@ -81,6 +84,9 @@ export function RunAgentDialog({
     setActiveTab(computedDefaultTab)
   }
 
+  const effectiveIssueId = issueId ?? selectedIssueId ?? null
+  const { issue } = useIssue(effectiveIssueId ?? '', projectId)
+
   if (!open) {
     return null
   }
@@ -91,6 +97,7 @@ export function RunAgentDialog({
         <DialogHeader>
           <DialogTitle>Run Agent</DialogTitle>
           <DialogDescription>Configure and start an agent session</DialogDescription>
+          <IssueIdStrip issueIds={effectiveIssueId ? [effectiveIssueId] : []} />
         </DialogHeader>
 
         <Tabs
@@ -128,6 +135,7 @@ export function RunAgentDialog({
             <IssuesAgentTabContent
               projectId={projectId}
               selectedIssueId={selectedIssueId}
+              issue={issue}
               onSessionCreated={onSessionCreated}
               onOpenChange={onOpenChange}
               onError={onError}
@@ -144,6 +152,7 @@ export function RunAgentDialog({
               <OpenSpecTabContent
                 projectId={projectId}
                 issueId={issueId}
+                issue={issue}
                 onAgentStart={onAgentStart}
                 onOpenChange={onOpenChange}
                 onError={onError}
@@ -437,6 +446,7 @@ function TaskAgentTabContent({
 interface IssuesAgentTabContentProps {
   projectId: string
   selectedIssueId?: string | null
+  issue?: IssueResponse
   onSessionCreated?: (result: CreateIssuesAgentSessionResult) => void
   onOpenChange: (open: boolean) => void
   onError?: (error: Error) => void
@@ -445,6 +455,7 @@ interface IssuesAgentTabContentProps {
 function IssuesAgentTabContent({
   projectId,
   selectedIssueId,
+  issue,
   onSessionCreated,
   onOpenChange,
   onError,
@@ -481,6 +492,12 @@ function IssuesAgentTabContent({
     localStorage.setItem(ISSUES_MODE_STORAGE_KEY, selectedMode)
   }, [selectedMode])
 
+  // Prefill textarea with issue context when the issue resolves, first-write-wins.
+  useEffect(() => {
+    if (!issue) return
+    setUserInstructions((prev) => (prev === '' ? formatIssueContextBlock(issue) : prev))
+  }, [issue])
+
   const handleStart = useCallback(async () => {
     if (!selectedModel) return
     try {
@@ -514,6 +531,8 @@ function IssuesAgentTabContent({
     onOpenChange,
     onError,
   ])
+
+  const hasIssue = !!issue
 
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-hidden py-4">
@@ -556,9 +575,11 @@ function IssuesAgentTabContent({
       />
 
       <p className="text-muted-foreground text-xs">
-        {userInstructions.trim()
-          ? 'The agent will start with these instructions.'
-          : 'Leave empty to start an interactive session.'}
+        {hasIssue
+          ? 'The agent will start with this context. Edit to customize.'
+          : userInstructions.trim()
+            ? 'The agent will start with these instructions.'
+            : 'Leave empty to start an interactive session.'}
       </p>
     </div>
   )

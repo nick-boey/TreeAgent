@@ -16,10 +16,11 @@ import { useProjectSkills } from '@/features/skills/hooks/use-project-skills'
 import { useTaskGraph } from '@/features/issues/hooks/use-task-graph'
 import { useProject } from '@/features/projects'
 import { isAgentConflictError, useRunAgent } from '../hooks/use-run-agent'
+import { formatIssueContextBlock } from '../lib/format-issue-context-block'
 import type { RunAgentResult } from '../hooks/use-run-agent'
 import { BaseBranchSelector } from './base-branch-selector'
 import { ChangePhase, SessionMode } from '@/api'
-import type { IssueOpenSpecState, SkillDescriptor } from '@/api/generated/types.gen'
+import type { IssueOpenSpecState, IssueResponse, SkillDescriptor } from '@/api/generated/types.gen'
 
 const MODELS = [
   { value: 'opus', label: 'Opus' },
@@ -59,6 +60,7 @@ const GATED_SKILLS: ReadonlySet<OpenSpecSkillName> = new Set([
 export interface OpenSpecTabContentProps {
   projectId: string
   issueId: string
+  issue?: IssueResponse
   onAgentStart?: (result: RunAgentResult) => void
   onOpenChange: (open: boolean) => void
   onError?: (error: Error) => void
@@ -124,6 +126,7 @@ export function buildSchemaOverride(schemaName: string | null | undefined): stri
 export function OpenSpecTabContent({
   projectId,
   issueId,
+  issue,
   onAgentStart,
   onOpenChange,
   onError,
@@ -177,6 +180,12 @@ export function OpenSpecTabContent({
       localStorage.setItem(BASE_BRANCH_STORAGE_KEY, selectedBaseBranch)
     }
   }, [selectedBaseBranch])
+
+  // Prefill textarea with issue context when the issue resolves, first-write-wins.
+  useEffect(() => {
+    if (!issue) return
+    setUserInstructions((prev) => (prev === '' ? formatIssueContextBlock(issue) : prev))
+  }, [issue])
 
   const effectiveBaseBranch = useMemo(
     () => selectedBaseBranch || project?.defaultBranch || '',

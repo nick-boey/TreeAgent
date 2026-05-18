@@ -16,6 +16,7 @@ import type { ReactNode } from 'react'
 import type {
   ClaudeModelInfo,
   DiscoveredSkills,
+  IssueResponse,
   RunAgentAcceptedResponse,
 } from '@/api/generated/types.gen'
 
@@ -48,6 +49,7 @@ const mockGetSkills = vi.mocked(Skills.getApiSkillsProjectByProjectId)
 const mockRunAgent = vi.mocked(Issues.postApiIssuesByIssueIdRun)
 const mockCreateIssuesAgentSession = vi.mocked(IssuesAgent.postApiIssuesAgentSession)
 const mockGetModels = vi.mocked(Models.getApiModels)
+const mockGetIssue = vi.mocked(Issues.getApiIssuesByIssueId)
 
 const MOCK_MODELS: ClaudeModelInfo[] = [
   {
@@ -67,6 +69,15 @@ const MOCK_MODELS: ClaudeModelInfo[] = [
     createdAt: '2025-10-01T00:00:00Z',
   },
 ]
+
+const MOCK_ISSUE: IssueResponse = {
+  id: 'issue-456',
+  title: 'Test Issue Title',
+  description: 'Test issue description',
+}
+
+const PREFILLED_BLOCK =
+  'Issue ID: issue-456\nTitle: Test Issue Title\nDescription: Test issue description'
 
 function createMockResponse<T>(data: T) {
   return {
@@ -130,6 +141,8 @@ describe('RunAgentDialog', () => {
     mockGetSkills.mockResolvedValue(createMockResponse(MOCK_SKILLS))
     mockRunAgent.mockResolvedValue(createMockResponse(createMockRunAgentResponse()))
     mockGetModels.mockResolvedValue(createMockResponse(MOCK_MODELS))
+    // Default: issue fetch fails gracefully so issue stays undefined (no prefill in most tests)
+    mockGetIssue.mockResolvedValue(createMockResponse(undefined as unknown as IssueResponse))
   })
 
   it('renders nothing when closed', () => {
@@ -196,6 +209,51 @@ describe('RunAgentDialog', () => {
     })
   })
 
+  describe('Issue ID strip', () => {
+    it('renders the strip when issueId is set', async () => {
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          issueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('issue-456')).toBeInTheDocument()
+      })
+    })
+
+    it('renders the strip when selectedIssueId is set and issueId is absent', async () => {
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          selectedIssueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      await waitFor(() => {
+        expect(screen.getByText('issue-456')).toBeInTheDocument()
+      })
+    })
+
+    it('does not render the strip when neither issueId nor selectedIssueId is set', async () => {
+      render(<RunAgentDialog open={true} onOpenChange={() => {}} projectId="project-123" />, {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument()
+      })
+      expect(screen.queryByRole('button', { name: /copy/i })).not.toBeInTheDocument()
+    })
+  })
+
   describe('Task Agent Tab', () => {
     it('shows skill picker, mode, model, and start button', async () => {
       render(
@@ -216,6 +274,29 @@ describe('RunAgentDialog', () => {
       expect(within(taskTab).getByRole('combobox', { name: 'Select mode' })).toBeInTheDocument()
       expect(within(taskTab).getByRole('combobox', { name: 'Select model' })).toBeInTheDocument()
       expect(within(taskTab).getByRole('button', { name: /start agent/i })).toBeInTheDocument()
+    })
+
+    it('Task Agent textarea stays empty (no prefill) when an issue is linked', async () => {
+      mockGetIssue.mockResolvedValue(createMockResponse(MOCK_ISSUE))
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          issueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const taskTab = getTaskTab()
+
+      await waitFor(() => {
+        expect(within(taskTab).getByRole('button', { name: /start agent/i })).toBeInTheDocument()
+      })
+
+      const textarea = within(taskTab).getByPlaceholderText(/additional instructions/i)
+      expect(textarea).toHaveValue('')
     })
 
     it('sends skillName and skillArgs when a skill is selected', async () => {
@@ -465,6 +546,101 @@ describe('RunAgentDialog', () => {
           to: '/sessions/$sessionId',
           params: { sessionId: 'session-123' },
         })
+      })
+    })
+
+    it('Issues Agent textarea is prefilled with formatted block when issue is linked', async () => {
+      mockGetIssue.mockResolvedValue(createMockResponse(MOCK_ISSUE))
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          selectedIssueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const issuesTab = getIssuesTab()
+
+      await waitFor(() => {
+        const textarea = within(issuesTab).getByPlaceholderText(/additional instructions/i)
+        expect(textarea).toHaveValue(PREFILLED_BLOCK)
+      })
+    })
+
+    it('issue-bound Issues Agent dispatch does NOT navigate to session page', async () => {
+      const user = userEvent.setup()
+      const onOpenChange = vi.fn()
+
+      mockGetIssue.mockResolvedValue(createMockResponse(MOCK_ISSUE))
+      mockCreateIssuesAgentSession.mockResolvedValue({
+        data: {
+          sessionId: 'session-123',
+          branchName: 'issues-agent-123',
+          clonePath: '/tmp/clone',
+        },
+      } as never)
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={onOpenChange}
+          projectId="project-123"
+          selectedIssueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const issuesTab = getIssuesTab()
+
+      // Wait for prefill to settle
+      await waitFor(() => {
+        const textarea = within(issuesTab).getByPlaceholderText(/additional instructions/i)
+        expect(textarea).toHaveValue(PREFILLED_BLOCK)
+      })
+
+      await user.click(within(issuesTab).getByRole('button', { name: /start agent/i }))
+
+      await waitFor(() => {
+        expect(onOpenChange).toHaveBeenCalledWith(false)
+      })
+      expect(mockNavigate).not.toHaveBeenCalled()
+    })
+
+    it('first-write-wins: user-typed content is preserved when useIssue resolves later', async () => {
+      // Simulate slow issue fetch with a deferred resolution
+      let resolveIssue!: (value: unknown) => void
+      const issuePromise = new Promise((resolve) => {
+        resolveIssue = resolve
+      })
+      mockGetIssue.mockReturnValue(issuePromise as ReturnType<typeof mockGetIssue>)
+
+      const user = userEvent.setup()
+
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          selectedIssueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      const issuesTab = getIssuesTab()
+
+      // User types before issue resolves
+      const textarea = await within(issuesTab).findByPlaceholderText(/additional instructions/i)
+      await user.type(textarea, 'custom instructions')
+
+      // Now issue resolves
+      resolveIssue(createMockResponse(MOCK_ISSUE))
+
+      // Wait a beat then check the textarea has not been overwritten
+      await waitFor(() => {
+        expect(textarea).toHaveValue('custom instructions')
       })
     })
   })
