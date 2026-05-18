@@ -1,8 +1,7 @@
 namespace Homespun.Shared.Models.OpenSpec;
 
 /// <summary>
-/// A per-branch snapshot of OpenSpec change state, posted by the worker at session end
-/// and served to the UI via the graph endpoint.
+/// A per-branch snapshot of OpenSpec change state cached by <c>BranchStateCacheService</c>.
 /// </summary>
 public class BranchStateSnapshot
 {
@@ -27,11 +26,6 @@ public class BranchStateSnapshot
     public List<SnapshotChange> Changes { get; init; } = new();
 
     /// <summary>
-    /// Changes on the branch without a sidecar.
-    /// </summary>
-    public List<SnapshotOrphan> Orphans { get; init; } = new();
-
-    /// <summary>
     /// Server-side timestamp (UTC) when the snapshot was stored.
     /// </summary>
     public DateTimeOffset CapturedAt { get; init; }
@@ -51,13 +45,4 @@ public class SnapshotChange
     public int TasksTotal { get; init; }
     public string? NextIncomplete { get; init; }
     public List<PhaseState> Phases { get; init; } = new();
-}
-
-/// <summary>
-/// Per-orphan entry in a branch snapshot.
-/// </summary>
-public class SnapshotOrphan
-{
-    public required string Name { get; init; }
-    public bool CreatedOnBranch { get; init; }
 }

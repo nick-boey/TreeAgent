@@ -1,7 +1,6 @@
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.OpenSpec.Services;
 using Homespun.Features.PullRequests.Data;
-using Homespun.Shared.Models.Fleece;
 using Homespun.Shared.Models.OpenSpec;
 using Microsoft.AspNetCore.Mvc;
 
@@ -9,10 +8,7 @@ namespace Homespun.Features.OpenSpec.Controllers;
 
 /// <summary>
 /// Per-decoration endpoints that surface OpenSpec state to the task-graph view
-/// without bundling everything into a single response. Backed by the same
-/// <see cref="IIssueGraphOpenSpecEnricher"/> the legacy <c>/taskgraph/data</c>
-/// endpoint uses, but split into independent endpoints per the move-graph-layout-to-client
-/// design.
+/// without bundling everything into a single response.
 /// </summary>
 [ApiController]
 [Route("api")]
@@ -58,25 +54,5 @@ public class OpenSpecDecorationsController(
 
         var map = await enricher.GetOpenSpecStatesAsync(projectId, issueIds, branchContext: null, ct);
         return Ok(map);
-    }
-
-    /// <summary>
-    /// Returns OpenSpec changes that live on main with no owning issue ("orphan" changes).
-    /// </summary>
-    [HttpGet("projects/{projectId}/orphan-changes")]
-    [ProducesResponseType<List<SnapshotOrphan>>(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<List<SnapshotOrphan>>> GetOrphanChanges(
-        string projectId,
-        CancellationToken ct = default)
-    {
-        var project = dataStore.GetProject(projectId);
-        if (project == null)
-        {
-            return NotFound("Project not found");
-        }
-
-        var orphans = await enricher.GetMainOrphanChangesAsync(projectId, branchContext: null, ct);
-        return Ok(orphans);
     }
 }

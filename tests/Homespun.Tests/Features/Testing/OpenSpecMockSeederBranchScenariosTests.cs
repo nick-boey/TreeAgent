@@ -1,3 +1,4 @@
+using Fleece.Core.Models;
 using Homespun.Features.Commands;
 using Homespun.Features.Fleece.Services;
 using Homespun.Features.Git;
@@ -15,17 +16,18 @@ namespace Homespun.Tests.Features.Testing;
 
 /// <summary>
 /// End-to-end test: the OpenSpecMockSeeder's per-branch fixtures surface correctly through
-/// <see cref="ChangeScannerService"/> (which is what
-/// <see cref="BranchStateResolverService.GetOrScanAsync"/> delegates to) and through the
-/// <see cref="IssueGraphOpenSpecEnricher"/>.
+/// <see cref="ChangeScannerService"/> (backed by a mocked <see cref="IProjectFleeceService"/>)
+/// and through the <see cref="IssueGraphOpenSpecEnricher"/>.
+/// Linkage is now driven by Fleece <c>openspec=&lt;name&gt;</c> tags, not sidecars.
 /// </summary>
 [TestFixture]
 public class OpenSpecMockSeederBranchScenariosTests
 {
     private string _tempDir = null!;
     private OpenSpecMockSeeder _seeder = null!;
-    private ChangeScannerService _scanner = null!;
     private Mock<ICommandRunner> _commandRunner = null!;
+    private Mock<IProjectFleeceService> _fleeceService = null!;
+    private ChangeScannerService _scanner = null!;
 
     [SetUp]
     public void SetUp()
@@ -47,8 +49,13 @@ public class OpenSpecMockSeederBranchScenariosTests
                 Error = string.Empty
             });
 
+        _fleeceService = new Mock<IProjectFleeceService>();
+        _fleeceService
+            .Setup(f => f.ListIssuesAsync(It.IsAny<string>(), null, null, null, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Issue>());
+
         _scanner = new ChangeScannerService(
-            new SidecarService(NullLogger<SidecarService>.Instance),
+            _fleeceService.Object,
             _commandRunner.Object,
             NullLogger<ChangeScannerService>.Instance);
     }
@@ -63,9 +70,10 @@ public class OpenSpecMockSeederBranchScenariosTests
     }
 
     [Test]
-    public async Task SeedBranch_Issue006_ProducesOneLinkedInProgressChange()
+    public async Task SeedBranch_Issue006_TaggedChange_AppearsLinked()
     {
         var clonePath = await SeedBranchAsync("ISSUE-006");
+        StubFleeceTag(clonePath, "ISSUE-006", "openspec=api-v2-impl");
 
         var scan = await _scanner.ScanBranchAsync(clonePath, "ISSUE-006");
 
@@ -76,24 +84,25 @@ public class OpenSpecMockSeederBranchScenariosTests
     }
 
     [Test]
-    public async Task SeedBranch_Issue002_ProducesTwoOrphans()
+    public async Task SeedBranch_Issue002_UntaggedChanges_SilentlySkipped()
     {
         var clonePath = await SeedBranchAsync("ISSUE-002");
+        // No openspec= tags → both changes are silently skipped.
 
         var scan = await _scanner.ScanBranchAsync(clonePath, "ISSUE-002");
 
-        Assert.That(scan.OrphanChanges, Has.Count.EqualTo(2));
         Assert.That(scan.LinkedChanges, Is.Empty);
+        Assert.That(scan.OrphanChanges, Is.Empty);
     }
 
     [Test]
-    public async Task SeedBranch_Issue001_ProducesInheritedChange()
+    public async Task SeedBranch_Issue001_UntaggedChange_SilentlySkipped()
     {
         var clonePath = await SeedBranchAsync("ISSUE-001");
+        // inherited-from-main has no openspec= tag for ISSUE-001 → silently skipped.
 
         var scan = await _scanner.ScanBranchAsync(clonePath, "ISSUE-001");
 
-        Assert.That(scan.InheritedChangeNames, Does.Contain("inherited-from-main"));
         Assert.That(scan.LinkedChanges, Is.Empty);
         Assert.That(scan.OrphanChanges, Is.Empty);
     }
@@ -110,6 +119,7 @@ public class OpenSpecMockSeederBranchScenariosTests
     public async Task EnrichAsync_Issue006_ReportsWithChangeAndPhases()
     {
         var clonePath = await SeedBranchAsync("ISSUE-006");
+        StubFleeceTag(clonePath, "ISSUE-006", "openspec=api-v2-impl");
         var enricher = BuildEnricher(clonePath, branch: "feature/api-v2+ISSUE-006", issueId: "ISSUE-006");
 
         var response = new TaskGraphResponse
@@ -128,34 +138,30 @@ public class OpenSpecMockSeederBranchScenariosTests
         Assert.That(state.Phases, Is.Not.Empty);
     }
 
-    [Test]
-    public async Task EnrichAsync_Issue002_ReportsExistsWithMultipleOrphans()
-    {
-        var clonePath = await SeedBranchAsync("ISSUE-002");
-        var enricher = BuildEnricher(clonePath, branch: "feature/dark-mode+ISSUE-002", issueId: "ISSUE-002");
-
-        var response = new TaskGraphResponse
-        {
-            Nodes = new List<TaskGraphNodeResponse>
-            {
-                new() { Issue = new IssueResponse { Id = "ISSUE-002" } }
-            }
-        };
-
-        await enricher.EnrichAsync("proj", response);
-
-        var state = response.OpenSpecStates["ISSUE-002"];
-        Assert.That(state.BranchState, Is.EqualTo(BranchPresence.Exists));
-        Assert.That(state.ChangeState, Is.EqualTo(ChangePhase.None));
-        Assert.That(state.Orphans, Has.Count.EqualTo(2));
-    }
-
     private async Task<string> SeedBranchAsync(string branchFleeceId)
     {
         var clonePath = Path.Combine(_tempDir, $"clone-{branchFleeceId}");
         Directory.CreateDirectory(Path.Combine(clonePath, "openspec", "changes"));
         await _seeder.SeedBranchAsync(clonePath, $"feat/x+{branchFleeceId}", branchFleeceId);
         return clonePath;
+    }
+
+    private void StubFleeceTag(string clonePath, string issueId, string tag)
+    {
+        var issue = new Issue
+        {
+            Id = issueId,
+            Title = issueId,
+            Status = IssueStatus.Open,
+            Type = IssueType.Task,
+            CreatedAt = DateTimeOffset.UtcNow,
+            LastUpdate = DateTimeOffset.UtcNow,
+            Tags = [tag]
+        };
+
+        _fleeceService
+            .Setup(f => f.ListIssuesAsync(clonePath, null, null, null, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Issue> { issue });
     }
 
     private IssueGraphOpenSpecEnricher BuildEnricher(string clonePath, string branch, string issueId)

@@ -11,10 +11,9 @@ namespace Homespun.Features.OpenSpec.Services;
 
 /// <summary>
 /// Side-effectful wrapper around <see cref="IChangeScannerService"/>:
-/// auto-links single orphans and auto-completes Fleece issues when their
-/// change has archived. Each side-effect emits a unified
-/// <c>IssueChanged</c> event so connected clients invalidate decoration
-/// caches without waiting for any background tick.
+/// auto-completes Fleece issues when their linked change has archived.
+/// Emits a unified <c>IssueChanged</c> event so connected clients
+/// invalidate decoration caches without waiting for any background tick.
 /// </summary>
 public class ChangeReconciliationService(
     IChangeScannerService scanner,
@@ -35,15 +34,7 @@ public class ChangeReconciliationService(
 
         var scan = await scanner.ScanBranchAsync(clonePath, branchFleeceId, baseBranch, ct);
 
-        // 1. Auto-write sidecar for single-orphan case so the next scan picks it up as linked.
-        var linkedOrphan = await scanner.TryAutoLinkSingleOrphanAsync(scan, branchFleeceId, ct);
-        if (linkedOrphan is not null)
-        {
-            scan = await scanner.ScanBranchAsync(clonePath, branchFleeceId, baseBranch, ct);
-            await InvalidateAndBroadcastAsync(projectId);
-        }
-
-        // 2. Auto-transition fleece issue to complete when any linked change is archived.
+        // Auto-transition fleece issue to complete when any linked change is archived.
         if (scan.LinkedChanges.Any(c => c.IsArchived))
         {
             var currentStatus = await transitionService.GetStatusAsync(projectId, branchFleeceId);

@@ -68,11 +68,7 @@ public class IssueGraphOpenSpecEnricherTests
             {
                 ProjectId = ProjectId,
                 Branch = "feat/foo+issue-1",
-                FleeceId = "issue-1",
-                Orphans = new List<SnapshotOrphan>
-                {
-                    new() { Name = "wandering", CreatedOnBranch = true }
-                }
+                FleeceId = "issue-1"
             });
 
         await _enricher.EnrichAsync(ProjectId, response);
@@ -80,8 +76,6 @@ public class IssueGraphOpenSpecEnricherTests
         var state = response.OpenSpecStates["issue-1"];
         Assert.That(state.BranchState, Is.EqualTo(BranchPresence.Exists));
         Assert.That(state.ChangeState, Is.EqualTo(ChangePhase.None));
-        Assert.That(state.Orphans, Has.Count.EqualTo(1));
-        Assert.That(state.Orphans[0].Name, Is.EqualTo("wandering"));
     }
 
     [Test]

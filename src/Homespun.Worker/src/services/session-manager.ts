@@ -33,29 +33,7 @@ import {
 } from "../utils/diagnostics.js";
 import { watch, existsSync } from "node:fs";
 import { InputQueue } from "./input-queue.js";
-import { runOpenSpecPostSessionHook } from "./openspec-snapshot.js";
-import { exec } from "node:child_process";
-import { promisify } from "node:util";
 
-const execAsync = promisify(exec);
-
-/**
- * Resolves the current branch name by running `git rev-parse --abbrev-ref HEAD`
- * in the given clone. Returns `null` for detached HEAD, bare repos, or errors.
- */
-async function resolveBranchName(cwd: string): Promise<string | null> {
-  try {
-    const { stdout } = await execAsync("git rev-parse --abbrev-ref HEAD", {
-      cwd,
-      timeout: 5000,
-    });
-    const branch = stdout.trim();
-    if (!branch || branch === "HEAD") return null;
-    return branch;
-  } catch {
-    return null;
-  }
-}
 
 export type SdkPermissionMode =
   | "default"
@@ -878,36 +856,6 @@ export class SessionManager {
         outputChannel.complete();
         session.debugLogCleanup?.();
         session.debugLogCleanup = undefined;
-
-        // Best-effort OpenSpec post-session snapshot. Fire and forget.
-        try {
-          const workingDirectory =
-            opts.workingDirectory ||
-            (sessionOptions.cwd as string | undefined) ||
-            process.env.WORKING_DIRECTORY;
-          const projectId = process.env.PROJECT_ID;
-          const fleeceId = process.env.ISSUE_ID;
-          const serverUrl =
-            process.env.HOMESPUN_SERVER_URL ||
-            process.env.Homespun__ServerUrl;
-
-          if (workingDirectory && projectId && fleeceId && serverUrl) {
-            const branch = await resolveBranchName(workingDirectory);
-            if (branch) {
-              void runOpenSpecPostSessionHook({
-                workingDirectory,
-                projectId,
-                branch,
-                fleeceId,
-                serverUrl,
-              });
-            }
-          }
-        } catch (err) {
-          warn(
-            `OpenSpec post-session hook scheduling failed for session '${session.id}': ${String(err)}`,
-          );
-        }
       }
     })();
   }

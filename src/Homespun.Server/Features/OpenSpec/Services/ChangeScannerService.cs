@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
 using Homespun.Features.Commands;
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.OpenSpec.Telemetry;
 using Homespun.Shared.Models.OpenSpec;
 using Microsoft.Extensions.Logging;
@@ -8,10 +9,11 @@ using Microsoft.Extensions.Logging;
 namespace Homespun.Features.OpenSpec.Services;
 
 /// <summary>
-/// Scans a clone's OpenSpec change directories and matches them to Fleece issues via sidecars.
+/// Scans a clone's OpenSpec change directories and matches them to Fleece issues
+/// via <c>openspec=&lt;change-name&gt;</c> tags on the per-clone Fleece projection.
 /// </summary>
 public class ChangeScannerService(
-    ISidecarService sidecarService,
+    IProjectFleeceService fleeceService,
     ICommandRunner commandRunner,
     ILogger<ChangeScannerService> logger) : IChangeScannerService
 {
@@ -41,10 +43,11 @@ public class ChangeScannerService(
         CancellationToken ct = default)
     {
         using var activity = OpenSpecActivitySource.Instance.StartActivity("openspec.scan.branch");
+        activity?.SetTag("issue.id", branchFleeceId);
+
+        var tagMap = await BuildTagMapAsync(clonePath, ct);
 
         var linked = new List<LinkedChangeInfo>();
-        var orphans = new List<OrphanChangeInfo>();
-        var inherited = new List<string>();
 
         var changesRoot = Path.Combine(clonePath, ChangesRelativePath);
         var archiveRoot = Path.Combine(clonePath, ArchiveRelativePath);
@@ -62,16 +65,8 @@ public class ChangeScannerService(
                     continue;
                 }
 
-                var sidecar = await sidecarService.ReadSidecarAsync(changeDir, ct);
-                if (sidecar is null)
+                if (!tagMap.ContainsKey(name))
                 {
-                    orphans.Add(new OrphanChangeInfo { Name = name, Directory = changeDir });
-                    continue;
-                }
-
-                if (!string.Equals(sidecar.FleeceId, branchFleeceId, StringComparison.Ordinal))
-                {
-                    inherited.Add(name);
                     continue;
                 }
 
@@ -82,7 +77,7 @@ public class ChangeScannerService(
                 {
                     Name = name,
                     Directory = changeDir,
-                    CreatedBy = sidecar.CreatedBy,
+                    CreatedBy = "agent",
                     IsArchived = false,
                     ArtifactState = artifactState,
                     TaskState = taskState
@@ -90,7 +85,7 @@ public class ChangeScannerService(
             }
         }
 
-        // Archive fallback: any archived change whose sidecar matches the branch fleece id.
+        // Archive fallback: any archived change whose name appears in the tag map.
         if (Directory.Exists(archiveRoot))
         {
             foreach (var archivedDir in Directory.GetDirectories(archiveRoot))
@@ -98,13 +93,12 @@ public class ChangeScannerService(
                 ct.ThrowIfCancellationRequested();
 
                 var archiveFolder = Path.GetFileName(archivedDir);
-                var sidecar = await sidecarService.ReadSidecarAsync(archivedDir, ct);
-                if (sidecar is null || !string.Equals(sidecar.FleeceId, branchFleeceId, StringComparison.Ordinal))
+                var changeName = StripDatePrefix(archiveFolder);
+
+                if (!tagMap.ContainsKey(changeName))
                 {
                     continue;
                 }
-
-                var changeName = StripDatePrefix(archiveFolder);
 
                 // Prefer a live copy when present; skip the archive entry to avoid duplicates.
                 if (linked.Any(l => !l.IsArchived && string.Equals(l.Name, changeName, StringComparison.Ordinal)))
@@ -118,7 +112,7 @@ public class ChangeScannerService(
                 {
                     Name = changeName,
                     Directory = archivedDir,
-                    CreatedBy = sidecar.CreatedBy,
+                    CreatedBy = "agent",
                     IsArchived = true,
                     ArchivedFolderName = archiveFolder,
                     ArtifactState = null,
@@ -127,24 +121,57 @@ public class ChangeScannerService(
             }
         }
 
-        if (orphans.Count > 0 && !string.IsNullOrWhiteSpace(baseBranch))
-        {
-            var addedChangeNames = await GetAddedChangeNamesOnBranchAsync(clonePath, baseBranch!, ct);
-            orphans = orphans.Select(o => new OrphanChangeInfo
-            {
-                Name = o.Name,
-                Directory = o.Directory,
-                CreatedOnBranch = addedChangeNames.Contains(o.Name)
-            }).ToList();
-        }
-
         return new BranchScanResult
         {
             BranchFleeceId = branchFleeceId,
             LinkedChanges = linked,
-            OrphanChanges = orphans,
-            InheritedChangeNames = inherited
+            OrphanChanges = [],
+            InheritedChangeNames = []
         };
+    }
+
+    /// <summary>
+    /// Builds a <c>change-name → issue-id</c> map from <c>openspec=&lt;name&gt;</c> tags
+    /// on all Fleece issues in the clone. Last-write-wins when the same change name is
+    /// tagged on multiple issues. Returns an empty map on failure.
+    /// </summary>
+    private async Task<Dictionary<string, string>> BuildTagMapAsync(
+        string clonePath,
+        CancellationToken ct)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        try
+        {
+            var issues = await fleeceService.ListIssuesAsync(clonePath, includeAll: true, ct: ct);
+
+            const string prefix = "openspec=";
+            foreach (var issue in issues)
+            {
+                foreach (var tag in issue.Tags)
+                {
+                    if (!tag.StartsWith(prefix, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    var changeName = tag[prefix.Length..];
+                    if (string.IsNullOrEmpty(changeName))
+                    {
+                        continue;
+                    }
+
+                    map[changeName] = issue.Id;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Failed to list Fleece issues in {Clone}; no changes will be linked", clonePath);
+        }
+
+        return map;
     }
 
     /// <inheritdoc />
@@ -283,29 +310,6 @@ public class ChangeScannerService(
         return TasksParser.Parse(content);
     }
 
-    /// <inheritdoc />
-    public async Task<string?> TryAutoLinkSingleOrphanAsync(
-        BranchScanResult scan,
-        string branchFleeceId,
-        CancellationToken ct = default)
-    {
-        if (scan.OrphanChanges.Count != 1)
-        {
-            return null;
-        }
-
-        var orphan = scan.OrphanChanges[0];
-        await sidecarService.WriteSidecarAsync(
-            orphan.Directory,
-            new ChangeSidecar { FleeceId = branchFleeceId, CreatedBy = "agent" },
-            ct);
-
-        logger.LogInformation(
-            "Auto-linked orphan change {Change} to fleece issue {Fleece}", orphan.Name, branchFleeceId);
-
-        return orphan.Name;
-    }
-
     /// <summary>
     /// Strips a leading date prefix (<c>YYYY-MM-DD-</c>) from an archive folder name.
     /// </summary>
@@ -339,63 +343,5 @@ public class ChangeScannerService(
 
         var braceIndex = output.IndexOf('{');
         return braceIndex < 0 ? string.Empty : output[braceIndex..];
-    }
-
-    /// <summary>
-    /// Returns the set of change names that have a newly-added file since the given base branch,
-    /// using <c>git log --diff-filter=A --name-only</c>. Failures return an empty set.
-    /// </summary>
-    private async Task<HashSet<string>> GetAddedChangeNamesOnBranchAsync(
-        string clonePath,
-        string baseBranch,
-        CancellationToken ct)
-    {
-        var added = new HashSet<string>(StringComparer.Ordinal);
-
-        try
-        {
-            var result = await commandRunner.RunAsync(
-                "git",
-                $"log --diff-filter=A --name-only --format= {baseBranch}..HEAD -- {ChangesRelativePath}/",
-                clonePath);
-
-            if (!result.Success)
-            {
-                logger.LogDebug(
-                    "git log (diff-filter=A) failed against {Base} in {Clone}: {Error}",
-                    baseBranch, clonePath, result.Error);
-                return added;
-            }
-
-            foreach (var rawLine in result.Output.Split('\n'))
-            {
-                var line = rawLine.Trim();
-                if (line.Length == 0 || !line.StartsWith(ChangesRelativePath + "/", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                var relative = line[(ChangesRelativePath.Length + 1)..];
-                var separatorIdx = relative.IndexOf('/');
-                if (separatorIdx <= 0)
-                {
-                    continue;
-                }
-
-                var firstSegment = relative[..separatorIdx];
-                if (string.Equals(firstSegment, "archive", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                added.Add(firstSegment);
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogDebug(ex, "Failed to determine added change directories on branch");
-        }
-
-        return added;
     }
 }

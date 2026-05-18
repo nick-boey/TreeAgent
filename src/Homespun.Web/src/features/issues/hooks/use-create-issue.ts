@@ -167,7 +167,6 @@ export function useCreateIssue(options: UseCreateIssueOptions): UseCreateIssueRe
           queryClient.invalidateQueries({ queryKey: ['linked-prs', projectId] }),
           queryClient.invalidateQueries({ queryKey: ['agent-statuses', projectId] }),
           queryClient.invalidateQueries({ queryKey: ['openspec-states', projectId] }),
-          queryClient.invalidateQueries({ queryKey: ['orphan-changes', projectId] }),
         ])
 
         onSuccess?.(issue)

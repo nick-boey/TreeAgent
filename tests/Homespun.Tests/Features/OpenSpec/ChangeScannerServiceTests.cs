@@ -1,7 +1,8 @@
+using Fleece.Core.Models;
 using Homespun.Features.Commands;
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.OpenSpec.Services;
 using Homespun.Shared.Models.Commands;
-using Homespun.Shared.Models.OpenSpec;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -12,7 +13,7 @@ public class ChangeScannerServiceTests
 {
     private string _tempDir = null!;
     private Mock<ICommandRunner> _commandRunner = null!;
-    private SidecarService _sidecarService = null!;
+    private Mock<IProjectFleeceService> _fleeceService = null!;
     private ChangeScannerService _scanner = null!;
 
     private const string BranchFleeceId = "issue-abc";
@@ -24,9 +25,14 @@ public class ChangeScannerServiceTests
         Directory.CreateDirectory(_tempDir);
 
         _commandRunner = new Mock<ICommandRunner>();
-        _sidecarService = new SidecarService(NullLogger<SidecarService>.Instance);
+        _fleeceService = new Mock<IProjectFleeceService>();
+
+        _fleeceService
+            .Setup(f => f.ListIssuesAsync(_tempDir, null, null, null, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<Issue>());
+
         _scanner = new ChangeScannerService(
-            _sidecarService,
+            _fleeceService.Object,
             _commandRunner.Object,
             NullLogger<ChangeScannerService>.Instance);
     }
@@ -40,6 +46,8 @@ public class ChangeScannerServiceTests
         }
     }
 
+    // --- Tag-map linkage tests (task 1.1) ---
+
     [Test]
     public async Task ScanBranchAsync_NoChangesDir_ReturnsEmpty()
     {
@@ -47,16 +55,13 @@ public class ChangeScannerServiceTests
 
         Assert.That(result.LinkedChanges, Is.Empty);
         Assert.That(result.OrphanChanges, Is.Empty);
-        Assert.That(result.InheritedChangeNames, Is.Empty);
     }
 
     [Test]
-    public async Task ScanBranchAsync_LinkedChange_AppearsLinked()
+    public async Task ScanBranchAsync_TaggedChange_AppearsLinked()
     {
-        var changeDir = CreateChangeDir("my-change");
-        await _sidecarService.WriteSidecarAsync(changeDir,
-            new ChangeSidecar { FleeceId = BranchFleeceId, CreatedBy = "agent" });
-
+        CreateChangeDir("my-change");
+        StubFleeceIssues(("issue-1", "openspec=my-change"));
         StubArtifactStatusSuccess("my-change", isComplete: false);
 
         var result = await _scanner.ScanBranchAsync(_tempDir, BranchFleeceId);
@@ -68,37 +73,23 @@ public class ChangeScannerServiceTests
     }
 
     [Test]
-    public async Task ScanBranchAsync_InheritedChange_IsFilteredOut()
+    public async Task ScanBranchAsync_UntaggedChange_SilentlySkipped()
     {
-        var changeDir = CreateChangeDir("inherited");
-        await _sidecarService.WriteSidecarAsync(changeDir,
-            new ChangeSidecar { FleeceId = "other-issue", CreatedBy = "server" });
+        CreateChangeDir("no-tag-change");
+        // No openspec= tag on any issue — change should be silently skipped.
 
         var result = await _scanner.ScanBranchAsync(_tempDir, BranchFleeceId);
 
         Assert.That(result.LinkedChanges, Is.Empty);
-        Assert.That(result.InheritedChangeNames, Does.Contain("inherited"));
         Assert.That(result.OrphanChanges, Is.Empty);
     }
 
     [Test]
-    public async Task ScanBranchAsync_OrphanChange_DetectedWithoutSidecar()
-    {
-        CreateChangeDir("orphan-change");
-
-        var result = await _scanner.ScanBranchAsync(_tempDir, BranchFleeceId);
-
-        Assert.That(result.OrphanChanges, Has.Count.EqualTo(1));
-        Assert.That(result.OrphanChanges[0].Name, Is.EqualTo("orphan-change"));
-        Assert.That(result.LinkedChanges, Is.Empty);
-    }
-
-    [Test]
-    public async Task ScanBranchAsync_ArchivedChange_FallsBackToArchive()
+    public async Task ScanBranchAsync_ArchivedChange_MatchesViaTag()
     {
         var archivedDir = CreateArchivedChangeDir("2026-04-16-old-change");
-        await _sidecarService.WriteSidecarAsync(archivedDir,
-            new ChangeSidecar { FleeceId = BranchFleeceId, CreatedBy = "agent" });
+        _ = archivedDir;
+        StubFleeceIssues(("issue-2", "openspec=old-change"));
 
         var result = await _scanner.ScanBranchAsync(_tempDir, BranchFleeceId);
 
@@ -110,18 +101,29 @@ public class ChangeScannerServiceTests
     }
 
     [Test]
+    public async Task ScanBranchAsync_MultipleChanges_DifferentTags_LandUnderCorrectIssues()
+    {
+        CreateChangeDir("change-foo");
+        CreateChangeDir("change-bar");
+        StubFleeceIssues(
+            ("issue-A", "openspec=change-foo"),
+            ("issue-B", "openspec=change-bar"));
+        StubArtifactStatusSuccess("change-foo", isComplete: false);
+        StubArtifactStatusSuccess("change-bar", isComplete: true);
+
+        var result = await _scanner.ScanBranchAsync(_tempDir, BranchFleeceId);
+
+        Assert.That(result.LinkedChanges, Has.Count.EqualTo(2));
+        Assert.That(result.LinkedChanges.Select(c => c.Name),
+            Is.EquivalentTo(new[] { "change-foo", "change-bar" }));
+    }
+
+    [Test]
     public async Task ScanBranchAsync_LiveAndArchived_PrefersLive()
     {
-        // Live version
-        var liveDir = CreateChangeDir("dup-change");
-        await _sidecarService.WriteSidecarAsync(liveDir,
-            new ChangeSidecar { FleeceId = BranchFleeceId, CreatedBy = "agent" });
-
-        // Archived copy
-        var archivedDir = CreateArchivedChangeDir("2026-03-01-dup-change");
-        await _sidecarService.WriteSidecarAsync(archivedDir,
-            new ChangeSidecar { FleeceId = BranchFleeceId, CreatedBy = "agent" });
-
+        CreateChangeDir("dup-change");
+        CreateArchivedChangeDir("2026-03-01-dup-change");
+        StubFleeceIssues(("issue-1", "openspec=dup-change"));
         StubArtifactStatusSuccess("dup-change", isComplete: false);
 
         var result = await _scanner.ScanBranchAsync(_tempDir, BranchFleeceId);
@@ -134,12 +136,9 @@ public class ChangeScannerServiceTests
     public async Task ScanBranchAsync_IncludesTaskState()
     {
         var changeDir = CreateChangeDir("with-tasks");
-        await _sidecarService.WriteSidecarAsync(changeDir,
-            new ChangeSidecar { FleeceId = BranchFleeceId, CreatedBy = "agent" });
-
+        StubFleeceIssues(("issue-1", "openspec=with-tasks"));
         await File.WriteAllTextAsync(Path.Combine(changeDir, "tasks.md"),
             "## 1. Phase\n\n- [x] Done\n- [ ] Pending\n");
-
         StubArtifactStatusSuccess("with-tasks", isComplete: true);
 
         var result = await _scanner.ScanBranchAsync(_tempDir, BranchFleeceId);
@@ -149,6 +148,21 @@ public class ChangeScannerServiceTests
         Assert.That(linked.TaskState.TasksDone, Is.EqualTo(1));
         Assert.That(linked.TaskState.NextIncomplete, Is.EqualTo("Pending"));
     }
+
+    [Test]
+    public async Task ScanBranchAsync_FleeceServiceFailure_ReturnsNoLinked()
+    {
+        CreateChangeDir("my-change");
+        _fleeceService
+            .Setup(f => f.ListIssuesAsync(_tempDir, null, null, null, true, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("fleece unavailable"));
+
+        var result = await _scanner.ScanBranchAsync(_tempDir, BranchFleeceId);
+
+        Assert.That(result.LinkedChanges, Is.Empty);
+    }
+
+    // --- Artifact state cache tests (unchanged) ---
 
     [Test]
     public async Task GetArtifactStateAsync_ParsesOpenSpecJson()
@@ -195,75 +209,7 @@ public class ChangeScannerServiceTests
         Assert.That(result, Is.Null);
     }
 
-    [Test]
-    public async Task TryAutoLinkSingleOrphanAsync_SingleOrphan_WritesSidecarAndReturnsName()
-    {
-        var orphanDir = CreateChangeDir("lonely-orphan");
-
-        var scan = new BranchScanResult
-        {
-            BranchFleeceId = BranchFleeceId,
-            OrphanChanges = new List<OrphanChangeInfo>
-            {
-                new() { Name = "lonely-orphan", Directory = orphanDir }
-            }
-        };
-
-        var name = await _scanner.TryAutoLinkSingleOrphanAsync(scan, BranchFleeceId);
-
-        Assert.That(name, Is.EqualTo("lonely-orphan"));
-
-        var sidecar = await _sidecarService.ReadSidecarAsync(orphanDir);
-        Assert.That(sidecar, Is.Not.Null);
-        Assert.That(sidecar!.FleeceId, Is.EqualTo(BranchFleeceId));
-        Assert.That(sidecar.CreatedBy, Is.EqualTo("agent"));
-    }
-
-    [Test]
-    public async Task TryAutoLinkSingleOrphanAsync_MultipleOrphans_ReturnsNullAndWritesNothing()
-    {
-        var orphanA = CreateChangeDir("a");
-        var orphanB = CreateChangeDir("b");
-
-        var scan = new BranchScanResult
-        {
-            BranchFleeceId = BranchFleeceId,
-            OrphanChanges = new List<OrphanChangeInfo>
-            {
-                new() { Name = "a", Directory = orphanA },
-                new() { Name = "b", Directory = orphanB }
-            }
-        };
-
-        var name = await _scanner.TryAutoLinkSingleOrphanAsync(scan, BranchFleeceId);
-
-        Assert.That(name, Is.Null);
-        Assert.That(await _sidecarService.ReadSidecarAsync(orphanA), Is.Null);
-        Assert.That(await _sidecarService.ReadSidecarAsync(orphanB), Is.Null);
-    }
-
-    [Test]
-    public async Task ScanBranchAsync_WithBaseBranch_FlagsAddedOrphans()
-    {
-        CreateChangeDir("brand-new-orphan");
-
-        _commandRunner
-            .Setup(r => r.RunAsync(
-                "git",
-                It.Is<string>(s => s.Contains("--diff-filter=A") && s.Contains("main..HEAD")),
-                _tempDir))
-            .ReturnsAsync(new CommandResult
-            {
-                Success = true,
-                ExitCode = 0,
-                Output = "openspec/changes/brand-new-orphan/proposal.md\nopenspec/changes/brand-new-orphan/tasks.md\n"
-            });
-
-        var result = await _scanner.ScanBranchAsync(_tempDir, BranchFleeceId, baseBranch: "main");
-
-        Assert.That(result.OrphanChanges, Has.Count.EqualTo(1));
-        Assert.That(result.OrphanChanges[0].CreatedOnBranch, Is.True);
-    }
+    // --- StripDatePrefix tests (unchanged) ---
 
     [Test]
     public void StripDatePrefix_ValidDate_RemovesPrefix()
@@ -293,6 +239,24 @@ public class ChangeScannerServiceTests
         var dir = Path.Combine(_tempDir, "openspec", "changes", "archive", archivedFolderName);
         Directory.CreateDirectory(dir);
         return dir;
+    }
+
+    private void StubFleeceIssues(params (string issueId, string tag)[] entries)
+    {
+        var issues = entries.Select(e => new Issue
+        {
+            Id = e.issueId,
+            Title = e.issueId,
+            Status = IssueStatus.Open,
+            Type = IssueType.Task,
+            CreatedAt = DateTimeOffset.UtcNow,
+            LastUpdate = DateTimeOffset.UtcNow,
+            Tags = [e.tag]
+        }).ToList();
+
+        _fleeceService
+            .Setup(f => f.ListIssuesAsync(_tempDir, null, null, null, true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(issues);
     }
 
     private void StubArtifactStatusSuccess(string changeName, bool isComplete)

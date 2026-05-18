@@ -134,7 +134,6 @@ export function useUpdateIssue(options?: UseUpdateIssueOptions) {
       queryClient.invalidateQueries({ queryKey: ['linked-prs'] })
       queryClient.invalidateQueries({ queryKey: ['agent-statuses'] })
       queryClient.invalidateQueries({ queryKey: ['openspec-states'] })
-      queryClient.invalidateQueries({ queryKey: ['orphan-changes'] })
       onSuccess?.(data as IssueResponse)
     },
     onSettled: () => {

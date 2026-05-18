@@ -4,21 +4,18 @@ namespace Homespun.Features.OpenSpec.Services;
 
 /// <summary>
 /// Scans a clone's <c>openspec/changes/</c> directory, matching changes to Fleece issues
-/// via their <c>.homespun.yaml</c> sidecars.
+/// via <c>openspec=&lt;change-name&gt;</c> tags on the per-clone Fleece projection.
 /// </summary>
 public interface IChangeScannerService
 {
     /// <summary>
-    /// Scans the clone for changes linked to <paramref name="branchFleeceId"/>.
+    /// Scans the clone for changes linked to Fleece issues via <c>openspec=</c> tags.
     /// </summary>
     /// <param name="clonePath">
     /// Absolute path to the clone root (the directory containing <c>openspec/</c>).
     /// </param>
-    /// <param name="branchFleeceId">The fleece-id suffix parsed from the branch name.</param>
-    /// <param name="baseBranch">
-    /// Optional base branch (e.g. <c>main</c>). When supplied, orphan changes are flagged as
-    /// "created on branch" via <c>git log --diff-filter=A</c>.
-    /// </param>
+    /// <param name="branchFleeceId">The fleece-id suffix parsed from the branch name (kept for telemetry).</param>
+    /// <param name="baseBranch">Unused; kept for call-site compatibility.</param>
     /// <param name="ct">Cancellation token.</param>
     Task<BranchScanResult> ScanBranchAsync(
         string clonePath,
@@ -41,16 +38,5 @@ public interface IChangeScannerService
     /// </summary>
     Task<TaskStateSummary> ParseTasksAsync(
         string changeDirectory,
-        CancellationToken ct = default);
-
-    /// <summary>
-    /// If exactly one orphan change exists in the scan, writes a sidecar pointing to
-    /// <paramref name="branchFleeceId"/> with <c>createdBy: agent</c>. Returns the change
-    /// name that was linked, or null when auto-linking did not occur (zero or multiple
-    /// orphans).
-    /// </summary>
-    Task<string?> TryAutoLinkSingleOrphanAsync(
-        BranchScanResult scan,
-        string branchFleeceId,
         CancellationToken ct = default);
 }

@@ -34,7 +34,6 @@ import {
   useLinkedPrs,
   useAgentStatuses,
   useOpenSpecStates,
-  useOrphanChanges,
   useCreateIssue,
   useUpdateIssue,
 } from '../hooks'
@@ -48,8 +47,6 @@ import {
 } from '../types'
 import { TaskGraphIssueRow, TaskGraphExpandedDetails } from './task-graph-row'
 import { InlineIssueEditor } from './inline-issue-editor'
-import { OrphanedChangesList } from './orphan-changes'
-import { aggregateOrphansFromInputs } from '../services/orphan-aggregation'
 import { ROW_HEIGHT, LANE_WIDTH, getTypeColor, TaskGraphEdges } from './task-graph-svg'
 
 export interface TaskGraphViewProps {
@@ -130,7 +127,6 @@ export const TaskGraphView = memo(
     const linkedPrsHook = useLinkedPrs(projectId)
     const agentStatusesHook = useAgentStatuses(projectId)
     const openSpecStatesHook = useOpenSpecStates(projectId, issueIds)
-    const orphanChangesHook = useOrphanChanges(projectId)
     const isLoading = issuesHook.isLoading
     const isError = issuesHook.isError
     const refetch = issuesHook.refetch
@@ -1036,18 +1032,6 @@ export const TaskGraphView = memo(
             return null
           })}
         </div>
-
-        {/* Deduped orphan changes across main + every branch. */}
-        <OrphanedChangesList
-          projectId={projectId}
-          entries={aggregateOrphansFromInputs({
-            orphanChanges: orphanChangesHook.orphanChanges,
-            openSpecStates: openSpecStatesHook.openSpecStates,
-            issues,
-          })}
-          issues={issueRenderLines}
-          openSpecStates={openSpecStatesHook.openSpecStates}
-        />
 
         {/* Cycle banner — degraded layout fallback. */}
         {layoutCycle && (

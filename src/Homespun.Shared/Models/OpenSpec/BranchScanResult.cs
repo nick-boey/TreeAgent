@@ -6,31 +6,32 @@ namespace Homespun.Shared.Models.OpenSpec;
 public class BranchScanResult
 {
     /// <summary>
-    /// The branch's fleece-id suffix (parsed from the branch name) used to match sidecars.
+    /// The branch's fleece-id suffix (parsed from the branch name), kept for telemetry.
     /// </summary>
     public required string BranchFleeceId { get; init; }
 
     /// <summary>
-    /// Changes whose sidecar <c>fleeceId</c> matches <see cref="BranchFleeceId"/>.
+    /// Changes linked to a Fleece issue via an <c>openspec=&lt;name&gt;</c> tag.
     /// Includes both live changes (<c>openspec/changes/&lt;name&gt;/</c>) and archived ones
     /// (<c>openspec/changes/archive/&lt;dated&gt;-&lt;name&gt;/</c>).
     /// </summary>
     public List<LinkedChangeInfo> LinkedChanges { get; init; } = new();
 
     /// <summary>
-    /// Changes that exist on disk but lack a sidecar.
+    /// Always empty — orphan classification has been removed.
+    /// Retained for call-site compatibility.
     /// </summary>
     public List<OrphanChangeInfo> OrphanChanges { get; init; } = new();
 
     /// <summary>
-    /// Change names whose sidecar points to a different fleece-id (inherited from main).
-    /// Reported for diagnostics; excluded from the branch's linked changes.
+    /// Always empty — inherited-change classification has been removed.
+    /// Retained for call-site compatibility.
     /// </summary>
     public List<string> InheritedChangeNames { get; init; } = new();
 }
 
 /// <summary>
-/// A change linked to the branch's fleece issue via its sidecar.
+/// A change linked to a Fleece issue via an <c>openspec=</c> tag.
 /// </summary>
 public class LinkedChangeInfo
 {
@@ -46,7 +47,7 @@ public class LinkedChangeInfo
     public required string Directory { get; init; }
 
     /// <summary>
-    /// The sidecar's <c>createdBy</c> value.
+    /// Origin label for diagnostic purposes.
     /// </summary>
     public required string CreatedBy { get; init; }
 
@@ -63,8 +64,7 @@ public class LinkedChangeInfo
 
     /// <summary>
     /// Artifact state from <c>openspec status --change &lt;name&gt; --json</c>.
-    /// Null when the CLI could not be invoked successfully (e.g. archived changes that
-    /// <c>openspec</c> no longer recognises by name).
+    /// Null when the CLI could not be invoked successfully (e.g. archived changes).
     /// </summary>
     public ChangeArtifactState? ArtifactState { get; init; }
 
@@ -75,17 +75,12 @@ public class LinkedChangeInfo
 }
 
 /// <summary>
-/// A change directory without a sidecar.
+/// Placeholder — orphan classification has been removed; this type is retained
+/// for call-site compatibility only and will not be populated.
 /// </summary>
 public class OrphanChangeInfo
 {
     public required string Name { get; init; }
     public required string Directory { get; init; }
-
-    /// <summary>
-    /// True when the change appears to have been added on this branch (via
-    /// <c>git log --diff-filter=A</c>). Detection is best-effort; defaults to false when
-    /// no base branch is supplied or the git query fails.
-    /// </summary>
     public bool CreatedOnBranch { get; init; }
 }

@@ -180,12 +180,37 @@ public class GraphTracingTests
 
         var transition = new Mock<IFleeceIssueTransitionService>();
 
-        var sidecarService = new SidecarService(NullLogger<SidecarService>.Instance);
+        // Return an issue tagged openspec=my-change so BuildTagMapAsync links the
+        // change directory and ScanBranchAsync calls GetArtifactStateAsync (which
+        // emits the openspec.artifact.state span we assert on).
+        var scannerFleeceService = new Mock<IProjectFleeceService>();
+        scannerFleeceService
+            .Setup(f => f.ListIssuesAsync(
+                _testPath,
+                It.IsAny<IssueStatus?>(),
+                It.IsAny<IssueType?>(),
+                It.IsAny<int?>(),
+                It.IsAny<bool>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync((IReadOnlyList<Issue>)new List<Issue>
+            {
+                new Issue
+                {
+                    Id = "issue-1",
+                    Title = "test",
+                    Type = IssueType.Task,
+                    Status = IssueStatus.Open,
+                    Tags = ["openspec=my-change"],
+                    CreatedAt = DateTime.UtcNow,
+                    LastUpdate = DateTime.UtcNow
+                }
+            });
+
         var commandRunner = new CommandRunner(
             new MockGitHubEnvironmentService(),
             NullLogger<CommandRunner>.Instance);
         var scanner = new ChangeScannerService(
-            sidecarService,
+            scannerFleeceService.Object,
             commandRunner,
             NullLogger<ChangeScannerService>.Instance);
         var reconciliation = new ChangeReconciliationService(

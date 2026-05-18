@@ -5,13 +5,12 @@ using Homespun.Shared.Models.OpenSpec;
 namespace Homespun.Features.OpenSpec.Services;
 
 /// <summary>
-/// Enriches a <see cref="TaskGraphResponse"/> with OpenSpec state for each issue:
-/// populates <c>OpenSpecStates</c> and surfaces any main-branch orphans.
+/// Enriches a <see cref="TaskGraphResponse"/> with OpenSpec state for each issue.
 /// </summary>
 public interface IIssueGraphOpenSpecEnricher
 {
     /// <summary>
-    /// Populates <c>OpenSpecStates</c> and <c>MainOrphanChanges</c> on the given response.
+    /// Populates <c>OpenSpecStates</c> on the given response.
     /// Swallows errors per-issue and logs at debug level — the graph must render regardless.
     ///
     /// <paramref name="branchContext"/> is optional — when omitted the enricher
@@ -33,16 +32,6 @@ public interface IIssueGraphOpenSpecEnricher
     Task<Dictionary<string, IssueOpenSpecState>> GetOpenSpecStatesAsync(
         string projectId,
         IReadOnlyCollection<string> issueIds,
-        BranchResolutionContext? branchContext = null,
-        CancellationToken ct = default);
-
-    /// <summary>
-    /// Returns OpenSpec changes that live on the project's main branch with no
-    /// owning issue ("orphan" changes). Each entry is keyed by change name; entries
-    /// duplicated across branches are de-duplicated to a single record.
-    /// </summary>
-    Task<List<SnapshotOrphan>> GetMainOrphanChangesAsync(
-        string projectId,
         BranchResolutionContext? branchContext = null,
         CancellationToken ct = default);
 }

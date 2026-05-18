@@ -327,7 +327,7 @@ public class MockDataSeederService : IHostedService
                 Type = IssueType.Chore,
                 Status = IssueStatus.Complete,
                 Priority = 3,
-                Tags = ["infrastructure", "maintenance"],
+                Tags = ["infrastructure", "maintenance", "openspec=2026-01-15-old-feature"],
                 CreatedAt = now.AddDays(-30),
                 LastUpdate = now.AddDays(-18)
             },
@@ -382,7 +382,7 @@ public class MockDataSeederService : IHostedService
                 Type = IssueType.Task,
                 Status = IssueStatus.Progress,
                 Priority = 2,
-                Tags = ["api", "backend"],
+                Tags = ["api", "backend", "openspec=api-v2-design", "openspec=api-v2-impl"],
                 ExecutionMode = ExecutionMode.Parallel,
                 ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-004", SortOrder = "b" }],
                 CreatedAt = now.AddDays(-12),
@@ -479,7 +479,7 @@ public class MockDataSeederService : IHostedService
                 Type = IssueType.Task,
                 Status = IssueStatus.Open,
                 Priority = 3,
-                Tags = ["api", "security"],
+                Tags = ["api", "security", "openspec=rate-limiting"],
                 ParentIssues = [new ParentIssueRef { ParentIssue = "ISSUE-004", SortOrder = "c" }],
                 CreatedAt = now.AddDays(-10),
                 LastUpdate = now.AddDays(-5)
