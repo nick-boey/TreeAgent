@@ -321,8 +321,8 @@ function FixtureGraphView({ issues, openSpecStates, viewMode }: FixtureGraphView
           edges={edges}
           renderLines={renderLines}
           expandedIds={new Set()}
+          expandedPanelHeights={new Map()}
           maxLanes={maxLanes}
-          rowRefs={rowRefs}
         />
         {renderLines.map((line, index) => {
           if (isIssueRenderLine(line)) {
@@ -516,8 +516,8 @@ function FixtureGraphViewWithPending({
           edges={edges}
           renderLines={renderLines}
           expandedIds={new Set()}
+          expandedPanelHeights={new Map()}
           maxLanes={maxLanes}
-          rowRefs={rowRefs}
         />
         {renderLines.map((line, index) => {
           if (isPendingIssueRenderLine(line)) {

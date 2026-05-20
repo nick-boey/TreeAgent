@@ -2,7 +2,7 @@
  * InlineIssueDetailRow - Expanded inline details for an issue in the task graph.
  */
 
-import { memo, useCallback, useState, useMemo } from 'react'
+import { memo, useCallback, useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react'
 import { Copy, Pencil, Play, X, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { IssueStatus, ExecutionMode } from '@/api'
@@ -28,6 +28,12 @@ export interface InlineIssueDetailRowProps {
   /** Called when clicking the Open Session button to navigate to an existing session */
   onOpenSession?: (sessionId: string) => void
   onClose?: () => void
+  /**
+   * Called with this panel's measured `offsetHeight` synchronously after mount
+   * (via `useLayoutEffect`) and on every subsequent resize (via `ResizeObserver`).
+   * Called with `height === 0` on unmount so the parent can drop the entry.
+   */
+  onHeightChange?: (issueId: string, height: number) => void
 }
 
 /**
@@ -41,9 +47,43 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
   onRunAgent,
   onOpenSession,
   onClose,
+  onHeightChange,
 }: InlineIssueDetailRowProps) {
   const [copied, setCopied] = useState(false)
   const isMobile = useMobile()
+  const containerRef = useRef<HTMLDivElement>(null)
+  const issueId = line.issueId
+
+  // Seed the height synchronously before first paint so edges crossing past
+  // this newly-mounted panel use the correct cumulative offset on the same
+  // paint that mounts it. The ResizeObserver below picks up subsequent
+  // changes asynchronously.
+  useLayoutEffect(() => {
+    if (!onHeightChange) return
+    const el = containerRef.current
+    if (el) {
+      onHeightChange(issueId, el.offsetHeight)
+    }
+    return () => {
+      onHeightChange(issueId, 0)
+    }
+  }, [issueId, onHeightChange])
+
+  useEffect(() => {
+    if (!onHeightChange) return
+    const el = containerRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = (entry.target as HTMLElement).offsetHeight
+        onHeightChange(issueId, height)
+      }
+    })
+    observer.observe(el)
+    return () => {
+      observer.disconnect()
+    }
+  }, [issueId, onHeightChange])
 
   // Calculate left padding to align with content (after SVG)
   // On mobile, use minimal padding for full-width display
@@ -81,6 +121,7 @@ export const InlineIssueDetailRow = memo(function InlineIssueDetailRow({
 
   return (
     <div
+      ref={containerRef}
       className={cn(
         'animate-expand bg-muted/30 border-muted overflow-hidden border-t px-3 py-4',
         'transition-all duration-200 ease-out'

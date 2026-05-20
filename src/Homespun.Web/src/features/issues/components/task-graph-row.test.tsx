@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { TaskGraphIssueRow } from './task-graph-row'
+import { ROW_HEIGHT } from './task-graph-svg'
 import { TaskGraphMarkerType } from '../services'
 import type { TaskGraphIssueRenderLine } from '../services'
 import type { UseQueryResult } from '@tanstack/react-query'
@@ -441,6 +442,22 @@ describe('TaskGraphIssueRow', () => {
       fireEvent.click(toggleButton)
 
       expect(onExecutionModeChange).toHaveBeenCalledWith('test-123', ExecutionMode.SERIES)
+    })
+  })
+
+  // Uniform-row-height invariant — relied on by `TaskGraphEdges`'s pure-function
+  // edge-Y math (`row * ROW_HEIGHT + ROW_HEIGHT/2 + cumulativeExpandedOffset`).
+  // Any variable-height row variant would silently break edge alignment.
+  describe('row-height invariant', () => {
+    it('renders TaskGraphIssueRow at exactly ROW_HEIGHT', () => {
+      vi.spyOn(prStatusHook, 'useLinkedPrStatus').mockReturnValue(
+        createMockQueryResult<IssuePullRequestStatus | null>(null)
+      )
+
+      const { container } = render(<TaskGraphIssueRow {...defaultProps} />)
+      const row = container.firstElementChild as HTMLElement | null
+      expect(row).not.toBeNull()
+      expect(row?.style.height).toBe(`${ROW_HEIGHT}px`)
     })
   })
 })

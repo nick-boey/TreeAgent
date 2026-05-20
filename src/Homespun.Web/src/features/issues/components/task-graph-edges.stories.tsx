@@ -7,6 +7,7 @@ import {
   calculateSvgWidth,
   getLaneCenterX,
   getRowCenterY,
+  getTypeColor,
 } from './task-graph-svg'
 import {
   TaskGraphMarkerType,
@@ -39,20 +40,40 @@ function issueLine(overrides: Partial<TaskGraphIssueRenderLine>): TaskGraphIssue
   }
 }
 
-function NodeMarkers({ lines, maxLanes }: { lines: TaskGraphRenderLine[]; maxLanes: number }) {
+function NodeMarkers({
+  lines,
+  maxLanes,
+  expandedIds,
+  expandedPanelHeights,
+}: {
+  lines: TaskGraphRenderLine[]
+  maxLanes: number
+  expandedIds: Set<string>
+  expandedPanelHeights: Map<string, number>
+}) {
   const width = calculateSvgWidth(maxLanes)
+  // Mirror the prefix-sum used by TaskGraphEdges so node markers and edges
+  // share the same Y coordinates without any DOM measurement.
+  let cumulative = 0
+  const totalPanelHeight = Array.from(expandedPanelHeights.values()).reduce((sum, h) => sum + h, 0)
   return (
     <svg
       width={width}
-      height={ROW_HEIGHT * lines.length}
+      height={ROW_HEIGHT * lines.length + totalPanelHeight}
       style={{ position: 'absolute', top: 0, left: 0 }}
       aria-hidden="true"
     >
       {lines.map((line, i) => {
-        if (line.type !== 'issue') return null
-        const cy = i * ROW_HEIGHT + getRowCenterY()
+        if (line.type !== 'issue') {
+          return null
+        }
+        const cy = i * ROW_HEIGHT + getRowCenterY() + cumulative
         const cx = getLaneCenterX(line.lane)
-        return <circle key={i} cx={cx} cy={cy} r={6} fill="#3b82f6" />
+        const node = <circle key={i} cx={cx} cy={cy} r={6} fill={getTypeColor(line.issueType)} />
+        if (expandedIds.has(line.issueId)) {
+          cumulative += expandedPanelHeights.get(line.issueId) ?? 0
+        }
+        return node
       })}
     </svg>
   )
@@ -62,26 +83,37 @@ function Frame({
   lines,
   edges,
   maxLanes,
+  expandedIds = new Set<string>(),
+  expandedPanelHeights = new Map<string, number>(),
 }: {
   lines: TaskGraphRenderLine[]
   edges: TaskGraphEdge[]
   maxLanes: number
+  expandedIds?: Set<string>
+  expandedPanelHeights?: Map<string, number>
 }) {
   const width = calculateSvgWidth(maxLanes)
+  const totalPanelHeight = Array.from(expandedPanelHeights.values()).reduce((sum, h) => sum + h, 0)
   return (
     <div
       style={{
         position: 'relative',
         width,
-        height: ROW_HEIGHT * lines.length,
+        height: ROW_HEIGHT * lines.length + totalPanelHeight,
         background: '#fff',
       }}
     >
-      <NodeMarkers lines={lines} maxLanes={maxLanes} />
+      <NodeMarkers
+        lines={lines}
+        maxLanes={maxLanes}
+        expandedIds={expandedIds}
+        expandedPanelHeights={expandedPanelHeights}
+      />
       <TaskGraphEdges
         edges={edges}
         renderLines={lines}
-        expandedIds={new Set()}
+        expandedIds={expandedIds}
+        expandedPanelHeights={expandedPanelHeights}
         maxLanes={maxLanes}
       />
     </div>
@@ -194,6 +226,51 @@ export const ParallelChildren: Story = {
         targetAttach: 'Bottom',
       },
     ],
+  },
+}
+
+/**
+ * Demonstrates Decision 2 of the redraw-graph-edges-reactively change:
+ * expanded panels feed their measured heights into TaskGraphEdges via
+ * `expandedPanelHeights`, which offsets every downstream endpoint Y by
+ * the cumulative height of expanded panels above it.
+ */
+export const ExpandedPanelOffset: Story = {
+  args: {
+    maxLanes: 1,
+    lines: [
+      issueLine({ issueId: 'a', title: 'Top sibling', lane: 0 }),
+      issueLine({ issueId: 'b', title: 'Expanded sibling', lane: 0 }),
+      issueLine({ issueId: 'c', title: 'Below expansion', lane: 0 }),
+    ],
+    edges: [
+      {
+        from: 'a',
+        to: 'b',
+        kind: 'SeriesSibling',
+        startRow: 0,
+        startLane: 0,
+        endRow: 1,
+        endLane: 0,
+        pivotLane: null,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      },
+      {
+        from: 'b',
+        to: 'c',
+        kind: 'SeriesSibling',
+        startRow: 1,
+        startLane: 0,
+        endRow: 2,
+        endLane: 0,
+        pivotLane: null,
+        sourceAttach: 'Bottom',
+        targetAttach: 'Top',
+      },
+    ],
+    expandedIds: new Set(['b']),
+    expandedPanelHeights: new Map([['b', 100]]),
   },
 }
 

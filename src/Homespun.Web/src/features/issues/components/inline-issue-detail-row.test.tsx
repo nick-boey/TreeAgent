@@ -354,4 +354,43 @@ describe('InlineIssueDetailRow', () => {
       expect(detailRow).toHaveClass('animate-expand')
     })
   })
+
+  // Height-reporting contract: drives the cumulative-offset math in
+  // `TaskGraphEdges` (Decisions 2 & 3 of redraw-graph-edges-reactively).
+  describe('onHeightChange', () => {
+    it('reports panel offsetHeight synchronously on mount (before paint)', () => {
+      const onHeightChange = vi.fn()
+      const FAKE_HEIGHT = 240
+      // jsdom returns 0 for offsetHeight; stub it for any HTMLElement.
+      const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')
+      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+        configurable: true,
+        get() {
+          return FAKE_HEIGHT
+        },
+      })
+      try {
+        render(<InlineIssueDetailRow {...defaultProps} onHeightChange={onHeightChange} />)
+        // useLayoutEffect runs synchronously during render in test environment.
+        expect(onHeightChange).toHaveBeenCalledWith('abc123', FAKE_HEIGHT)
+      } finally {
+        if (original) {
+          Object.defineProperty(HTMLElement.prototype, 'offsetHeight', original)
+        } else {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          delete (HTMLElement.prototype as any).offsetHeight
+        }
+      }
+    })
+
+    it('reports height === 0 on unmount so parent can drop the entry', () => {
+      const onHeightChange = vi.fn()
+      const { unmount } = render(
+        <InlineIssueDetailRow {...defaultProps} onHeightChange={onHeightChange} />
+      )
+      onHeightChange.mockClear()
+      unmount()
+      expect(onHeightChange).toHaveBeenCalledWith('abc123', 0)
+    })
+  })
 })

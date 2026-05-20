@@ -92,6 +92,7 @@ function Frame({
         edges={edges}
         renderLines={lines}
         expandedIds={new Set()}
+        expandedPanelHeights={new Map()}
         maxLanes={maxLanes}
       />
     </div>
