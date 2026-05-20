@@ -22,6 +22,7 @@ import {
 import type {
   DiscoveredSkills,
   IssueOpenSpecState,
+  IssueResponse,
   RunAgentAcceptedResponse,
   TaskGraphResponse,
   Project,
@@ -216,10 +217,23 @@ describe('OpenSpecTabContent', () => {
     mockGetProject.mockResolvedValue(createMockResponse(createProject()))
   })
 
-  function renderTab(state: IssueOpenSpecState | null) {
+  const MOCK_ISSUE: IssueResponse = {
+    id: 'issue-1',
+    title: 'Test Issue',
+    description: 'Test description',
+  }
+
+  const PREFILLED_BLOCK = 'Issue ID: issue-1\nTitle: Test Issue\nDescription: Test description'
+
+  function renderTab(state: IssueOpenSpecState | null, issue?: IssueResponse) {
     mockGetGraph.mockResolvedValue(createMockResponse(createGraph(state)))
     return render(
-      <OpenSpecTabContent projectId="project-1" issueId="issue-1" onOpenChange={vi.fn()} />,
+      <OpenSpecTabContent
+        projectId="project-1"
+        issueId="issue-1"
+        issue={issue}
+        onOpenChange={vi.fn()}
+      />,
       { wrapper: wrapper() }
     )
   }
@@ -261,11 +275,14 @@ describe('OpenSpecTabContent', () => {
   })
 
   it('dispatches with skill name and change name as arg', async () => {
-    renderTab({
-      branchState: BranchPresence.WITH_CHANGE,
-      changeState: ChangePhase.READY_TO_APPLY,
-      changeName: 'my-change',
-    })
+    renderTab(
+      {
+        branchState: BranchPresence.WITH_CHANGE,
+        changeState: ChangePhase.READY_TO_APPLY,
+        changeName: 'my-change',
+      },
+      MOCK_ISSUE
+    )
 
     // Wait for auto-selection to settle.
     const startBtn = await screen.findByTestId('openspec-start-agent')
@@ -280,6 +297,7 @@ describe('OpenSpecTabContent', () => {
             skillName: 'openspec-apply-change',
             skillArgs: { change: 'my-change' },
             mode: SessionMode.BUILD,
+            userInstructions: PREFILLED_BLOCK,
           }),
         })
       )
@@ -287,12 +305,15 @@ describe('OpenSpecTabContent', () => {
   })
 
   it('prepends schema override to userInstructions when non-default schema', async () => {
-    renderTab({
-      branchState: BranchPresence.WITH_CHANGE,
-      changeState: ChangePhase.READY_TO_APPLY,
-      changeName: 'my-change',
-      schemaName: 'custom-schema',
-    })
+    renderTab(
+      {
+        branchState: BranchPresence.WITH_CHANGE,
+        changeState: ChangePhase.READY_TO_APPLY,
+        changeName: 'my-change',
+        schemaName: 'custom-schema',
+      },
+      MOCK_ISSUE
+    )
 
     const startBtn = await screen.findByTestId('openspec-start-agent')
     await waitFor(() => expect(startBtn).not.toBeDisabled())
@@ -302,7 +323,7 @@ describe('OpenSpecTabContent', () => {
       expect(mockRunAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           body: expect.objectContaining({
-            userInstructions: "use openspec schema 'custom-schema' for all openspec commands",
+            userInstructions: `use openspec schema 'custom-schema' for all openspec commands\n\n${PREFILLED_BLOCK}`,
           }),
         })
       )
