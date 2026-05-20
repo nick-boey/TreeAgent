@@ -31,8 +31,6 @@ public class IssueGraphOpenSpecEnricher(
         enrichActivity?.SetTag("project.id", projectId);
         enrichActivity?.SetTag("graph.node.count", response.Nodes.Count);
 
-        // Build the context once if the caller did not supply one. Hot-path
-        // callers (GraphService) always pass a pre-built context.
         var context = branchContext ?? await BuildFallbackContextAsync(projectId);
 
         foreach (var node in response.Nodes)
@@ -65,15 +63,6 @@ public class IssueGraphOpenSpecEnricher(
             {
                 logger.LogDebug(ex, "Failed to enrich OpenSpec state for issue {IssueId}", issueId);
             }
-        }
-
-        try
-        {
-            response.MainOrphanChanges = await ScanMainOrphansAsync(projectId, ct);
-        }
-        catch (Exception ex)
-        {
-            logger.LogDebug(ex, "Failed to scan main-branch orphans for project {ProjectId}", projectId);
         }
     }
 
@@ -113,27 +102,6 @@ public class IssueGraphOpenSpecEnricher(
         }
 
         return result;
-    }
-
-    /// <inheritdoc />
-    public async Task<List<SnapshotOrphan>> GetMainOrphanChangesAsync(
-        string projectId,
-        BranchResolutionContext? branchContext = null,
-        CancellationToken ct = default)
-    {
-        // The branch context isn't needed for the main-branch scan — kept on the
-        // signature so callers can pass a single context for the whole request
-        // even though only the per-issue path consumes it.
-        _ = branchContext;
-        try
-        {
-            return await ScanMainOrphansAsync(projectId, ct);
-        }
-        catch (Exception ex)
-        {
-            logger.LogDebug(ex, "Failed to scan main-branch orphans for project {ProjectId}", projectId);
-            return new List<SnapshotOrphan>();
-        }
     }
 
     private async Task<BranchResolutionContext> BuildFallbackContextAsync(string projectId)
@@ -177,8 +145,7 @@ public class IssueGraphOpenSpecEnricher(
             return new IssueOpenSpecState
             {
                 BranchState = BranchPresence.Exists,
-                ChangeState = ChangePhase.None,
-                Orphans = snapshot?.Orphans ?? new List<SnapshotOrphan>()
+                ChangeState = ChangePhase.None
             };
         }
 
@@ -205,36 +172,8 @@ public class IssueGraphOpenSpecEnricher(
             ChangeState = MapPhase(primary),
             ChangeName = primary.Name,
             SchemaName = primary.ArtifactState?.SchemaName,
-            Phases = phases,
-            Orphans = snapshot.Orphans
+            Phases = phases
         };
-    }
-
-    internal async Task<List<SnapshotOrphan>> ScanMainOrphansAsync(
-        string projectId,
-        CancellationToken ct)
-    {
-        var project = dataStore.GetProject(projectId);
-        if (project is null || string.IsNullOrEmpty(project.LocalPath))
-        {
-            return new List<SnapshotOrphan>();
-        }
-
-        // Main orphans live in the project's primary repo clone (not a per-branch clone).
-        var mainPath = project.LocalPath;
-        if (!Directory.Exists(mainPath))
-        {
-            return new List<SnapshotOrphan>();
-        }
-
-        // Use a sentinel branch fleece-id that cannot match — all changes either become
-        // "inherited" (sidecar points elsewhere) or orphans (no sidecar).
-        const string SentinelFleeceId = "\0__homespun_main_scan__";
-        var scan = await scanner.ScanBranchAsync(mainPath, SentinelFleeceId, baseBranch: null, ct);
-
-        return scan.OrphanChanges
-            .Select(o => new SnapshotOrphan { Name = o.Name, CreatedOnBranch = o.CreatedOnBranch })
-            .ToList();
     }
 
     internal static ChangePhase MapPhase(SnapshotChange change)

@@ -53,11 +53,6 @@ public class IssueOpenSpecState
     /// Per-phase roll-up parsed from tasks.md (only populated for linked changes).
     /// </summary>
     public List<PhaseSummary> Phases { get; init; } = new();
-
-    /// <summary>
-    /// Orphan changes on the issue's branch (no sidecar).
-    /// </summary>
-    public List<SnapshotOrphan> Orphans { get; init; } = new();
 }
 
 /// <summary>

@@ -50,8 +50,3 @@ export {
   openSpecStatesQueryKey,
   type UseOpenSpecStatesResult,
 } from './use-openspec-states'
-export {
-  useOrphanChanges,
-  orphanChangesQueryKey,
-  type UseOrphanChangesResult,
-} from './use-orphan-changes'

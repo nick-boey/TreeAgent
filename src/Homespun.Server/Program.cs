@@ -398,8 +398,7 @@ builder.Services.AddSingleton<IPlansService, PlansService>();
 // TimeProvider is required by OpenSpec services and may not be registered under mock mode.
 builder.Services.AddSingleton(TimeProvider.System);
 
-// OpenSpec services (read/write .homespun.yaml sidecars linking changes to Fleece issues)
-builder.Services.AddSingleton<ISidecarService, SidecarService>();
+// OpenSpec services (change-to-issue linkage via Fleece openspec= tags)
 builder.Services.AddScoped<IChangeScannerService, ChangeScannerService>();
 builder.Services.AddScoped<IChangeReconciliationService, ChangeReconciliationService>();
 builder.Services.AddSingleton<IBranchStateCacheService, BranchStateCacheService>();

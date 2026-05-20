@@ -41,11 +41,6 @@ public class TaskGraphResponse
     /// </summary>
     public Dictionary<string, IssueOpenSpecState> OpenSpecStates { get; set; } = new();
 
-    /// <summary>
-    /// Orphan OpenSpec changes that live on <c>main</c> (no owning issue).
-    /// Rendered as a separate "Orphaned Changes" section at the bottom of the graph.
-    /// </summary>
-    public List<SnapshotOrphan> MainOrphanChanges { get; set; } = [];
 }
 
 public class TaskGraphNodeResponse

@@ -92,11 +92,6 @@ public class BranchStateResolverService(
                 TasksTotal = c.TaskState.TasksTotal,
                 NextIncomplete = c.TaskState.NextIncomplete,
                 Phases = c.TaskState.Phases
-            }).ToList(),
-            Orphans = scan.OrphanChanges.Select(o => new SnapshotOrphan
-            {
-                Name = o.Name,
-                CreatedOnBranch = o.CreatedOnBranch
             }).ToList()
         };
     }

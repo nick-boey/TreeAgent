@@ -43,8 +43,6 @@ public class ChangeReconciliationServiceTests
 
         _scanner.Setup(s => s.ScanBranchAsync(ClonePath, FleeceId, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(scan);
-        _scanner.Setup(s => s.TryAutoLinkSingleOrphanAsync(scan, FleeceId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((string?)null);
         _transition.Setup(t => t.GetStatusAsync(ProjectId, FleeceId)).ReturnsAsync(IssueStatus.Progress);
         _transition.Setup(t => t.TransitionToCompleteAsync(ProjectId, FleeceId, It.IsAny<int?>()))
             .ReturnsAsync(FleeceTransitionResult.Ok(IssueStatus.Progress, IssueStatus.Complete));
@@ -69,8 +67,6 @@ public class ChangeReconciliationServiceTests
 
         _scanner.Setup(s => s.ScanBranchAsync(ClonePath, FleeceId, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(scan);
-        _scanner.Setup(s => s.TryAutoLinkSingleOrphanAsync(scan, FleeceId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((string?)null);
         _transition.Setup(t => t.GetStatusAsync(ProjectId, FleeceId)).ReturnsAsync(IssueStatus.Complete);
 
         await _service.ReconcileAsync(ProjectId, ClonePath, FleeceId);
@@ -93,47 +89,10 @@ public class ChangeReconciliationServiceTests
 
         _scanner.Setup(s => s.ScanBranchAsync(ClonePath, FleeceId, null, It.IsAny<CancellationToken>()))
             .ReturnsAsync(scan);
-        _scanner.Setup(s => s.TryAutoLinkSingleOrphanAsync(scan, FleeceId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((string?)null);
 
         await _service.ReconcileAsync(ProjectId, ClonePath, FleeceId);
 
         _transition.Verify(t => t.TransitionToCompleteAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int?>()),
             Times.Never);
-    }
-
-    [Test]
-    public async Task ReconcileAsync_SingleOrphan_AutoLinksAndRescans()
-    {
-        var firstScan = new BranchScanResult
-        {
-            BranchFleeceId = FleeceId,
-            OrphanChanges = new List<OrphanChangeInfo>
-            {
-                new() { Name = "orphan", Directory = "/tmp/orphan" }
-            }
-        };
-
-        var secondScan = new BranchScanResult
-        {
-            BranchFleeceId = FleeceId,
-            LinkedChanges = new List<LinkedChangeInfo>
-            {
-                new() { Name = "orphan", Directory = "/tmp/orphan", CreatedBy = "agent", IsArchived = false }
-            }
-        };
-
-        _scanner.SetupSequence(s => s.ScanBranchAsync(ClonePath, FleeceId, null, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(firstScan)
-            .ReturnsAsync(secondScan);
-        _scanner.Setup(s => s.TryAutoLinkSingleOrphanAsync(firstScan, FleeceId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync("orphan");
-
-        var result = await _service.ReconcileAsync(ProjectId, ClonePath, FleeceId);
-
-        Assert.That(result, Is.SameAs(secondScan));
-        Assert.That(result.LinkedChanges, Has.Count.EqualTo(1));
-        _scanner.Verify(s => s.ScanBranchAsync(ClonePath, FleeceId, null, It.IsAny<CancellationToken>()),
-            Times.Exactly(2));
     }
 }

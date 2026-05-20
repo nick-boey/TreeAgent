@@ -1,4 +1,5 @@
 using Homespun.Features.Commands;
+using Homespun.Features.Fleece.Services;
 using Homespun.Features.OpenSpec.Services;
 using Homespun.Shared.Models.Commands;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -106,7 +107,7 @@ public class ChangeScannerArtifactStateCacheTests
             });
 
         var scanner = new ChangeScannerService(
-            new SidecarService(NullLogger<SidecarService>.Instance),
+            new Mock<IProjectFleeceService>().Object,
             commandRunner.Object,
             NullLogger<ChangeScannerService>.Instance);
 
