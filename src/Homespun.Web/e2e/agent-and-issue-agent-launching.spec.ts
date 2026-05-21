@@ -81,14 +81,17 @@ test.describe.serial('Agent and Issue Agent Launching', () => {
     await expect(issueRow).toBeVisible()
     await issueRow.click()
 
-    // Click the toolbar Issues Agent button
-    await page.click('[data-testid="toolbar-issues-agent"]')
+    // Click the toolbar Run Agent button
+    await page.click('[data-testid="toolbar-run-agent"]')
 
-    // Verify the Run Agent dialog opens on the Issues Agent tab
+    // Verify the Run Agent dialog opens
     const agentDialog = page.locator('[role="dialog"]').filter({ hasText: 'Run Agent' })
     await expect(agentDialog).toBeVisible({ timeout: 10000 })
 
-    // Verify we're on the Issues Agent tab (now skill-less — free-text only)
+    // Switch to the Issues Agent tab
+    await agentDialog.getByRole('tab', { name: /issues agent/i }).click()
+
+    // Verify the Issues Agent tab is visible (now skill-less — free-text only)
     const issuesTab = agentDialog.locator('[data-testid="issues-tab-content"]')
     await expect(issuesTab).toBeVisible()
 

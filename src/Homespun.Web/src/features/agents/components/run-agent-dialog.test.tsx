@@ -177,6 +177,51 @@ describe('RunAgentDialog', () => {
     expect(screen.getByRole('tab', { name: /issues agent/i })).toBeInTheDocument()
   })
 
+  describe('OpenSpec tab visibility', () => {
+    it('shows the OpenSpec tab when issueId is set', async () => {
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          issueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /openspec/i })).toBeInTheDocument()
+      })
+    })
+
+    it('shows the OpenSpec tab when only selectedIssueId is set', async () => {
+      render(
+        <RunAgentDialog
+          open={true}
+          onOpenChange={() => {}}
+          projectId="project-123"
+          selectedIssueId="issue-456"
+        />,
+        { wrapper: createWrapper() }
+      )
+
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /openspec/i })).toBeInTheDocument()
+      })
+    })
+
+    it('hides the OpenSpec tab when neither issueId nor selectedIssueId is set', async () => {
+      render(<RunAgentDialog open={true} onOpenChange={() => {}} projectId="project-123" />, {
+        wrapper: createWrapper(),
+      })
+
+      await waitFor(() => {
+        expect(screen.getByRole('dialog')).toBeInTheDocument()
+      })
+      expect(screen.queryByRole('tab', { name: /openspec/i })).not.toBeInTheDocument()
+    })
+  })
+
   it('defaults to task tab when issueId is provided', async () => {
     render(
       <RunAgentDialog

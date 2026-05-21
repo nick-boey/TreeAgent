@@ -108,7 +108,7 @@ export function RunAgentDialog({
           <TabsList variant="line">
             <TabsTrigger value="task">Task Agent</TabsTrigger>
             <TabsTrigger value="issues">Issues Agent</TabsTrigger>
-            {issueId ? <TabsTrigger value="openspec">OpenSpec</TabsTrigger> : null}
+            {effectiveIssueId ? <TabsTrigger value="openspec">OpenSpec</TabsTrigger> : null}
           </TabsList>
 
           <TabsContent
@@ -142,7 +142,7 @@ export function RunAgentDialog({
             />
           </TabsContent>
 
-          {issueId ? (
+          {effectiveIssueId ? (
             <TabsContent
               value="openspec"
               forceMount
@@ -151,7 +151,7 @@ export function RunAgentDialog({
             >
               <OpenSpecTabContent
                 projectId={projectId}
-                issueId={issueId}
+                issueId={effectiveIssueId}
                 issue={issue}
                 onAgentStart={onAgentStart}
                 onOpenChange={onOpenChange}

@@ -22,7 +22,6 @@ const defaultProps = {
   onMakeParent: vi.fn(),
   onEditIssue: vi.fn(),
   onOpenAgentLauncher: vi.fn(),
-  onOpenIssuesAgent: vi.fn(),
   onAssignIssue: vi.fn(),
   depth: 3,
   onDepthChange: vi.fn(),
