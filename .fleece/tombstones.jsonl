@@ -44,6 +44,7 @@
 {"issueId":"nNPfDD","originalTitle":"Test issue","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"p2hsEN","originalTitle":"Add UI for modifying workflows","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"pczleh","originalTitle":"Fix broken issues agent diff panel","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"pgk6w9","originalTitle":"Orphaned changes doesn\u0027t quite work","cleanedAt":"2026-05-21T07:27:43.942593+00:00","cleanedBy":"runner"}
 {"issueId":"q4jrGK","originalTitle":"E2E and integration tests for workflow and task queue systems","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"qvUugH","originalTitle":"Migrate design to Subframe","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"rf9aTf","originalTitle":"Search doesn\u0027t work","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}

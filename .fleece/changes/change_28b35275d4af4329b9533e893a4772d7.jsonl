@@ -1,5 +1,0 @@
-{"kind":"meta","follows":"5bf7b69487c84a8f810e46d8adb21e68"}
-{"kind":"add","at":"2026-05-18T09:34:30.2072942+00:00","by":"Homespun Bot","issueId":"0y6gL5","property":"tags","value":"openspec=remove-orphan-changes-and-sidecars"}
-{"kind":"set","at":"2026-05-18T12:29:33.3571496+00:00","by":"Homespun Bot","issueId":"0y6gL5","property":"status","value":"Progress"}
-{"kind":"set","at":"2026-05-18T12:34:38.513326+00:00","by":"Homespun Bot","issueId":"0y6gL5","property":"status","value":"Review"}
-{"kind":"add","at":"2026-05-18T12:34:38.513326+00:00","by":"Homespun Bot","issueId":"0y6gL5","property":"tags","value":"hsp-linked-pr=832"}
