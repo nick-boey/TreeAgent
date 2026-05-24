@@ -15,6 +15,7 @@
 {"issueId":"By06dl","originalTitle":"Example issue","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"CQQ0sc","originalTitle":"Documentation \u0026 Polish","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"Ct2Rbd","originalTitle":"Task graph loading waits for GitHub PRs to load","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"E9AL8M","originalTitle":"Convert units library to F#","cleanedAt":"2026-05-24T07:15:13.1853809+00:00","cleanedBy":"runner"}
 {"issueId":"FVQEfE","originalTitle":"Fix log level parsing for server logs","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"Gsexze","originalTitle":"Add GitHub and Fleece CLI tools to all containers","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"HYqZp4","originalTitle":"Add single container mode for mini prompts and execution mode","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
@@ -36,6 +37,7 @@
 {"issueId":"bWENZs","originalTitle":"Check log access works","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"cHYXZV","originalTitle":"Agents page currently broken","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"fFgKeO","originalTitle":"Test mock container","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"hvyZsY","originalTitle":"Add F# transpilation","cleanedAt":"2026-05-24T07:15:13.1853809+00:00","cleanedBy":"runner"}
 {"issueId":"jdiG3U","originalTitle":"Run bd sync on cloned repositories","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"k0DZ7S","originalTitle":"PR caching not used on project load","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"kCGtGv","originalTitle":"Check that stopping sessions kills container","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
@@ -53,5 +55,6 @@
 {"issueId":"sMhFm4","originalTitle":"Fix Beads setup for new repositories","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"t56TXM","originalTitle":"Don\u0027t show message time on hover","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"u1dQ8S","originalTitle":"Test issue 2","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
+{"issueId":"uitYm4","originalTitle":"OpenSpec: chat-assistant-ui","cleanedAt":"2026-05-24T07:15:13.1853809+00:00","cleanedBy":"runner"}
 {"issueId":"x1jVvd","originalTitle":"Allow dev and release containers on the same machine","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
 {"issueId":"zwE7WW","originalTitle":"Fix display of edges with new issue creation","cleanedAt":"2026-05-18T07:35:55.7414788+00:00","cleanedBy":"runner"}
