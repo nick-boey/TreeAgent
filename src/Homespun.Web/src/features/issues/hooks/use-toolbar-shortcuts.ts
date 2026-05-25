@@ -20,6 +20,14 @@ export interface ToolbarShortcutCallbacks {
   isFilterActive?: boolean
   /** Focus the filter input with cursor at the end */
   onFocusFilterAtEnd?: () => void
+  /** Pop the top undo entry and apply its inverse via the server-side stack. */
+  onUndo?: () => void
+  /** Re-apply the top redo entry. */
+  onRedo?: () => void
+  /** False when the server-side undo stack is empty — suppresses the binding. */
+  canUndo?: boolean
+  /** False when the server-side redo stack is empty — suppresses the binding. */
+  canRedo?: boolean
 }
 
 export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
@@ -39,6 +47,10 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
     onToggleFilter,
     isFilterActive = false,
     onFocusFilterAtEnd,
+    onUndo,
+    onRedo,
+    canUndo = false,
+    canRedo = false,
   } = callbacks
 
   const handleKeyDown = useCallback(
@@ -140,6 +152,34 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
         }
         return
       }
+
+      // Redo: Ctrl+Shift+Z or Cmd+Shift+Z. Must be checked BEFORE the plain
+      // Ctrl+Z branch because shiftKey + key='Z' is what we want here.
+      if ((ctrlKey || metaKey) && shiftKey && key.toLowerCase() === 'z') {
+        if (canRedo && onRedo) {
+          event.preventDefault()
+          onRedo()
+        }
+        return
+      }
+
+      // Undo: Ctrl+Z or Cmd+Z.
+      if ((ctrlKey || metaKey) && !shiftKey && key.toLowerCase() === 'z') {
+        if (canUndo && onUndo) {
+          event.preventDefault()
+          onUndo()
+        }
+        return
+      }
+
+      // Undo: u (no modifier). Mirrors the legacy keybinding the v3.0 UI used.
+      if (!shiftKey && !ctrlKey && !metaKey && key === 'u') {
+        if (canUndo && onUndo) {
+          event.preventDefault()
+          onUndo()
+        }
+        return
+      }
     },
     [
       onCreateAbove,
@@ -157,6 +197,10 @@ export function useToolbarShortcuts(callbacks: ToolbarShortcutCallbacks) {
       onToggleFilter,
       isFilterActive,
       onFocusFilterAtEnd,
+      onUndo,
+      onRedo,
+      canUndo,
+      canRedo,
     ]
   )
 

@@ -247,4 +247,89 @@ describe('useToolbarShortcuts', () => {
     dispatchKeyDown('f')
     expect(onToggleFilter).toHaveBeenCalled()
   })
+
+  describe('undo/redo shortcuts', () => {
+    it('calls onUndo when Ctrl+Z is pressed', () => {
+      const onUndo = vi.fn()
+      renderHook(() => useToolbarShortcuts({ ...callbacks, onUndo, canUndo: true }))
+
+      dispatchKeyDown('z', { ctrlKey: true })
+      expect(onUndo).toHaveBeenCalled()
+    })
+
+    it('calls onUndo when Cmd+Z is pressed (macOS)', () => {
+      const onUndo = vi.fn()
+      renderHook(() => useToolbarShortcuts({ ...callbacks, onUndo, canUndo: true }))
+
+      dispatchKeyDown('z', { metaKey: true })
+      expect(onUndo).toHaveBeenCalled()
+    })
+
+    it('calls onUndo when u is pressed (no modifier)', () => {
+      const onUndo = vi.fn()
+      renderHook(() => useToolbarShortcuts({ ...callbacks, onUndo, canUndo: true }))
+
+      dispatchKeyDown('u')
+      expect(onUndo).toHaveBeenCalled()
+    })
+
+    it('calls onRedo when Ctrl+Shift+Z is pressed', () => {
+      const onRedo = vi.fn()
+      const onUndo = vi.fn()
+      renderHook(() =>
+        useToolbarShortcuts({ ...callbacks, onUndo, onRedo, canUndo: true, canRedo: true })
+      )
+
+      // Shift+ctrl+Z should hit redo, not undo
+      dispatchKeyDown('Z', { ctrlKey: true, shiftKey: true })
+      expect(onRedo).toHaveBeenCalled()
+      expect(onUndo).not.toHaveBeenCalled()
+    })
+
+    it('calls onRedo when Cmd+Shift+Z is pressed (macOS)', () => {
+      const onRedo = vi.fn()
+      renderHook(() => useToolbarShortcuts({ ...callbacks, onRedo, canRedo: true }))
+
+      dispatchKeyDown('Z', { metaKey: true, shiftKey: true })
+      expect(onRedo).toHaveBeenCalled()
+    })
+
+    it('does NOT call onUndo when canUndo is false', () => {
+      const onUndo = vi.fn()
+      renderHook(() => useToolbarShortcuts({ ...callbacks, onUndo, canUndo: false }))
+
+      dispatchKeyDown('z', { ctrlKey: true })
+      dispatchKeyDown('u')
+      expect(onUndo).not.toHaveBeenCalled()
+    })
+
+    it('does NOT call onRedo when canRedo is false', () => {
+      const onRedo = vi.fn()
+      renderHook(() => useToolbarShortcuts({ ...callbacks, onRedo, canRedo: false }))
+
+      dispatchKeyDown('Z', { ctrlKey: true, shiftKey: true })
+      expect(onRedo).not.toHaveBeenCalled()
+    })
+
+    it('does NOT trigger undo when typing in input field', () => {
+      const onUndo = vi.fn()
+      renderHook(() => useToolbarShortcuts({ ...callbacks, onUndo, canUndo: true }))
+
+      const input = document.createElement('input')
+      document.body.appendChild(input)
+      input.focus()
+
+      const event = new KeyboardEvent('keydown', { key: 'u', bubbles: true })
+      Object.defineProperty(event, 'target', { value: input })
+      document.dispatchEvent(event)
+
+      expect(onUndo).not.toHaveBeenCalled()
+      document.body.removeChild(input)
+    })
+
+    it('does not throw when onUndo is undefined', () => {
+      renderHook(() => useToolbarShortcuts({ ...callbacks, canUndo: true }))
+      expect(() => dispatchKeyDown('u')).not.toThrow()
+    })
+  })
 })

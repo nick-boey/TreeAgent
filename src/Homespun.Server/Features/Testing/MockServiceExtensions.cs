@@ -73,6 +73,7 @@ public static class MockServiceExtensions
 
         // Register real FleeceService (reads/writes to temp .fleece directories)
         services.AddSingleton<IProjectFleeceService, ProjectFleeceService>();
+        services.AddSingleton<IIssueUndoRedoService, IssueUndoRedoService>();
         services.AddSingleton<IIssueAncestorTraversalService, IssueAncestorTraversalService>();
 
         // Core services

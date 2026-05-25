@@ -368,6 +368,8 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
             updates[fieldResolution.FieldName] = value;
         }
 
+        // Manual conflict-resolution writes are not user-driven undo steps;
+        // skip the undo-stack push (per spec: sync/agent-merge paths use recordUndo: false).
         await _fleeceService.UpdateIssueAsync(
             projectPath,
             conflict.IssueId,
@@ -379,7 +381,8 @@ public class FleeceChangeApplicationService : IFleeceChangeApplicationService
             ParseEnum<ExecutionMode>(updates.GetValueOrDefault("ExecutionMode")),
             updates.GetValueOrDefault("WorkingBranchId")?.ToString(),
             updates.GetValueOrDefault("AssignedTo")?.ToString(),
-            cancellationToken);
+            recordUndo: false,
+            ct: cancellationToken);
 
         return (await _fleeceService.GetIssueAsync(projectPath, conflict.IssueId, cancellationToken))!;
     }

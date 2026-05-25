@@ -10,6 +10,7 @@ import {
   useDefaultFilter,
   type TaskGraphViewRef,
 } from '@/features/issues'
+import { useIssueHistory } from '@/features/issues/hooks/use-issue-history'
 import { MoveOperationType } from '@/features/issues/types'
 import { MoveDirection } from '@/api/generated/types.gen'
 import { useAppStore } from '@/stores/app-store'
@@ -380,6 +381,9 @@ function IssuesList() {
     }
   }, [])
 
+  // Per-project undo/redo state and mutations.
+  const history = useIssueHistory(projectId)
+
   // Register keyboard shortcuts
   useToolbarShortcuts({
     onCreateAbove: handleCreateAbove,
@@ -398,6 +402,10 @@ function IssuesList() {
     onToggleFilter: handleToggleFilter,
     isFilterActive: filterActive,
     onFocusFilterAtEnd: handleFocusFilterAtEnd,
+    onUndo: history.undo,
+    onRedo: history.redo,
+    canUndo: history.canUndo,
+    canRedo: history.canRedo,
   })
 
   const isDefaultFilterActive =
@@ -444,6 +452,10 @@ function IssuesList() {
         defaultFilterActive={isDefaultFilterActive}
         viewMode={issuesViewMode}
         onViewModeChange={setIssuesViewMode}
+        onUndo={history.undo}
+        onRedo={history.redo}
+        canUndo={history.canUndo}
+        canRedo={history.canRedo}
       />
 
       {/* Task Graph View */}

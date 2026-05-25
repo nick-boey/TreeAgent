@@ -44,6 +44,7 @@ public class FleeceChangeDetectionIntegrationTests
         _fleeceService = new ProjectFleeceService(
             serializationQueueMock.Object,
             new Mock<global::Fleece.Core.Services.Interfaces.IIssueLayoutService>().Object,
+            serviceProvider: null,
             NullLogger<ProjectFleeceService>.Instance);
 
         // Create the change detection service with real dependencies

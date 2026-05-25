@@ -88,7 +88,7 @@ public class BranchIdBackgroundServiceTests
             .ReturnsAsync(issue);
 
         _mockFleeceService.Setup(x => x.UpdateIssueAsync(
-                "/path", issueId, null, null, null, null, null, null, generatedBranchId, null, It.IsAny<CancellationToken>()))
+                "/path", issueId, null, null, null, null, null, null, generatedBranchId, null, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(updatedIssue);
 
         // Act
@@ -100,7 +100,7 @@ public class BranchIdBackgroundServiceTests
         // Assert
         _mockBranchIdGenerator.Verify(x => x.GenerateAsync(title, It.IsAny<CancellationToken>()), Times.Once);
         _mockFleeceService.Verify(x => x.UpdateIssueAsync(
-                "/path", issueId, null, null, null, null, null, null, generatedBranchId, null, It.IsAny<CancellationToken>()),
+                "/path", issueId, null, null, null, null, null, null, generatedBranchId, null, It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
         _mockClientProxy.Verify(x => x.SendCoreAsync(
             "BranchIdGenerated",
@@ -133,7 +133,7 @@ public class BranchIdBackgroundServiceTests
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string>(),
             It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string>(),
-            It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockClientProxy.Verify(x => x.SendCoreAsync(
             "BranchIdGenerationFailed",
             It.Is<object?[]>(args => args[0]!.Equals(issueId) && args[1]!.Equals(projectId) &&
@@ -175,7 +175,7 @@ public class BranchIdBackgroundServiceTests
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string>(),
             It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string>(),
-            It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockClientProxy.Verify(x => x.SendCoreAsync(
             It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -208,7 +208,7 @@ public class BranchIdBackgroundServiceTests
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string>(),
             It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string>(),
-            It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
         _mockClientProxy.Verify(x => x.SendCoreAsync(
             It.IsAny<string>(), It.IsAny<object?[]>(), It.IsAny<CancellationToken>()), Times.Never);
     }

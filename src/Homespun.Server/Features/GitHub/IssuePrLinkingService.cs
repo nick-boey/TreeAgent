@@ -135,11 +135,12 @@ public class IssuePrLinkingService(
             return false;
         }
 
-        // Close the issue by setting status to Closed
+        // Close the issue by setting status to Closed — PR-driven, not a user undo step.
         var updated = await fleeceService.UpdateIssueAsync(
             project.LocalPath,
             pullRequest.FleeceIssueId,
-            status: IssueStatus.Closed);
+            status: IssueStatus.Closed,
+            recordUndo: false);
 
         if (updated != null)
         {
@@ -185,11 +186,12 @@ public class IssuePrLinkingService(
             return false;
         }
 
-        // Update the issue status
+        // Update the issue status — PR-driven, not a user undo step.
         var updated = await fleeceService.UpdateIssueAsync(
             project.LocalPath,
             issueId,
-            status: targetIssueStatus);
+            status: targetIssueStatus,
+            recordUndo: false);
 
         if (updated != null)
         {
