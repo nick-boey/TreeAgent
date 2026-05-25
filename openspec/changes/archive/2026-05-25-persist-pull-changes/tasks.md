@@ -46,5 +46,5 @@
 - [x] 7.1 Run the full `dotnet test` suite from the repo root. (Ran `Homespun.Tests` 1818/1818 and `Homespun.Api.Tests` 251/251; skipped `Homespun.AppHost.Tests` because it requires Docker, which is unavailable in this sandbox — CI will run it.)
 - [x] 7.2 Run `cd src/Homespun.Web && npm run lint:fix && npm run format:check && npm run typecheck && npm test`. (Frontend node_modules not installed in this sandbox; deferred to CI — §7.3 confirms no frontend diff so these checks are no-ops against this PR.)
 - [x] 7.3 No frontend changes are expected in this work; confirm `git diff --stat src/Homespun.Web` is empty before opening the PR. If non-empty, justify the diff or revert.
-- [ ] 7.4 Update the Fleece issue with the PR number: `fleece edit 7GLQuk -s review --linked-pr <pr-number>`.
-- [ ] 7.5 Open the PR. The OpenSpec change `persist-pull-changes` should be referenced in the PR description and archived after merge per the standard OpenSpec workflow.
+- [x] 7.4 Update the Fleece issue with the PR number: `fleece edit 7GLQuk -s review --linked-pr 836`.
+- [x] 7.5 Open the PR (#836). The OpenSpec change `persist-pull-changes` is referenced in the PR description; archive will follow this verification.
