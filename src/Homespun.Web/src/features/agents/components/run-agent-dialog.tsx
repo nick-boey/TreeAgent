@@ -495,6 +495,7 @@ function IssuesAgentTabContent({
   // Prefill textarea with issue context when the issue resolves, first-write-wins.
   useEffect(() => {
     if (!issue) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUserInstructions((prev) => (prev === '' ? formatIssueContextBlock(issue) : prev))
   }, [issue])
 

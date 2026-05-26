@@ -54,7 +54,16 @@ function NodeMarkers({
   const width = calculateSvgWidth(maxLanes)
   // Mirror the prefix-sum used by TaskGraphEdges so node markers and edges
   // share the same Y coordinates without any DOM measurement.
-  let cumulative = 0
+  // Pre-compute cumulative offsets before JSX to avoid mutating variables
+  // inside the render body (react-hooks/immutability).
+  const yOffsets: number[] = []
+  let cum = 0
+  for (const line of lines) {
+    yOffsets.push(cum)
+    if (line.type === 'issue' && expandedIds.has(line.issueId)) {
+      cum += expandedPanelHeights.get(line.issueId) ?? 0
+    }
+  }
   const totalPanelHeight = Array.from(expandedPanelHeights.values()).reduce((sum, h) => sum + h, 0)
   return (
     <svg
@@ -67,13 +76,9 @@ function NodeMarkers({
         if (line.type !== 'issue') {
           return null
         }
-        const cy = i * ROW_HEIGHT + getRowCenterY() + cumulative
+        const cy = i * ROW_HEIGHT + getRowCenterY() + yOffsets[i]
         const cx = getLaneCenterX(line.lane)
-        const node = <circle key={i} cx={cx} cy={cy} r={6} fill={getTypeColor(line.issueType)} />
-        if (expandedIds.has(line.issueId)) {
-          cumulative += expandedPanelHeights.get(line.issueId) ?? 0
-        }
-        return node
+        return <circle key={i} cx={cx} cy={cy} r={6} fill={getTypeColor(line.issueType)} />
       })}
     </svg>
   )
