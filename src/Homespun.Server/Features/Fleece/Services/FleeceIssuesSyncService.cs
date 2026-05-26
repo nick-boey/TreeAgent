@@ -158,6 +158,20 @@ public class FleeceIssuesSyncService(
         BranchStatusResult branchStatus,
         CancellationToken ct)
     {
+        // Pre-merge autosave: turn any dirty `.fleece/` working-tree state into a real
+        // commit so `git merge` becomes a true three-way merge instead of silently
+        // overwriting WT lines that exist nowhere in committed history.
+        var autosaveError = await AutosaveFleeceChangesAsync(projectPath);
+        if (autosaveError is not null)
+        {
+            return new FleecePullResult(
+                Success: false,
+                ErrorMessage: autosaveError,
+                IssuesMerged: 0,
+                WasBehindRemote: branchStatus.IsBehindRemote,
+                CommitsPulled: 0);
+        }
+
         var mergeResult = await commandRunner.RunAsync("git", $"merge --no-edit origin/{defaultBranch}", projectPath);
         if (!mergeResult.Success)
         {
@@ -297,6 +311,50 @@ public class FleeceIssuesSyncService(
 
         logger.LogInformation("Successfully pushed fleece issues sync");
         return new FleeceIssueSyncResult(true, null, filesCount, true, CompactionWarning: compactionWarning);
+    }
+
+    /// <summary>
+    /// Stage and commit any uncommitted working-tree changes under <c>.fleece/</c>
+    /// as a synthetic <c>chore(fleece): pre-pull autosave [skip ci]</c> commit. Restricted
+    /// to <c>.fleece/</c> paths only — never touches the non-fleece working tree, so the
+    /// existing "non-fleece changes block sync" policy is unaffected. Returns
+    /// <c>null</c> on success (including the no-op case when nothing under
+    /// <c>.fleece/</c> is dirty) or an error message describing why the autosave commit
+    /// failed.
+    /// </summary>
+    private async Task<string?> AutosaveFleeceChangesAsync(string projectPath)
+    {
+        var statusResult = await commandRunner.RunAsync("git", "status --porcelain .fleece/", projectPath);
+        if (!statusResult.Success)
+        {
+            return $"Failed to inspect .fleece/ status before pull: {statusResult.Error}";
+        }
+        if (string.IsNullOrWhiteSpace(statusResult.Output))
+        {
+            return null;
+        }
+
+        var fileCount = CountChangedFiles(statusResult.Output);
+
+        var addResult = await commandRunner.RunAsync("git", "add .fleece/", projectPath);
+        if (!addResult.Success)
+        {
+            return $"Failed to stage .fleece/ for pre-pull autosave: {addResult.Error}";
+        }
+
+        var commitResult = await commandRunner.RunAsync(
+            "git",
+            "commit -m \"chore(fleece): pre-pull autosave [skip ci]\"",
+            projectPath);
+        if (!commitResult.Success
+            && !commitResult.Output.Contains("nothing to commit")
+            && !commitResult.Error.Contains("nothing to commit"))
+        {
+            return $"Failed to create pre-pull autosave commit: {commitResult.Error}";
+        }
+
+        logger.LogInformation("Pre-pull autosave: committed {Count} .fleece/ file change(s)", fileCount);
+        return null;
     }
 
     /// <summary>

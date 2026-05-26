@@ -129,6 +129,20 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             // Don't fail the clone creation
         }
 
+        // Restore the GUID-per-session invariant on the clone. The copy above intentionally
+        // omits `.active-change` / `.replay-cache`; this step then writes a fresh per-session
+        // change file plus a clone-local `.active-change` so the agent's first edit appends to
+        // a session-scoped log instead of inheriting main's open session.
+        try
+        {
+            await BootstrapCloneActiveChangeAsync(workdirPath);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to bootstrap clone .active-change at {ClonePath}", workdirPath);
+            // Don't fail the clone creation — Fleece will lazy-bootstrap on first write.
+        }
+
         // Wire the fleece pre-commit hook + gitignore entries inside the clone so the
         // agent's commits stage .fleece/changes/ correctly and the per-clone
         // .fleece/.active-change / .replay-cache files don't leak into git.
@@ -787,9 +801,66 @@ public class GitCloneService(ICommandRunner commandRunner, ILogger<GitCloneServi
             logger.LogDebug("Deleted existing .fleece directory from clone");
         }
 
-        // Copy the full .fleece directory from main
-        CopyDirectory(sourceFleecePath, destFleecePath, name => name == ".git");
+        // Copy the full .fleece directory from main, excluding `.git` (never relevant under
+        // .fleece/) and the two per-clone runtime files. `.active-change` and `.replay-cache`
+        // are gitignored, per-clone state — inheriting them from main violates Fleece's
+        // GUID-per-session invariant and silently corrupts the merge of a clone's PR.
+        CopyDirectory(
+            sourceFleecePath,
+            destFleecePath,
+            name => name == ".git" || name == ".active-change" || name == ".replay-cache");
         logger.LogInformation("Successfully synced .fleece directory to clone");
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Writes a fresh `.fleece/changes/change_&lt;guid&gt;.jsonl` and `.fleece/.active-change`
+    /// in the clone so the agent's first edit appends to a session-scoped change log instead
+    /// of (a) silently sharing main's open session or (b) waiting on Fleece's lazy bootstrap
+    /// during the first write. The new change file's first line is a `meta` event whose
+    /// `follows` field points at the existing change file with the most recent mtime (or is
+    /// omitted entirely when no existing change files are present — a valid root).
+    /// </summary>
+    private Task BootstrapCloneActiveChangeAsync(string clonePath)
+    {
+        var fleeceDir = Path.Combine(clonePath, ".fleece");
+        var changesDir = Path.Combine(fleeceDir, "changes");
+
+        if (!Directory.Exists(fleeceDir))
+        {
+            logger.LogDebug("No .fleece directory in clone {ClonePath}; skipping active-change bootstrap", clonePath);
+            return Task.CompletedTask;
+        }
+
+        Directory.CreateDirectory(changesDir);
+
+        string? followsId = null;
+        var existingChangeFiles = Directory.GetFiles(changesDir, "change_*.jsonl");
+        if (existingChangeFiles.Length > 0)
+        {
+            var newest = existingChangeFiles
+                .Select(p => new { Path = p, MTime = File.GetLastWriteTimeUtc(p) })
+                .OrderByDescending(x => x.MTime)
+                .First();
+            var name = Path.GetFileNameWithoutExtension(newest.Path);
+            // name == "change_<id>"; the id starts after the "change_" prefix.
+            followsId = name.StartsWith("change_", StringComparison.Ordinal) ? name["change_".Length..] : name;
+        }
+
+        var newGuid = Guid.NewGuid().ToString("N");
+        var newChangePath = Path.Combine(changesDir, $"change_{newGuid}.jsonl");
+        var metaLine = followsId is null
+            ? "{\"kind\":\"meta\"}"
+            : $"{{\"kind\":\"meta\",\"follows\":\"{followsId}\"}}";
+        File.WriteAllText(newChangePath, metaLine + "\n");
+
+        var activeChangePath = Path.Combine(fleeceDir, ".active-change");
+        File.WriteAllText(activeChangePath, $"{{\"guid\":\"{newGuid}\"}}");
+
+        logger.LogInformation(
+            "Bootstrapped clone {ClonePath} with new change file {NewGuid} (follows={Follows})",
+            clonePath, newGuid, followsId ?? "<root>");
 
         return Task.CompletedTask;
     }
