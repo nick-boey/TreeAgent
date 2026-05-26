@@ -52,11 +52,11 @@ public class FleecePostMergeServiceTests
 
         // Assert
         _fleeceServiceMock.Verify(x => x.UpdateIssueAsync(
-            ProjectPath, "abc123", null, null, null, null, null, null, null, UserEmail, It.IsAny<CancellationToken>()),
+            ProjectPath, "abc123", null, null, null, null, null, null, null, UserEmail, It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
 
         _fleeceServiceMock.Verify(x => x.UpdateIssueAsync(
-            ProjectPath, "def456", null, null, null, null, null, null, null, UserEmail, It.IsAny<CancellationToken>()),
+            ProjectPath, "def456", null, null, null, null, null, null, null, UserEmail, It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -77,7 +77,7 @@ public class FleecePostMergeServiceTests
 
         // Assert - no UpdateIssueAsync call for assignment
         _fleeceServiceMock.Verify(x => x.UpdateIssueAsync(
-            ProjectPath, "abc123", null, null, null, null, null, null, null, It.IsAny<string>(), It.IsAny<CancellationToken>()),
+            ProjectPath, "abc123", null, null, null, null, null, null, null, It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 
@@ -100,7 +100,7 @@ public class FleecePostMergeServiceTests
         _fleeceServiceMock.Verify(x => x.UpdateIssueAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<IssueStatus?>(),
             It.IsAny<IssueType?>(), It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(),
-            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()),
+            It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Never);
     }
 

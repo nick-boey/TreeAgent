@@ -554,4 +554,96 @@ public class IssuesApiTests
         Assert.That(issue!.ParentIssues.Any(p => p.ParentIssue == parent.Id), Is.True);
     }
 
+    // --- /api/projects/{projectId}/issues/history/{state,undo,redo} ---
+
+    [Test]
+    public async Task History_RoundTrip_CreateEditUndoRedo()
+    {
+        // Use a dedicated project so per-test stacks don't bleed across runs.
+        var projRequest = new { Name = "History-" + Guid.NewGuid().ToString("N")[..8], DefaultBranch = "main" };
+        var projResponse = await _client.PostAsJsonAsync("/api/projects", projRequest, JsonOptions);
+        projResponse.EnsureSuccessStatusCode();
+        var project = (await projResponse.Content.ReadFromJsonAsync<Project>(JsonOptions))!;
+
+        async Task<IssueHistoryState> ReadState()
+        {
+            var stateResp = await _client.GetAsync($"/api/projects/{project.Id}/issues/history/state");
+            stateResp.EnsureSuccessStatusCode();
+            return (await stateResp.Content.ReadFromJsonAsync<IssueHistoryState>(JsonOptions))!;
+        }
+
+        // Empty stacks on a fresh project.
+        var initialState = await ReadState();
+        Assert.Multiple(() =>
+        {
+            Assert.That(initialState.CanUndo, Is.False);
+            Assert.That(initialState.CanRedo, Is.False);
+            Assert.That(initialState.UndoCount, Is.EqualTo(0));
+            Assert.That(initialState.RedoCount, Is.EqualTo(0));
+        });
+
+        // Empty-stack undo reports failure but still returns 200 + state.
+        var emptyUndo = await _client.PostAsync($"/api/projects/{project.Id}/issues/history/undo", null);
+        emptyUndo.EnsureSuccessStatusCode();
+        var emptyUndoBody = (await emptyUndo.Content.ReadFromJsonAsync<IssueHistoryOperationResponse>(JsonOptions))!;
+        Assert.That(emptyUndoBody.Success, Is.False);
+        Assert.That(emptyUndoBody.ErrorMessage, Is.EqualTo("Nothing to undo"));
+
+        // Create + edit through the public mutation endpoints — both pushes accrue on the stack.
+        var createReq = new CreateIssueRequest
+        {
+            ProjectId = project.Id,
+            Title = "Undo round-trip test",
+            Type = IssueType.Task
+        };
+        var createResp = await _client.PostAsJsonAsync("/api/issues", createReq, JsonOptions);
+        createResp.EnsureSuccessStatusCode();
+        var created = (await createResp.Content.ReadFromJsonAsync<IssueResponse>(JsonOptions))!;
+
+        var updateReq = new UpdateIssueRequest
+        {
+            ProjectId = project.Id,
+            Status = IssueStatus.Progress
+        };
+        var updateResp = await _client.PutAsJsonAsync($"/api/issues/{created.Id}", updateReq, JsonOptions);
+        updateResp.EnsureSuccessStatusCode();
+
+        var afterEdits = await ReadState();
+        Assert.That(afterEdits.UndoCount, Is.GreaterThanOrEqualTo(2));
+        Assert.That(afterEdits.CanUndo, Is.True);
+        Assert.That(afterEdits.CanRedo, Is.False);
+
+        // Undo the status change.
+        var undoResp = await _client.PostAsync($"/api/projects/{project.Id}/issues/history/undo", null);
+        undoResp.EnsureSuccessStatusCode();
+        var undoBody = (await undoResp.Content.ReadFromJsonAsync<IssueHistoryOperationResponse>(JsonOptions))!;
+        Assert.That(undoBody.Success, Is.True);
+        Assert.That(undoBody.State.CanRedo, Is.True);
+
+        // Fetch the issue to confirm reverted state.
+        var refetched = await _client.GetAsync($"/api/issues/{created.Id}?projectId={project.Id}");
+        refetched.EnsureSuccessStatusCode();
+        var revertedIssue = (await refetched.Content.ReadFromJsonAsync<IssueResponse>(JsonOptions))!;
+        Assert.That(revertedIssue.Status, Is.EqualTo(IssueStatus.Open),
+            "undo of the status change should restore Open");
+
+        // Redo to re-apply.
+        var redoResp = await _client.PostAsync($"/api/projects/{project.Id}/issues/history/redo", null);
+        redoResp.EnsureSuccessStatusCode();
+        var redoBody = (await redoResp.Content.ReadFromJsonAsync<IssueHistoryOperationResponse>(JsonOptions))!;
+        Assert.That(redoBody.Success, Is.True);
+
+        var refetchedAgain = await _client.GetAsync($"/api/issues/{created.Id}?projectId={project.Id}");
+        refetchedAgain.EnsureSuccessStatusCode();
+        var reappliedIssue = (await refetchedAgain.Content.ReadFromJsonAsync<IssueResponse>(JsonOptions))!;
+        Assert.That(reappliedIssue.Status, Is.EqualTo(IssueStatus.Progress));
+    }
+
+    [Test]
+    public async Task History_State_ProjectNotFound_Returns404()
+    {
+        var response = await _client.GetAsync("/api/projects/nonexistent-project-id/issues/history/state");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
 }

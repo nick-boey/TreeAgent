@@ -20,6 +20,8 @@ import {
   ListTodo,
   ListTree,
   Network,
+  Undo2,
+  Redo2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
@@ -88,6 +90,14 @@ export interface ProjectToolbarProps {
   viewMode?: ViewMode
   /** Called when view mode changes */
   onViewModeChange?: (mode: ViewMode) => void
+  /** Undo the most recent user-initiated mutation (server-side stack). */
+  onUndo?: () => void
+  /** Redo the most recently undone mutation. */
+  onRedo?: () => void
+  /** True when the server-side undo stack has at least one entry. */
+  canUndo?: boolean
+  /** True when the server-side redo stack has at least one entry. */
+  canRedo?: boolean
 }
 
 export function ProjectToolbar({
@@ -125,6 +135,10 @@ export function ProjectToolbar({
   defaultFilterActive = false,
   viewMode = ViewMode.Tree,
   onViewModeChange,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }: ProjectToolbarProps) {
   const isMobile = useMobile()
   const internalFilterInputRef = useRef<HTMLInputElement>(null)
@@ -256,6 +270,34 @@ export function ProjectToolbar({
           data-testid="toolbar-move-down"
         >
           <ChevronDown className="h-4 w-4" />
+        </Button>
+      </ButtonGroup>
+
+      <Separator orientation="vertical" className="mx-1 h-6" />
+
+      {/* Undo / Redo group */}
+      <ButtonGroup>
+        <Button
+          variant="outline"
+          size={buttonSize}
+          onClick={onUndo}
+          disabled={!canUndo}
+          aria-label="Undo last change (Ctrl+Z)"
+          title="Undo last change (Ctrl+Z, u)"
+          data-testid="toolbar-undo"
+        >
+          <Undo2 className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size={buttonSize}
+          onClick={onRedo}
+          disabled={!canRedo}
+          aria-label="Redo (Ctrl+Shift+Z)"
+          title="Redo (Ctrl+Shift+Z)"
+          data-testid="toolbar-redo"
+        >
+          <Redo2 className="h-4 w-4" />
         </Button>
       </ButtonGroup>
 

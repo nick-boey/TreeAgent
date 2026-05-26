@@ -46,11 +46,18 @@ public class IssuesControllerTests
     private Mock<IIssueAncestorTraversalService> _ancestorTraversalMock = null!;
     private Mock<IModelCatalogService> _modelCatalogMock = null!;
     private Mock<IPhaseDispatchGuard> _phaseDispatchGuardMock = null!;
+    private Mock<IIssueUndoRedoService> _undoRedoServiceMock = null!;
     private Mock<ILogger<IssuesController>> _loggerMock = null!;
     private Mock<IHubClients> _clientsMock = null!;
     private Mock<IClientProxy> _allClientsMock = null!;
     private Mock<IClientProxy> _groupClientsMock = null!;
     private IssuesController _controller = null!;
+
+    private sealed class NoOpDisposable : IDisposable
+    {
+        public static readonly NoOpDisposable Instance = new();
+        public void Dispose() { }
+    }
 
     private static readonly Project TestProject = new()
     {
@@ -96,6 +103,15 @@ public class IssuesControllerTests
             .Setup(g => g.GetBlockingPhasesAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<string>());
+        _undoRedoServiceMock = new Mock<IIssueUndoRedoService>();
+        // Default: BeginBatch returns a no-op disposable so existing controller flows
+        // that wrap multi-step writes (Create) don't NRE on a missing setup.
+        _undoRedoServiceMock
+            .Setup(u => u.BeginBatch(It.IsAny<string>()))
+            .Returns(NoOpDisposable.Instance);
+        _undoRedoServiceMock
+            .Setup(u => u.GetStateAsync(It.IsAny<string>()))
+            .ReturnsAsync(new IssueHistoryState { CanUndo = false, CanRedo = false, UndoCount = 0, RedoCount = 0 });
         _loggerMock = new Mock<ILogger<IssuesController>>();
         _clientsMock = new Mock<IHubClients>();
         _allClientsMock = new Mock<IClientProxy>();
@@ -125,6 +141,7 @@ public class IssuesControllerTests
             _ancestorTraversalMock.Object,
             _modelCatalogMock.Object,
             _phaseDispatchGuardMock.Object,
+            _undoRedoServiceMock.Object,
             NullLogger<IssuesController>.Instance);
 
         // Set up HTTP context for controller. RequestServices is consulted by
@@ -155,7 +172,7 @@ public class IssuesControllerTests
             .Setup(x => x.CreateIssueAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IssueType>(),
                 It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(),
-                It.IsAny<IssueStatus?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<IssueStatus?>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         var request = new CreateIssueRequest { ProjectId = TestProject.Id, Title = "Test Issue" };
@@ -189,7 +206,7 @@ public class IssuesControllerTests
             .Setup(x => x.CreateIssueAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IssueType>(),
                 It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(),
-                It.IsAny<IssueStatus?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<IssueStatus?>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         var request = new CreateIssueRequest { ProjectId = TestProject.Id, Title = "Test Issue" };
@@ -237,7 +254,7 @@ public class IssuesControllerTests
             .Setup(x => x.CreateIssueAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IssueType>(),
                 It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(),
-                It.IsAny<IssueStatus?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<IssueStatus?>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         var request = new CreateIssueRequest { ProjectId = TestProject.Id, Title = "Test Issue" };
@@ -256,7 +273,7 @@ public class IssuesControllerTests
                 request.ExecutionMode,
                 It.IsAny<IssueStatus?>(),
                 userEmail,
-                It.IsAny<CancellationToken>()),
+                It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -276,7 +293,7 @@ public class IssuesControllerTests
             .Setup(x => x.CreateIssueAsync(
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IssueType>(),
                 It.IsAny<string?>(), It.IsAny<int?>(), It.IsAny<ExecutionMode?>(),
-                It.IsAny<IssueStatus?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<IssueStatus?>(), It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         var request = new CreateIssueRequest { ProjectId = TestProject.Id, Title = "Test Issue" };
@@ -295,7 +312,7 @@ public class IssuesControllerTests
                 request.ExecutionMode,
                 It.IsAny<IssueStatus?>(),
                 (string?)null,
-                It.IsAny<CancellationToken>()),
+                It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -323,7 +340,7 @@ public class IssuesControllerTests
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
                 It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         var request = new UpdateIssueRequest { ProjectId = TestProject.Id, Status = IssueStatus.Progress };
@@ -363,7 +380,7 @@ public class IssuesControllerTests
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
                 It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(issue);
 
         var request = new UpdateIssueRequest { ProjectId = TestProject.Id, Title = "Updated Issue" };
@@ -396,7 +413,7 @@ public class IssuesControllerTests
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
                 It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Issue?)null);
 
         var request = new UpdateIssueRequest { ProjectId = TestProject.Id, Title = "Updated Issue" };
@@ -971,7 +988,7 @@ public class IssuesControllerTests
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
                 It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(updatedIssue);
 
         var request = new UpdateIssueRequest
@@ -997,7 +1014,7 @@ public class IssuesControllerTests
                 request.ExecutionMode,
                 request.WorkingBranchId,
                 currentUserEmail, // Should be auto-assigned
-                It.IsAny<CancellationToken>()),
+                It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -1041,7 +1058,7 @@ public class IssuesControllerTests
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
                 It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(updatedIssue);
 
         var request = new UpdateIssueRequest
@@ -1067,7 +1084,7 @@ public class IssuesControllerTests
                 request.ExecutionMode,
                 request.WorkingBranchId,
                 (string?)null, // Should remain null
-                It.IsAny<CancellationToken>()),
+                It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -1113,7 +1130,7 @@ public class IssuesControllerTests
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
                 It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(updatedIssue);
 
         var request = new UpdateIssueRequest
@@ -1141,7 +1158,7 @@ public class IssuesControllerTests
                 request.ExecutionMode,
                 request.WorkingBranchId,
                 (string?)null, // Should be null to preserve existing assignee
-                It.IsAny<CancellationToken>()),
+                It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -1187,7 +1204,7 @@ public class IssuesControllerTests
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
                 It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(updatedIssue);
 
         var request = new UpdateIssueRequest
@@ -1213,7 +1230,7 @@ public class IssuesControllerTests
                 request.ExecutionMode,
                 request.WorkingBranchId,
                 requestAssignee, // Should use the request value
-                It.IsAny<CancellationToken>()),
+                It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -1250,7 +1267,7 @@ public class IssuesControllerTests
                 It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(),
                 It.IsAny<IssueStatus?>(), It.IsAny<IssueType?>(), It.IsAny<string?>(),
                 It.IsAny<int?>(), It.IsAny<ExecutionMode?>(), It.IsAny<string?>(),
-                It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(updatedIssue);
 
         var request = new UpdateIssueRequest
@@ -1275,7 +1292,7 @@ public class IssuesControllerTests
                 request.ExecutionMode,
                 request.WorkingBranchId,
                 assignedEmail,
-                It.IsAny<CancellationToken>()),
+                It.IsAny<bool>(), It.IsAny<CancellationToken>()),
             Times.Once);
     }
 
@@ -1411,4 +1428,126 @@ public class IssuesControllerTests
             x => x.QueueAgentStartAsync(It.Is<AgentStartRequest>(r => r.Model == "claude-sonnet-4-6-20250601")),
             Times.Once);
     }
+
+    #region History Endpoint Tests
+
+    [Test]
+    public async Task GetHistoryState_EmptyStacks_ReturnsAllZero()
+    {
+        _projectServiceMock.Setup(x => x.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
+        _undoRedoServiceMock
+            .Setup(u => u.GetStateAsync(TestProject.LocalPath))
+            .ReturnsAsync(new IssueHistoryState { CanUndo = false, CanRedo = false, UndoCount = 0, RedoCount = 0 });
+
+        var result = await _controller.GetHistoryState(TestProject.Id);
+
+        var ok = result.Result as OkObjectResult;
+        Assert.That(ok, Is.Not.Null);
+        var state = ok!.Value as IssueHistoryState;
+        Assert.That(state, Is.Not.Null);
+        Assert.That(state!.CanUndo, Is.False);
+        Assert.That(state.CanRedo, Is.False);
+    }
+
+    [Test]
+    public async Task GetHistoryState_ProjectNotFound_Returns404()
+    {
+        _projectServiceMock.Setup(x => x.GetByIdAsync(It.IsAny<string>())).ReturnsAsync((Project?)null);
+
+        var result = await _controller.GetHistoryState("missing");
+
+        Assert.That(result.Result, Is.TypeOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public async Task Undo_EmptyStack_ReturnsSuccessFalseWithMessage()
+    {
+        _projectServiceMock.Setup(x => x.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
+        _undoRedoServiceMock
+            .Setup(u => u.UndoAsync(TestProject.LocalPath, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _undoRedoServiceMock
+            .Setup(u => u.GetStateAsync(TestProject.LocalPath))
+            .ReturnsAsync(new IssueHistoryState { CanUndo = false, CanRedo = false, UndoCount = 0, RedoCount = 0 });
+
+        var result = await _controller.Undo(TestProject.Id);
+
+        var ok = result.Result as OkObjectResult;
+        Assert.That(ok, Is.Not.Null);
+        var response = ok!.Value as IssueHistoryOperationResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response!.Success, Is.False);
+        Assert.That(response.ErrorMessage, Is.EqualTo("Nothing to undo"));
+    }
+
+    [Test]
+    public async Task Undo_Success_BroadcastsBulkIssueChanged()
+    {
+        _projectServiceMock.Setup(x => x.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
+        _undoRedoServiceMock
+            .Setup(u => u.UndoAsync(TestProject.LocalPath, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _undoRedoServiceMock
+            .Setup(u => u.GetStateAsync(TestProject.LocalPath))
+            .ReturnsAsync(new IssueHistoryState { CanUndo = false, CanRedo = true, UndoCount = 0, RedoCount = 1 });
+
+        var result = await _controller.Undo(TestProject.Id);
+
+        var ok = result.Result as OkObjectResult;
+        var response = ok!.Value as IssueHistoryOperationResponse;
+        Assert.That(response!.Success, Is.True);
+        Assert.That(response.State.CanRedo, Is.True);
+
+        _groupClientsMock.Verify(
+            x => x.SendCoreAsync("IssueChanged",
+                It.Is<object?[]>(args =>
+                    args.Length == 4 &&
+                    (string)args[0]! == TestProject.Id &&
+                    (IssueChangeType)args[1]! == IssueChangeType.Updated &&
+                    args[2] == null &&
+                    args[3] == null),
+                default),
+            Times.Once);
+    }
+
+    [Test]
+    public async Task Redo_EmptyStack_ReturnsSuccessFalseWithMessage()
+    {
+        _projectServiceMock.Setup(x => x.GetByIdAsync(TestProject.Id)).ReturnsAsync(TestProject);
+        _undoRedoServiceMock
+            .Setup(u => u.RedoAsync(TestProject.LocalPath, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        _undoRedoServiceMock
+            .Setup(u => u.GetStateAsync(TestProject.LocalPath))
+            .ReturnsAsync(new IssueHistoryState { CanUndo = false, CanRedo = false, UndoCount = 0, RedoCount = 0 });
+
+        var result = await _controller.Redo(TestProject.Id);
+
+        var ok = result.Result as OkObjectResult;
+        var response = ok!.Value as IssueHistoryOperationResponse;
+        Assert.That(response!.Success, Is.False);
+        Assert.That(response.ErrorMessage, Is.EqualTo("Nothing to redo"));
+    }
+
+    [Test]
+    public async Task Undo_ProjectNotFound_Returns404()
+    {
+        _projectServiceMock.Setup(x => x.GetByIdAsync(It.IsAny<string>())).ReturnsAsync((Project?)null);
+
+        var result = await _controller.Undo("missing");
+
+        Assert.That(result.Result, Is.TypeOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public async Task Redo_ProjectNotFound_Returns404()
+    {
+        _projectServiceMock.Setup(x => x.GetByIdAsync(It.IsAny<string>())).ReturnsAsync((Project?)null);
+
+        var result = await _controller.Redo("missing");
+
+        Assert.That(result.Result, Is.TypeOf<NotFoundObjectResult>());
+    }
+
+    #endregion
 }

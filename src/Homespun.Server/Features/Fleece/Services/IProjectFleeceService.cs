@@ -90,6 +90,19 @@ public interface IProjectFleeceService
     /// <param name="ct">Cancellation token</param>
     Task ReloadFromDiskAsync(string projectPath, CancellationToken ct = default);
 
+    /// <summary>
+    /// Applies a set of issue snapshots to the in-memory cache and rewrites
+    /// the projected snapshot file (<c>.fleece/issues.jsonl</c>) so the user-visible
+    /// state reflects an undo/redo step. Each item replaces the cache entry for
+    /// its id verbatim. Called only by <see cref="IIssueUndoRedoService"/>; the
+    /// corresponding compensating events are written separately via
+    /// <c>IEventStore.AppendEventsAsync</c>.
+    /// </summary>
+    /// <param name="projectPath">Path to the project containing .fleece/ directory</param>
+    /// <param name="snapshots">Issue states to install</param>
+    /// <param name="ct">Cancellation token</param>
+    Task ApplyUndoSnapshotsAsync(string projectPath, IReadOnlyList<Issue> snapshots, CancellationToken ct = default);
+
     #endregion
 
     #region Task Graph Operations
@@ -145,6 +158,7 @@ public interface IProjectFleeceService
         ExecutionMode? executionMode = null,
         IssueStatus? status = null,
         string? assignedTo = null,
+        bool recordUndo = true,
         CancellationToken ct = default);
 
     /// <summary>
@@ -173,6 +187,7 @@ public interface IProjectFleeceService
         ExecutionMode? executionMode = null,
         string? workingBranchId = null,
         string? assignedTo = null,
+        bool recordUndo = true,
         CancellationToken ct = default);
 
     /// <summary>
@@ -182,7 +197,7 @@ public interface IProjectFleeceService
     /// <param name="issueId">The issue ID.</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>True if the issue was found and deleted.</returns>
-    Task<bool> DeleteIssueAsync(string projectPath, string issueId, CancellationToken ct = default);
+    Task<bool> DeleteIssueAsync(string projectPath, string issueId, bool recordUndo = true, CancellationToken ct = default);
 
     /// <summary>
     /// Adds a parent relationship to an issue using Fleece.Core's DependencyService.
@@ -194,7 +209,7 @@ public interface IProjectFleeceService
     /// <param name="insertBefore">If true, insert before the sibling; if false, insert after.</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The updated child issue with the new parent relationship.</returns>
-    Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, string? siblingIssueId = null, bool insertBefore = false, CancellationToken ct = default);
+    Task<Issue> AddParentAsync(string projectPath, string childId, string parentId, string? siblingIssueId = null, bool insertBefore = false, bool recordUndo = true, CancellationToken ct = default);
 
     /// <summary>
     /// Removes a parent relationship from an issue using Fleece.Core's DependencyService.
@@ -204,7 +219,7 @@ public interface IProjectFleeceService
     /// <param name="parentId">The ID of the parent issue to remove.</param>
     /// <param name="ct">Cancellation token</param>
     /// <returns>The updated child issue with the parent relationship removed.</returns>
-    Task<Issue> RemoveParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default);
+    Task<Issue> RemoveParentAsync(string projectPath, string childId, string parentId, bool recordUndo = true, CancellationToken ct = default);
 
     /// <summary>
     /// Removes all parent relationships from an issue.
@@ -214,7 +229,7 @@ public interface IProjectFleeceService
     /// <param name="ct">Cancellation token</param>
     /// <returns>The updated issue with all parent relationships removed.</returns>
     /// <exception cref="KeyNotFoundException">If the issue is not found.</exception>
-    Task<Issue> RemoveAllParentsAsync(string projectPath, string issueId, CancellationToken ct = default);
+    Task<Issue> RemoveAllParentsAsync(string projectPath, string issueId, bool recordUndo = true, CancellationToken ct = default);
 
     /// <summary>
     /// Checks whether setting a parent relationship would create a cycle.
@@ -237,7 +252,7 @@ public interface IProjectFleeceService
     /// <param name="ct">Cancellation token</param>
     /// <returns>The updated child issue.</returns>
     /// <exception cref="InvalidOperationException">If the relationship would create a cycle.</exception>
-    Task<Issue> SetParentAsync(string projectPath, string childId, string parentId, bool addToExisting = false, CancellationToken ct = default);
+    Task<Issue> SetParentAsync(string projectPath, string childId, string parentId, bool addToExisting = false, bool recordUndo = true, CancellationToken ct = default);
 
     /// <summary>
     /// Moves a series sibling issue up or down using Fleece.Core's DependencyService.
@@ -249,7 +264,7 @@ public interface IProjectFleeceService
     /// <returns>The updated issue with its new sort order.</returns>
     /// <exception cref="KeyNotFoundException">If the issue is not found.</exception>
     /// <exception cref="InvalidOperationException">If the issue has no parent, multiple parents, or is already first/last.</exception>
-    Task<Issue> MoveSeriesSiblingAsync(string projectPath, string issueId, MoveDirection direction, CancellationToken ct = default);
+    Task<Issue> MoveSeriesSiblingAsync(string projectPath, string issueId, MoveDirection direction, bool recordUndo = true, CancellationToken ct = default);
 
     #endregion
 }

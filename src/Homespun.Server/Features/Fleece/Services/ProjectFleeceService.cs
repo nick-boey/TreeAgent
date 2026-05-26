@@ -1,9 +1,15 @@
 using System.Collections.Concurrent;
+using System.Text;
+using System.Text.Json;
+using Fleece.Core.EventSourcing;
+using Fleece.Core.EventSourcing.Events;
 using Fleece.Core.Models;
 using Fleece.Core.Models.Graph;
+using Fleece.Core.Serialization;
 using Fleece.Core.Services;
 using Fleece.Core.Services.Interfaces;
 using Homespun.Shared.Requests;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Homespun.Features.Fleece.Services;
 
@@ -20,18 +26,26 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
     private readonly ConcurrentDictionary<string, bool> _cacheInitialized = new(StringComparer.OrdinalIgnoreCase);
     private readonly IIssueSerializationQueue _serializationQueue;
     private readonly IIssueLayoutService _issueLayoutService;
+    private readonly IServiceProvider? _serviceProvider;
     private readonly ILogger<ProjectFleeceService> _logger;
     private bool _disposed;
 
     public ProjectFleeceService(
         IIssueSerializationQueue serializationQueue,
         IIssueLayoutService issueLayoutService,
+        IServiceProvider? serviceProvider,
         ILogger<ProjectFleeceService> logger)
     {
         _serializationQueue = serializationQueue;
         _issueLayoutService = issueLayoutService;
+        _serviceProvider = serviceProvider;
         _logger = logger;
     }
+
+    // Optional — when null, undo recording is silently disabled
+    // (used by unit tests that instantiate ProjectFleeceService directly).
+    private IIssueUndoRedoService? UndoRedoService =>
+        _serviceProvider?.GetService<IIssueUndoRedoService>();
 
     private IFleeceService GetOrCreateFleeceService(string projectPath)
     {
@@ -97,6 +111,26 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         _issueCache.TryRemove(projectPath, out _);
         await EnsureCacheLoadedAsync(projectPath, ct);
         _logger.LogInformation("Reloaded issues from disk for project: {ProjectPath}", projectPath);
+    }
+
+    public async Task ApplyUndoSnapshotsAsync(string projectPath, IReadOnlyList<Issue> snapshots, CancellationToken ct = default)
+    {
+        if (snapshots.Count == 0) return;
+        var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+        foreach (var snapshot in snapshots)
+        {
+            cache[snapshot.Id] = snapshot;
+        }
+        RewriteSnapshotFile(projectPath, cache);
+        _logger.LogInformation("Applied {Count} undo snapshot(s) for project: {ProjectPath}", snapshots.Count, projectPath);
+    }
+
+    private static void RewriteSnapshotFile(string projectPath, ConcurrentDictionary<string, Issue> cache)
+    {
+        var snapshotPath = Path.Combine(projectPath, ".fleece", "issues.jsonl");
+        var lines = cache.Values
+            .Select(issue => JsonSerializer.Serialize(issue, FleeceJsonContext.Default.Issue));
+        File.WriteAllLines(snapshotPath, lines);
     }
 
     #endregion
@@ -200,7 +234,7 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
     public async Task<Issue> CreateIssueAsync(
         string projectPath, string title, IssueType type, string? description = null,
         int? priority = null, ExecutionMode? executionMode = null, IssueStatus? status = null,
-        string? assignedTo = null, CancellationToken ct = default)
+        string? assignedTo = null, bool recordUndo = true, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
         var service = GetOrCreateFleeceService(projectPath);
@@ -229,6 +263,20 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             executionMode.HasValue ? $" [ExecutionMode: {executionMode}]" : "",
             status.HasValue && status.Value != IssueStatus.Open ? $" [Status: {status}]" : "");
 
+        if (recordUndo)
+        {
+            // Forward: a CreateEvent representing the new issue payload.
+            // Inverse: soft-delete by Set(status, Deleted) — keeps tombstones reserved for hard deletes.
+            // Undo snapshot: same issue with Status = Deleted.
+            var deletedIssue = issue with { Status = IssueStatus.Deleted };
+            UndoRedoService?.PushInverse(
+                projectPath,
+                forwardEvents: new[] { (IssueEvent)BuildCreateEvent(issue) },
+                inverseEvents: new[] { (IssueEvent)BuildSetEvent(issue.Id, "status", IssueStatus.Deleted) },
+                undoSnapshots: new[] { deletedIssue },
+                redoSnapshots: new[] { issue });
+        }
+
         return issue;
     }
 
@@ -236,10 +284,10 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         string projectPath, string issueId, string? title = null, IssueStatus? status = null,
         IssueType? type = null, string? description = null, int? priority = null,
         ExecutionMode? executionMode = null, string? workingBranchId = null,
-        string? assignedTo = null, CancellationToken ct = default)
+        string? assignedTo = null, bool recordUndo = true, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-        if (!cache.TryGetValue(issueId, out _))
+        if (!cache.TryGetValue(issueId, out var before))
         {
             _logger.LogWarning("Issue '{IssueId}' not found in project '{ProjectPath}'", issueId, projectPath);
             return null;
@@ -275,6 +323,18 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             if (assignedTo != null) changes.Add($"assignedTo='{assignedTo}'");
 
             _logger.LogInformation("Updated issue '{IssueId}': {Changes}", issueId, string.Join(", ", changes));
+
+            if (recordUndo)
+            {
+                var (forward, inverse) = BuildUpdateScalarEvents(before, issue);
+                if (forward.Count > 0)
+                {
+                    UndoRedoService?.PushInverse(
+                        projectPath, forward, inverse,
+                        undoSnapshots: new[] { before }, redoSnapshots: new[] { issue });
+                }
+            }
+
             return issue;
         }
         catch (KeyNotFoundException)
@@ -285,9 +345,10 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         }
     }
 
-    public async Task<bool> DeleteIssueAsync(string projectPath, string issueId, CancellationToken ct = default)
+    public async Task<bool> DeleteIssueAsync(string projectPath, string issueId, bool recordUndo = true, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+        Issue? beforeState = cache.TryGetValue(issueId, out var existing) ? existing : null;
         var service = GetOrCreateFleeceService(projectPath);
         var deleted = await service.DeleteAsync(issueId, ct);
 
@@ -303,6 +364,19 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
                 QueuedAt: DateTimeOffset.UtcNow), ct);
 
             _logger.LogInformation("Deleted issue '{IssueId}'", issueId);
+
+            if (recordUndo && beforeState is not null && updatedIssue is not null)
+            {
+                // Forward: Set(status, Deleted). Inverse: Set(status, <previous>).
+                var forwardSet = BuildSetEvent(issueId, "status", IssueStatus.Deleted);
+                var inverseSet = BuildSetEvent(issueId, "status", beforeState.Status);
+                UndoRedoService?.PushInverse(
+                    projectPath,
+                    forwardEvents: new[] { (IssueEvent)forwardSet },
+                    inverseEvents: new[] { (IssueEvent)inverseSet },
+                    undoSnapshots: new[] { beforeState },
+                    redoSnapshots: new[] { updatedIssue });
+            }
         }
         else
         {
@@ -312,9 +386,10 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
     }
 
     public async Task<Issue> AddParentAsync(string projectPath, string childId, string parentId,
-        string? siblingIssueId = null, bool insertBefore = false, CancellationToken ct = default)
+        string? siblingIssueId = null, bool insertBefore = false, bool recordUndo = true, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+        Issue? before = cache.TryGetValue(childId, out var existing) ? existing : null;
         var service = GetOrCreateFleeceService(projectPath);
 
         DependencyPosition? position = null;
@@ -330,12 +405,28 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         var issue = await service.AddDependencyAsync(parentId, childId, position, cancellationToken: ct);
         cache[childId] = issue;
         _logger.LogInformation("Added parent '{ParentId}' to issue '{ChildId}'", parentId, childId);
+
+        if (recordUndo && before is not null)
+        {
+            // The library may have rebalanced sibling sortOrders. Set(parentIssues) of
+            // the full before/after lists captures all changes precisely.
+            var forward = BuildSetEvent(childId, "parentIssues", issue.ParentIssues);
+            var inverse = BuildSetEvent(childId, "parentIssues", before.ParentIssues);
+            UndoRedoService?.PushInverse(
+                projectPath,
+                forwardEvents: new[] { (IssueEvent)forward },
+                inverseEvents: new[] { (IssueEvent)inverse },
+                undoSnapshots: new[] { before },
+                redoSnapshots: new[] { issue });
+        }
+
         return issue;
     }
 
-    public async Task<Issue> RemoveParentAsync(string projectPath, string childId, string parentId, CancellationToken ct = default)
+    public async Task<Issue> RemoveParentAsync(string projectPath, string childId, string parentId, bool recordUndo = true, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+        Issue? before = cache.TryGetValue(childId, out var existing) ? existing : null;
         var service = GetOrCreateFleeceService(projectPath);
         var issue = await service.RemoveDependencyAsync(parentId, childId, ct);
         // Fleece.Core v2.1.0 soft-deletes parents (Active=false) instead of removing them.
@@ -343,13 +434,26 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         issue = issue with { ParentIssues = issue.ParentIssues.Where(p => p.Active).ToList() };
         cache[childId] = issue;
         _logger.LogInformation("Removed parent '{ParentId}' from issue '{ChildId}'", parentId, childId);
+
+        if (recordUndo && before is not null)
+        {
+            var forward = BuildSetEvent(childId, "parentIssues", issue.ParentIssues);
+            var inverse = BuildSetEvent(childId, "parentIssues", before.ParentIssues);
+            UndoRedoService?.PushInverse(
+                projectPath,
+                forwardEvents: new[] { (IssueEvent)forward },
+                inverseEvents: new[] { (IssueEvent)inverse },
+                undoSnapshots: new[] { before },
+                redoSnapshots: new[] { issue });
+        }
+
         return issue;
     }
 
-    public async Task<Issue> RemoveAllParentsAsync(string projectPath, string issueId, CancellationToken ct = default)
+    public async Task<Issue> RemoveAllParentsAsync(string projectPath, string issueId, bool recordUndo = true, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
-        if (!cache.TryGetValue(issueId, out _))
+        if (!cache.TryGetValue(issueId, out var before))
         {
             _logger.LogWarning("Issue '{IssueId}' not found in project '{ProjectPath}'", issueId, projectPath);
             throw new KeyNotFoundException($"Issue '{issueId}' not found");
@@ -371,6 +475,19 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             QueuedAt: DateTimeOffset.UtcNow), ct);
 
         _logger.LogInformation("Removed all parents from issue '{IssueId}'", issueId);
+
+        if (recordUndo)
+        {
+            var forward = BuildSetEvent(issueId, "parentIssues", issue.ParentIssues);
+            var inverse = BuildSetEvent(issueId, "parentIssues", before.ParentIssues);
+            UndoRedoService?.PushInverse(
+                projectPath,
+                forwardEvents: new[] { (IssueEvent)forward },
+                inverseEvents: new[] { (IssueEvent)inverse },
+                undoSnapshots: new[] { before },
+                redoSnapshots: new[] { issue });
+        }
+
         return issue;
     }
 
@@ -399,9 +516,10 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         return false;
     }
 
-    public async Task<Issue> SetParentAsync(string projectPath, string childId, string parentId, bool addToExisting = false, CancellationToken ct = default)
+    public async Task<Issue> SetParentAsync(string projectPath, string childId, string parentId, bool addToExisting = false, bool recordUndo = true, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
+        Issue? before = cache.TryGetValue(childId, out var existing) ? existing : null;
         var service = GetOrCreateFleeceService(projectPath);
 
         try
@@ -410,6 +528,19 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             cache[childId] = issue;
 
             _logger.LogInformation("Set parent '{ParentId}' for issue '{ChildId}' (addToExisting: {AddToExisting})", parentId, childId, addToExisting);
+
+            if (recordUndo && before is not null)
+            {
+                var forward = BuildSetEvent(childId, "parentIssues", issue.ParentIssues);
+                var inverse = BuildSetEvent(childId, "parentIssues", before.ParentIssues);
+                UndoRedoService?.PushInverse(
+                    projectPath,
+                    forwardEvents: new[] { (IssueEvent)forward },
+                    inverseEvents: new[] { (IssueEvent)inverse },
+                    undoSnapshots: new[] { before },
+                    redoSnapshots: new[] { issue });
+            }
+
             return issue;
         }
         catch (Exception ex) when (ex.Message.Contains("cycle", StringComparison.OrdinalIgnoreCase)
@@ -420,7 +551,7 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
         }
     }
 
-    public async Task<Issue> MoveSeriesSiblingAsync(string projectPath, string issueId, MoveDirection direction, CancellationToken ct = default)
+    public async Task<Issue> MoveSeriesSiblingAsync(string projectPath, string issueId, MoveDirection direction, bool recordUndo = true, CancellationToken ct = default)
     {
         var cache = await EnsureCacheLoadedAsync(projectPath, ct);
         if (!cache.TryGetValue(issueId, out var issue))
@@ -435,6 +566,15 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             throw new InvalidOperationException($"Issue '{issueId}' has multiple parents. Move sibling operation requires exactly one parent.");
 
         var parentId = issue.ParentIssues[0].ParentIssue;
+
+        // Snapshot every sibling under the same parent BEFORE the move so the inverse
+        // can restore each sibling's full parentIssues collection precisely.
+        var beforeSiblings = recordUndo
+            ? cache.Values.Where(i => i.ParentIssues.Any(p => p.ParentIssue == parentId))
+                .Select(i => i with { ParentIssues = i.ParentIssues.ToList() })
+                .ToList()
+            : new List<Issue>();
+
         var service = GetOrCreateFleeceService(projectPath);
         var result = direction == MoveDirection.Up
             ? await service.MoveUpAsync(parentId, issueId, ct)
@@ -444,13 +584,188 @@ public sealed class ProjectFleeceService : IProjectFleeceService, IDisposable
             throw new InvalidOperationException(result.Message ?? $"Cannot move issue '{issueId}' {direction.ToString().ToLower()}.");
 
         var allIssues = await service.GetAllAsync(ct);
+        var afterSiblings = new List<Issue>();
         foreach (var refreshedIssue in allIssues.Where(i => i.ParentIssues.Any(p => p.ParentIssue == parentId)))
+        {
             cache[refreshedIssue.Id] = refreshedIssue;
+            afterSiblings.Add(refreshedIssue);
+        }
 
         if (result.UpdatedIssue != null) cache[issueId] = result.UpdatedIssue;
 
         _logger.LogInformation("Moved issue '{IssueId}' {Direction} under parent '{ParentId}'", issueId, direction, parentId);
+
+        if (recordUndo)
+        {
+            // Capture only siblings whose parentIssues actually changed (by reference equality
+            // of the serialized lexOrder for the matching parent).
+            var beforeById = beforeSiblings.ToDictionary(i => i.Id, StringComparer.OrdinalIgnoreCase);
+            var changedBefore = new List<Issue>();
+            var changedAfter = new List<Issue>();
+            foreach (var after in afterSiblings)
+            {
+                if (!beforeById.TryGetValue(after.Id, out var b)) continue;
+                if (!ParentListsEqual(b.ParentIssues, after.ParentIssues))
+                {
+                    changedBefore.Add(b);
+                    changedAfter.Add(after);
+                }
+            }
+
+            if (changedBefore.Count > 0)
+            {
+                var forwardEvents = changedAfter
+                    .Select(a => (IssueEvent)BuildSetEvent(a.Id, "parentIssues", a.ParentIssues))
+                    .ToList();
+                var inverseEvents = changedBefore
+                    .Select(b => (IssueEvent)BuildSetEvent(b.Id, "parentIssues", b.ParentIssues))
+                    .ToList();
+
+                UndoRedoService?.PushInverse(
+                    projectPath, forwardEvents, inverseEvents,
+                    undoSnapshots: changedBefore, redoSnapshots: changedAfter);
+            }
+        }
+
         return result.UpdatedIssue ?? issue;
+    }
+
+    private static bool ParentListsEqual(IReadOnlyList<ParentIssueRef> a, IReadOnlyList<ParentIssueRef> b)
+    {
+        if (a.Count != b.Count) return false;
+        for (int i = 0; i < a.Count; i++)
+        {
+            if (!string.Equals(a[i].ParentIssue, b[i].ParentIssue, StringComparison.OrdinalIgnoreCase)) return false;
+            if (a[i].SortOrder != b[i].SortOrder) return false;
+            if (a[i].Active != b[i].Active) return false;
+        }
+        return true;
+    }
+
+    #endregion
+
+    #region Undo Event Builders
+
+    private static (IReadOnlyList<IssueEvent> Forward, IReadOnlyList<IssueEvent> Inverse)
+        BuildUpdateScalarEvents(Issue before, Issue after)
+    {
+        var forward = new List<IssueEvent>();
+        var inverse = new List<IssueEvent>();
+
+        void AddPair<T>(string property, T? beforeVal, T? afterVal) where T : class
+        {
+            if (!Equals(beforeVal, afterVal))
+            {
+                forward.Add(BuildSetEvent(after.Id, property, (object?)afterVal));
+                inverse.Add(BuildSetEvent(after.Id, property, (object?)beforeVal));
+            }
+        }
+
+        void AddPairValue<T>(string property, T? beforeVal, T? afterVal) where T : struct
+        {
+            if (!Nullable.Equals(beforeVal, afterVal))
+            {
+                forward.Add(BuildSetEvent(after.Id, property, (object?)afterVal));
+                inverse.Add(BuildSetEvent(after.Id, property, (object?)beforeVal));
+            }
+        }
+
+        AddPair("title", before.Title, after.Title);
+        AddPair("description", before.Description, after.Description);
+        if (before.Status != after.Status)
+        {
+            forward.Add(BuildSetEvent(after.Id, "status", after.Status));
+            inverse.Add(BuildSetEvent(after.Id, "status", before.Status));
+        }
+        if (before.Type != after.Type)
+        {
+            forward.Add(BuildSetEvent(after.Id, "type", after.Type));
+            inverse.Add(BuildSetEvent(after.Id, "type", before.Type));
+        }
+        AddPairValue("priority", before.Priority, after.Priority);
+        if (before.ExecutionMode != after.ExecutionMode)
+        {
+            forward.Add(BuildSetEvent(after.Id, "executionMode", after.ExecutionMode));
+            inverse.Add(BuildSetEvent(after.Id, "executionMode", before.ExecutionMode));
+        }
+        AddPair("workingBranchId", before.WorkingBranchId, after.WorkingBranchId);
+        AddPair("assignedTo", before.AssignedTo, after.AssignedTo);
+
+        return (forward, inverse);
+    }
+
+    private static SetEvent BuildSetEvent(string issueId, string property, object? value)
+    {
+        return new SetEvent
+        {
+            At = DateTimeOffset.UtcNow,
+            IssueId = issueId,
+            Property = property,
+            Value = ToJsonElement(value),
+        };
+    }
+
+    private static CreateEvent BuildCreateEvent(Issue issue)
+    {
+        var data = JsonSerializer.Serialize(issue, FleeceJsonContext.Default.Issue);
+        return new CreateEvent
+        {
+            At = DateTimeOffset.UtcNow,
+            IssueId = issue.Id,
+            Data = JsonDocument.Parse(data).RootElement.Clone(),
+        };
+    }
+
+    private static JsonElement ToJsonElement(object? value)
+    {
+        string json;
+        switch (value)
+        {
+            case null:
+                json = "null";
+                break;
+            case string s:
+                json = JsonSerializer.Serialize(s);
+                break;
+            case int i:
+                json = JsonSerializer.Serialize(i);
+                break;
+            case bool b:
+                json = JsonSerializer.Serialize(b);
+                break;
+            case IssueStatus s:
+                json = JsonSerializer.Serialize(s.ToString());
+                break;
+            case IssueType t:
+                json = JsonSerializer.Serialize(t.ToString());
+                break;
+            case ExecutionMode em:
+                json = JsonSerializer.Serialize(em.ToString());
+                break;
+            case IEnumerable<ParentIssueRef> parents:
+                json = SerializeParentIssueList(parents);
+                break;
+            case IEnumerable<string> strings:
+                json = JsonSerializer.Serialize(strings.ToList());
+                break;
+            default:
+                json = JsonSerializer.Serialize(value);
+                break;
+        }
+        return JsonDocument.Parse(json).RootElement.Clone();
+    }
+
+    private static string SerializeParentIssueList(IEnumerable<ParentIssueRef> parents)
+    {
+        var list = parents.ToList();
+        var sb = new StringBuilder("[");
+        for (int i = 0; i < list.Count; i++)
+        {
+            if (i > 0) sb.Append(',');
+            sb.Append(JsonSerializer.Serialize(list[i], EventSourcingJsonContext.Default.ParentIssueRef));
+        }
+        sb.Append(']');
+        return sb.ToString();
     }
 
     #endregion

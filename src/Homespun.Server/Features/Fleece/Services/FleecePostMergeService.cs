@@ -52,9 +52,10 @@ public class FleecePostMergeService(
                 // Assign unassigned issues to the active user
                 if (string.IsNullOrWhiteSpace(issue.AssignedTo) && !string.IsNullOrWhiteSpace(userEmail))
                 {
+                    // Post-merge bookkeeping — not a user undo step.
                     await fleeceService.UpdateIssueAsync(
                         projectPath, change.IssueId,
-                        assignedTo: userEmail, ct: ct);
+                        assignedTo: userEmail, recordUndo: false, ct: ct);
 
                     logger.LogInformation("Post-merge: assigned issue {IssueId} to {UserEmail}",
                         change.IssueId, userEmail);

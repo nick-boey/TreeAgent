@@ -169,6 +169,7 @@ else
     builder.Services.AddSingleton<global::Fleece.Core.Services.Interfaces.IGraphLayoutService, GraphLayoutService>();
     builder.Services.AddSingleton<global::Fleece.Core.Services.Interfaces.IIssueLayoutService, IssueLayoutService>();
     builder.Services.AddSingleton<IProjectFleeceService, ProjectFleeceService>();
+    builder.Services.AddSingleton<IIssueUndoRedoService, IssueUndoRedoService>();
     builder.Services.AddSingleton<IIssueAncestorTraversalService, IssueAncestorTraversalService>();
     builder.Services.AddScoped<IFleeceIssueTransitionService, FleeceIssueTransitionService>();
     builder.Services.AddSingleton<IFleeceIssuesSyncService, FleeceIssuesSyncService>();

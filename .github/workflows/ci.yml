@@ -48,6 +48,9 @@ jobs:
     - name: Restore local tools
       run: dotnet tool restore
 
+    - name: Install Fleece CLI
+      run: dotnet tool install --global Fleece.Cli --version 3.1.0
+
     - name: Build
       run: dotnet build --no-restore --configuration Release
 

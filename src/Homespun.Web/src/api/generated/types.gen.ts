@@ -548,18 +548,16 @@ export type IssueDto = {
 };
 
 export type IssueHistoryOperationResponse = {
-    success?: boolean;
-    state?: IssueHistoryState;
+    success: boolean;
     errorMessage?: string | null;
+    state: IssueHistoryState;
 };
 
 export type IssueHistoryState = {
-    currentTimestamp?: string | null;
-    canUndo?: boolean;
-    canRedo?: boolean;
-    totalEntries?: number;
-    undoDescription?: string | null;
-    redoDescription?: string | null;
+    canUndo: boolean;
+    canRedo: boolean;
+    undoCount: number;
+    redoCount: number;
 };
 
 export type IssueOpenSpecState = {

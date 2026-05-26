@@ -43,7 +43,8 @@ public class FleeceIssueTransitionService(
         var updated = await fleeceService.UpdateIssueAsync(
             project.LocalPath,
             issueId,
-            status: IssueStatus.Progress);
+            status: IssueStatus.Progress,
+            recordUndo: false);
 
         if (updated == null)
         {
@@ -87,7 +88,8 @@ public class FleeceIssueTransitionService(
         var updated = await fleeceService.UpdateIssueAsync(
             project.LocalPath,
             issueId,
-            status: IssueStatus.Progress);
+            status: IssueStatus.Progress,
+            recordUndo: false);
 
         if (updated == null)
         {
@@ -129,7 +131,8 @@ public class FleeceIssueTransitionService(
         var updated = await fleeceService.UpdateIssueAsync(
             project.LocalPath,
             issueId,
-            status: IssueStatus.Complete);
+            status: IssueStatus.Complete,
+            recordUndo: false);
 
         if (updated == null)
         {
@@ -182,7 +185,8 @@ public class FleeceIssueTransitionService(
         var updated = await fleeceService.UpdateIssueAsync(
             project.LocalPath,
             issueId,
-            status: IssueStatus.Progress);
+            status: IssueStatus.Progress,
+            recordUndo: false);
 
         if (updated == null)
         {

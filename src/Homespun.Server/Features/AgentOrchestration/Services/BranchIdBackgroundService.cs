@@ -98,11 +98,12 @@ public class BranchIdBackgroundService(
                 return;
             }
 
-            // Update issue with generated branch ID
+            // Update issue with generated branch ID — background bookkeeping, not a user undo step.
             var updatedIssue = await fleeceService.UpdateIssueAsync(
                 project.LocalPath,
                 issueId,
                 workingBranchId: result.BranchId,
+                recordUndo: false,
                 ct: CancellationToken.None);
 
             if (updatedIssue != null)

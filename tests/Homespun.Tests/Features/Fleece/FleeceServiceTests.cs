@@ -26,7 +26,7 @@ public class FleeceServiceTests
             .Setup(q => q.EnqueueAsync(It.IsAny<IssueWriteOperation>(), It.IsAny<CancellationToken>()))
             .Returns(ValueTask.CompletedTask);
 
-        _service = new ProjectFleeceService(_mockQueue.Object, new Mock<global::Fleece.Core.Services.Interfaces.IIssueLayoutService>().Object, _mockLogger.Object);
+        _service = new ProjectFleeceService(_mockQueue.Object, new Mock<global::Fleece.Core.Services.Interfaces.IIssueLayoutService>().Object, serviceProvider: null, _mockLogger.Object);
     }
 
     [TearDown]

@@ -39,6 +39,7 @@ public class IssuesController(
     IIssueAncestorTraversalService ancestorTraversal,
     IModelCatalogService modelCatalog,
     IPhaseDispatchGuard phaseDispatchGuard,
+    IIssueUndoRedoService undoRedoService,
     ILogger<IssuesController> logger) : ControllerBase
 {
     private static readonly IssueStatus[] OpenStatuses =
@@ -237,43 +238,48 @@ public class IssuesController(
             return NotFound("Project not found");
         }
 
-        // Create the issue first, with user email assignment if configured
-        var issue = await fleeceService.CreateIssueAsync(
-            project.LocalPath,
-            request.Title,
-            request.Type,
-            request.Description,
-            request.Priority,
-            request.ExecutionMode,
-            assignedTo: dataStore.UserEmail);
-
-        // Apply provided working branch ID if any
-        if (!string.IsNullOrWhiteSpace(request.WorkingBranchId))
+        // Group all internal writes (create + optional working-branch update + optional parent
+        // link) under one undo entry so a single Ctrl+Z reverses the entire HTTP call.
+        Issue issue;
+        using (undoRedoService.BeginBatch(project.LocalPath))
         {
-            issue = await fleeceService.UpdateIssueAsync(
+            issue = await fleeceService.CreateIssueAsync(
                 project.LocalPath,
-                issue.Id,
-                workingBranchId: request.WorkingBranchId.Trim()) ?? issue;
-        }
+                request.Title,
+                request.Type,
+                request.Description,
+                request.Priority,
+                request.ExecutionMode,
+                assignedTo: dataStore.UserEmail);
 
-        // If a parent issue ID was provided, add this issue as a child of that parent
-        if (!string.IsNullOrWhiteSpace(request.ParentIssueId))
-        {
-            issue = await fleeceService.AddParentAsync(
-                project.LocalPath,
-                issue.Id,
-                request.ParentIssueId.Trim(),
-                siblingIssueId: request.SiblingIssueId?.Trim(),
-                insertBefore: request.InsertBefore);
-        }
+            // Apply provided working branch ID if any
+            if (!string.IsNullOrWhiteSpace(request.WorkingBranchId))
+            {
+                issue = await fleeceService.UpdateIssueAsync(
+                    project.LocalPath,
+                    issue.Id,
+                    workingBranchId: request.WorkingBranchId.Trim()) ?? issue;
+            }
 
-        // If a child issue ID was provided, make the new issue the parent of that child
-        if (!string.IsNullOrWhiteSpace(request.ChildIssueId))
-        {
-            await fleeceService.AddParentAsync(
-                project.LocalPath,
-                request.ChildIssueId.Trim(),
-                issue.Id);
+            // If a parent issue ID was provided, add this issue as a child of that parent
+            if (!string.IsNullOrWhiteSpace(request.ParentIssueId))
+            {
+                issue = await fleeceService.AddParentAsync(
+                    project.LocalPath,
+                    issue.Id,
+                    request.ParentIssueId.Trim(),
+                    siblingIssueId: request.SiblingIssueId?.Trim(),
+                    insertBefore: request.InsertBefore);
+            }
+
+            // If a child issue ID was provided, make the new issue the parent of that child
+            if (!string.IsNullOrWhiteSpace(request.ChildIssueId))
+            {
+                await fleeceService.AddParentAsync(
+                    project.LocalPath,
+                    request.ChildIssueId.Trim(),
+                    issue.Id);
+            }
         }
 
         // Broadcast issue creation to connected clients
@@ -713,6 +719,90 @@ public class IssuesController(
         }
 
         return Ok(result);
+    }
+
+    #endregion
+
+    #region History Operations
+
+    /// <summary>
+    /// Returns the current undo/redo stack pointers for the given project.
+    /// </summary>
+    [HttpGet("projects/{projectId}/issues/history/state")]
+    [ProducesResponseType<IssueHistoryState>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IssueHistoryState>> GetHistoryState(string projectId)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        var state = await undoRedoService.GetStateAsync(project.LocalPath);
+        return Ok(state);
+    }
+
+    /// <summary>
+    /// Pops the top undo entry and appends its inverse events to the active
+    /// change file. Returns <c>{ success: false, errorMessage: "Nothing to undo" }</c>
+    /// when the stack is empty.
+    /// </summary>
+    [HttpPost("projects/{projectId}/issues/history/undo")]
+    [ProducesResponseType<IssueHistoryOperationResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IssueHistoryOperationResponse>> Undo(string projectId)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        var success = await undoRedoService.UndoAsync(project.LocalPath, HttpContext.RequestAborted);
+        var state = await undoRedoService.GetStateAsync(project.LocalPath);
+
+        if (success)
+        {
+            await notificationHub.BroadcastIssueChanged(projectId, IssueChangeType.Updated, null, null);
+        }
+
+        return Ok(new IssueHistoryOperationResponse
+        {
+            Success = success,
+            ErrorMessage = success ? null : "Nothing to undo",
+            State = state,
+        });
+    }
+
+    /// <summary>
+    /// Re-applies the top redo entry. Mirror of <see cref="Undo"/>.
+    /// </summary>
+    [HttpPost("projects/{projectId}/issues/history/redo")]
+    [ProducesResponseType<IssueHistoryOperationResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<IssueHistoryOperationResponse>> Redo(string projectId)
+    {
+        var project = await projectService.GetByIdAsync(projectId);
+        if (project == null)
+        {
+            return NotFound("Project not found");
+        }
+
+        var success = await undoRedoService.RedoAsync(project.LocalPath, HttpContext.RequestAborted);
+        var state = await undoRedoService.GetStateAsync(project.LocalPath);
+
+        if (success)
+        {
+            await notificationHub.BroadcastIssueChanged(projectId, IssueChangeType.Updated, null, null);
+        }
+
+        return Ok(new IssueHistoryOperationResponse
+        {
+            Success = success,
+            ErrorMessage = success ? null : "Nothing to redo",
+            State = state,
+        });
     }
 
     #endregion
