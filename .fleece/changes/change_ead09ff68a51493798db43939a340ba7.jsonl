@@ -1,5 +1,0 @@
-{"kind":"meta","follows":"5bf7b69487c84a8f810e46d8adb21e68"}
-{"kind":"add","at":"2026-05-25T04:56:26.0155682+00:00","by":"Homespun Bot","issueId":"nr5lA9","property":"tags","value":"openspec=reimplement-undo-redo-compensating-events"}
-{"kind":"set","at":"2026-05-25T05:47:50.3191695+00:00","by":"Homespun Bot","issueId":"nr5lA9","property":"status","value":"Progress"}
-{"kind":"set","at":"2026-05-25T22:39:15.4091829+00:00","by":"Homespun Bot","issueId":"nr5lA9","property":"status","value":"Review"}
-{"kind":"add","at":"2026-05-25T22:39:15.4091829+00:00","by":"Homespun Bot","issueId":"nr5lA9","property":"tags","value":"hsp-linked-pr=837"}
